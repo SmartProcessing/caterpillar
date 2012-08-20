@@ -13,11 +13,11 @@
 %% ===================================================================
 
 start_link() ->
-    case application:get_env(caterpillar, handler) of
+    case application:get_env(caterpillar, worker) of
         undefined ->
             {error, settings_not_set};
         {ok, Settings} ->
-            supervisor:start_link({local, ?MODULE}, ?MODULE, Settings)
+            supervisor:start_link(?MODULE, Settings)
     end.
 
 %% ===================================================================
@@ -25,12 +25,13 @@ start_link() ->
 %% ===================================================================
 
 init(Settings) ->
-    {ok, { {one_for_one, 3, 60}, 
-            [
-                {caterpillar, {caterpillar, start_link, Settings}},
+    {ok, {{one_for_one, 3, 60}, 
+            [{
+                caterpillar, 
+                {caterpillar, start_link, Settings},
                 permanent,
                 5000,
                 worker,
                 [caterpillar]
-            ]} }.
+            }]}}.
 

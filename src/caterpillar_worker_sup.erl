@@ -17,7 +17,10 @@ start_link() ->
         undefined ->
             {error, settings_not_set};
         {ok, Settings} ->
-            supervisor:start_link({local, ?MODULE}, ?MODULE, Settings)
+            {ok, Pid} = supervisor:start_link(
+                {local, ?MODULE}, ?MODULE, Settings),
+            erlang:unlink(Pid),
+            {ok, Pid}
     end.
 
 %% ===================================================================
@@ -25,13 +28,13 @@ start_link() ->
 %% ===================================================================
 
 init(Settings) ->
-    {ok, { {one_for_one, 3, 60}, 
-            [
-                {caterpillar_worker, 
-                    {caterpillar_worker, start_link, Settings}},
+    {ok, {{simple_one_for_one, 3, 60}, 
+            [{
+                caterpillar_worker, 
+                {caterpillar_worker, start_link, Settings},
                 permanent,
                 5000,
                 worker,
                 [caterpillar_worker]
-            ]} }.
+            }]}}.
 

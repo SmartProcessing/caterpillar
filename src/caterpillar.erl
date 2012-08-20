@@ -61,14 +61,16 @@ init(Settings) ->
 
 handle_call({newref, RevDef}, _From, State) ->
     Queue = queue:in(RevDef, State#state.main_queue),
-    %% ...
-    number_free_workers(State),
-    list_building_revs(State),
-    %% TODO
-    {reply, State#state{main_queue=Queue}, State};
+    case State#state.next_to_build of
+        none ->
+            {ok, NewState} = schedule_build(State#state{main_queue=Queue});
+        _Other ->
+            NewState = State#state{main_queue=Queue}
+    end,
+    {reply, ok, NewState};
 handle_call({built, _Worker}, _From, State) ->
-    schedule_build(State),
-    {reply, ok, State};
+    {ok, NewState} = schedule_build(State),
+    {reply, ok, NewState};
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -108,11 +110,12 @@ get_build_candidate(State) ->
 -spec create_workers(WorkerNumber :: non_neg_integer()) -> 
     {ok, [{Pid :: pid(), none}]}.
 create_workers(WorkerNumber) ->
+    caterpillar_worker_sup:start_link(),
     create_workers(WorkerNumber, []).
 create_workers(0, Acc) ->
     Acc;
 create_workers(WorkerNumber, Acc) ->
-    {ok, Pid} = supervisor:start_link(caterpillar_worker_sup, []),
+    {ok, Pid} = supervisor:start_child(caterpillar_worker_sup, []),
     create_workers(WorkerNumber - 1, [{Pid, none}|Acc]).
 
 -spec list_building_revs(State :: record()) -> {ok, [rev_def()]}.

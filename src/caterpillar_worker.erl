@@ -20,14 +20,15 @@
 %% ------------------------------------------------------------------
 
 start_link() ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+    gen_server:start_link(?MODULE, [], []).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
 init(Args) ->
-    {ok, Args}.
+    io:format("caterpillar worker started~n", []),
+    {ok, {state, Args}}.
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
