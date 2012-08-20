@@ -105,23 +105,15 @@ get_build_candidate(State) ->
             {ok, State}
     end.
 
--spec create_workers(WorkerNumber :: non_neg_integer()) -> {ok, [{Pid :: pid(), none}]}.
+-spec create_workers(WorkerNumber :: non_neg_integer()) -> 
+    {ok, [{Pid :: pid(), none}]}.
 create_workers(WorkerNumber) ->
     create_workers(WorkerNumber, []).
 create_workers(0, Acc) ->
     Acc;
 create_workers(WorkerNumber, Acc) ->
-    Pid = erlang:spawn_monitor(fun build_worker/0),
+    {ok, Pid} = supervisor:start_link(caterpillar_worker_sup, []),
     create_workers(WorkerNumber - 1, [{Pid, none}|Acc]).
-
-build_worker() ->
-    receive
-        build ->
-            not_implemented;
-        _Other ->
-            not_implementer
-    end,
-    build_worker().
 
 -spec list_building_revs(State :: record()) -> {ok, [rev_def()]}.
 list_building_revs(State) ->

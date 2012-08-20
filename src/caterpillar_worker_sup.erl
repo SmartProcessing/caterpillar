@@ -1,4 +1,4 @@
--module(caterpillar_sup).
+-module(caterpillar_worker_sup).
 
 -behaviour(supervisor).
 
@@ -13,7 +13,7 @@
 %% ===================================================================
 
 start_link() ->
-    case application:get_env(caterpillar, handler) of
+    case application:get_env(caterpillar, worker) of
         undefined ->
             {error, settings_not_set};
         {ok, Settings} ->
@@ -27,10 +27,11 @@ start_link() ->
 init(Settings) ->
     {ok, { {one_for_one, 3, 60}, 
             [
-                {caterpillar, {caterpillar, start_link, Settings}},
+                {caterpillar_worker, 
+                    {caterpillar_worker, start_link, Settings}},
                 permanent,
                 5000,
                 worker,
-                [caterpillar]
+                [caterpillar_worker]
             ]} }.
 
