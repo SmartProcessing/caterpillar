@@ -1,9 +1,11 @@
 -module(caterpillar).
+-include_lib("caterpillar.hrl").
 -behaviour(gen_server).
--define(GV, proplists:get_value).
 
 -record(state, {
-        plugins=[],
+        vcs_plugins=[],
+        build_plugins=[],
+        platform_plugins=[],
         deps,
         unpack_dir,
         main_queue,
@@ -12,7 +14,6 @@
         workers=[]
     }).
 
--type rev_def() :: {atom(), atom(), list()}.
 -type plugin_def() :: {PluginName :: atom(), PluginArguments :: [term()]}.
 
 %% ------------------------------------------------------------------
@@ -40,23 +41,36 @@ start_link() ->
 %% ------------------------------------------------------------------
 
 init(Settings) ->
-    VCSPlugins = ?GV(vcs_plugins, Settings),
-    Plugins = init_plugins(VCSPlugins),
+    VCSPlugins = ?GV(vcs_plugins, Settings, [caterpillar_git_local]),
+    {ok, Plugins} = init_plugins(VCSPlugins),
     Unpack = ?GV(unpack_dir, Settings),
-    Deps = dets:open_file(
+    {ok, Deps} = dets:open_file(deps,
         ?GV(deps, Settings, "/var/lib/smprc/caterpillar/stats")),
+    BuildPlugins = ?GV(
+        build_plugins, 
+        Settings, 
+        [{deb, caterpillar_deb_plugin}]
+    ),
+    PlatformPlugins = ?GV(
+        platform_plugins, 
+        Settings, 
+        [{default, caterpillar_default_builder}]
+    ),
     BuildQueue = queue:new(),
     WaitQueue = queue:new(),
     {ok, WorkerList} = create_workers(?GV(build_workers_number, Settings, 5)),
     {ok, #state{
-            plugins=Plugins,
+            vcs_plugins=Plugins,
+            build_plugins=BuildPlugins,
+            platform_plugins=PlatformPlugins,
             deps=Deps,
             unpack_dir=Unpack,
             main_queue=BuildQueue,
             wait_queue=WaitQueue,
             workers=WorkerList,
             next_to_build=none
-        }}.
+        }
+    }.
 
 handle_call({newref, RevDef}, _From, State) ->
     Queue = queue:in(RevDef, State#state.main_queue),
@@ -68,7 +82,8 @@ handle_call({newref, RevDef}, _From, State) ->
             {ok, NewState} = try_build(QueuedState)
     end,
     {reply, ok, NewState};
-handle_call({built, _Worker}, _From, State) ->
+handle_call({built, _Worker, RevDef}, _From, State) ->
+    caterpillar_deps:update(State#state.deps, RevDef),
     {ok, ScheduledState} = schedule_build(State),
     {ok, NewState} = try_build(ScheduledState),
     {reply, ok, NewState};
@@ -94,7 +109,7 @@ code_change(_OldVsn, State, _Extra) ->
 %% Build section
 %% ------------------------------------------------------------------
 
--spec try_build(State :: record()) -> {ok, NewState :: record()}.
+-spec try_build(State :: #state{}) -> {ok, NewState :: #state{}}.
 try_build(State) ->
     case number_free_workers(State) of
         Int when Int > 0 ->
@@ -103,7 +118,7 @@ try_build(State) ->
             {ok, State}
     end.
 
--spec job_free_worker(State :: record()) -> {ok, NewState :: record()}.
+-spec job_free_worker(State :: #state{}) -> {ok, NewState :: #state{}}.
 job_free_worker(State) ->
     NewWorkers = job_free_worker(
         State#state.workers, State#state.next_to_build),
@@ -132,11 +147,11 @@ create_workers(WorkerNumber, Acc) ->
     {ok, Pid} = supervisor:start_child(caterpillar_worker_sup, []),
     create_workers(WorkerNumber - 1, [{Pid, none}|Acc]).
 
--spec list_building_revs(State :: record()) -> {ok, [rev_def()]}.
+-spec list_building_revs(State :: #state{}) -> {ok, [#rev_def{}]}.
 list_building_revs(State) ->
     {ok, [RevDef || {_Pid, RevDef} <- State#state.workers, RevDef /= none]}.
 
--spec number_free_workers(State :: record()) -> {ok, non_neg_integer()}.
+-spec number_free_workers(State :: #state{}) -> {ok, non_neg_integer()}.
 number_free_workers(State) ->
     {ok, lists:foldl(
             fun({_Pid, none}, Cnt) -> 
@@ -149,13 +164,13 @@ number_free_workers(State) ->
 %% Scheduling section
 %% ------------------------------------------------------------------
 
--spec schedule_build(State :: record()) -> {ok, NewState :: record()}.
+-spec schedule_build(State :: #state{}) -> {ok, NewState :: #state{}}.
 schedule_build(State) when State#state.next_to_build == none ->
     get_build_candidate(State);
 schedule_build(State) ->
     {ok, State}.
 
--spec get_build_candidate(State :: record()) -> {ok, NewState :: record()}.
+-spec get_build_candidate(State :: #state{}) -> {ok, NewState :: #state{}}.
 get_build_candidate(State) ->
     case {
             queue:is_empty(State#state.wait_queue),
@@ -173,32 +188,39 @@ get_build_candidate(State) ->
 get_build_candidate(main_queue, State) ->
     {{value, Candidate}, MainQueue} = queue:out(State#state.main_queue),
     case check_build_deps(Candidate, State) of
-        true -> %% independent
+        independent ->
             {ok, State#state{main_queue=MainQueue, next_to_build=Candidate}};
-        false ->
+        dependent ->
             WaitQueue = queue:in(Candidate, State#state.wait_queue),
             get_build_candidate(
-                State#state{main_queue=MainQueue, wait_queue=WaitQueue})
+                State#state{main_queue=MainQueue, wait_queue=WaitQueue});
+        unresolved ->
+            RolledMainQueue = queue:in(Candidate, MainQueue),
+            get_build_candidate(State#state{main_queue=RolledMainQueue})
     end;
 get_build_candidate(wait_queue, State) ->
     {{value, Candidate}, WaitQueue} = queue:out(State#state.wait_queue),
     case check_build_deps(Candidate, State) of
-        true -> %% independent
+        independent -> %% independent
             {ok, State#state{wait_queue=WaitQueue, next_to_build=Candidate}};
-        false ->
+        dependent ->
             WaitQueue = queue:in(Candidate, State#state.wait_queue),
             get_build_candidate(
-                State#state{wait_queue=WaitQueue})
+                State#state{wait_queue=WaitQueue});
+        _Other ->
+            {error, broken_deps}
     end;
 get_build_candidate(both, State) ->
     {{value, Candidate}, WaitQueue} = queue:out(State#state.wait_queue),
     case check_build_deps(Candidate, State) of
-        true -> %% independent
+        independent -> %% independent
             {ok, State#state{wait_queue=WaitQueue, next_to_build=Candidate}};
-        false ->
+        dependent ->
             WaitQueue = queue:in(Candidate, State#state.wait_queue),
             get_build_candidate(main_queue,
-                State#state{wait_queue=WaitQueue})
+                State#state{wait_queue=WaitQueue});
+        _Other ->
+            {error, broken_deps}
     end.
 
 
@@ -214,17 +236,17 @@ init_plugins(VCSPlugins) ->
                 Pid 
         end, VCSPlugins).
 
-%% @doc true when candidate is independent from building packages
--spec check_build_deps(Candidate :: rev_def(), State :: record()) -> true|false.
+-spec check_build_deps(Candidate :: #rev_def{}, State :: #state{}) -> true|false.
 check_build_deps(Candidate, State) ->
-    {ok, NowBuilding} = list_building_revs(State),
-    case caterpillar_dependencies:check_list(
-            State#state.deps,
-            Candidate,
-            NowBuilding
-        ) of
-        {ok, [{depends, []}, {is_dependencie, []}]} ->
-            true;
-        _Other ->
-            false
+    case caterpillar_dependencies:check_consistency(
+            State#state.deps, Candidate) of
+        {ok, success} ->
+            {ok, NowBuilding} = list_building_revs(State),
+            {ok, Res} = caterpillar_dependencies:check_list(
+                State#state.deps,
+                Candidate,
+                NowBuilding),
+            Res;
+        {ok, unresolved, _List} ->
+            unresolved
     end.
