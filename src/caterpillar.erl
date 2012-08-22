@@ -238,15 +238,19 @@ init_plugins(VCSPlugins) ->
 
 -spec check_build_deps(Candidate :: #rev_def{}, State :: #state{}) -> true|false.
 check_build_deps(Candidate, State) ->
-    case caterpillar_dependencies:check_consistency(
+    case caterpillar_dependencies:list_unresolved_dependencies(
             State#state.deps, Candidate) of
-        {ok, success} ->
+        {ok, []} ->
             {ok, NowBuilding} = list_building_revs(State),
             {ok, Res} = caterpillar_dependencies:check_list(
                 State#state.deps,
                 Candidate,
                 NowBuilding),
             Res;
-        {ok, unresolved, _List} ->
-            unresolved
+        {ok, Dependencies} when is_list(Dependencies) ->
+            unresolved;
+        {error, Res} ->
+            {error, Res};
+        Other ->
+            {error, Other}
     end.
