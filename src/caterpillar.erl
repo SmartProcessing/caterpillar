@@ -194,7 +194,7 @@ get_build_candidate(main_queue, State) ->
             WaitQueue = queue:in(Candidate, State#state.wait_queue),
             get_build_candidate(
                 State#state{main_queue=MainQueue, wait_queue=WaitQueue});
-        unresolved ->
+        _Other ->
             RolledMainQueue = queue:in(Candidate, MainQueue),
             get_build_candidate(State#state{main_queue=RolledMainQueue})
     end;
