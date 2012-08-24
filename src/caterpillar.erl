@@ -59,6 +59,11 @@ handle_call({built, _Worker, RevDef}, _From, State) ->
     {ok, ScheduledState} = schedule_build(State),
     {ok, NewState} = try_build(ScheduledState),
     {reply, ok, NewState};
+handle_call({newrepo, Plugin, Name}, _From, State) ->
+    [PluginPid|_] = 
+        [Pid || {PName, Pid} <- State#state.vcs_plugins, PName == Plugin],
+    Res = gen_server:call(PluginPid, {newrepo, Name}),
+    {reply, Res, State};
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -206,7 +211,8 @@ get_build_candidate(both, State) ->
 %% External communication section
 %% ------------------------------------------------------------------
 
--spec init_plugins(VCSPlugins :: [plugin_def()]) -> [Pid :: pid()].
+-spec init_plugins(VCSPlugins :: [plugin_def()]) -> 
+    [{Plugin :: atom(), Pid :: pid()}].
 init_plugins(VCSPlugins) ->
     logging:info_msg("initializing VCS plugins: ~p", [VCSPlugins]),
     {ok, lists:map(
@@ -214,7 +220,7 @@ init_plugins(VCSPlugins) ->
                 logging:info_msg("starting ~p", [Plugin]),
                 {ok, Pid} = Plugin:start(PluginSettings),
                 erlang:monitor(process, Pid),
-                Pid 
+                {Plugin, Pid}
         end, VCSPlugins)}.
 
 -spec check_build_deps(Candidate :: #rev_def{}, State :: #state{}) -> true|false.
