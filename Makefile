@@ -9,4 +9,4 @@ test: clean
 	$(REBAR) -C rebar.test.config eunit
 
 devel: clean compile
-	erl -pa ebin -config test.config -eval "application:start(caterpillar)."
+	ERL_LIBS="../../smprc-logging/trunk/lib" erl -pa ebin -config test.config -eval "application:start(caterpillar)."

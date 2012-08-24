@@ -3,7 +3,7 @@
 -behaviour(supervisor).
 
 %% API
--export([start_link/0]).
+-export([start_link/0, start_link/1]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -11,6 +11,8 @@
 %% ===================================================================
 %% API functions
 %% ===================================================================
+
+-ifndef(TEST).
 
 start_link() ->
     case application:get_env(caterpillar, worker) of
@@ -22,6 +24,26 @@ start_link() ->
             erlang:unlink(Pid),
             {ok, Pid}
     end.
+
+-endif.
+
+
+-ifdef(TEST).
+
+start_link() ->
+    {ok, Pid} = supervisor:start_link(
+        {local, ?MODULE}, ?MODULE, []),
+    erlang:unlink(Pid),
+    {ok, Pid}.
+
+-endif.
+
+start_link(Settings) ->
+    {ok, Pid} = supervisor:start_link(
+        {local, ?MODULE}, ?MODULE, Settings),
+    erlang:unlink(Pid),
+    {ok, Pid}.
+
 
 %% ===================================================================
 %% Supervisor callbacks

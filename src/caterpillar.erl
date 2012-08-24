@@ -20,16 +20,15 @@
 
 
 start_link(Settings) ->
-    io:format("Starting caterpillar gen_serv: ~n", []),
     gen_server:start_link({local, ?MODULE}, ?MODULE, Settings, []).
 
 init(Settings) ->
-    io:format("Starting caterpillar:~n", []),
-    VCSPlugins = ?GV(vcs_plugins, Settings, [caterpillar_git_local]),
+    logging:info_msg("Starting caterpillar:~n", []),
+    VCSPlugins = ?GV(vcs_plugins, Settings, [{caterpillar_git_local, []}]),
     {ok, Plugins} = init_plugins(VCSPlugins),
     Unpack = ?GV(unpack_dir, Settings),
     {ok, Deps} = dets:open_file(deps,
-        ?GV(deps, Settings, "/var/lib/smprc/caterpillar/stats")),
+        [{file, ?GV(deps, Settings, "/var/lib/smprc/caterpillar/deps")}]),
     BuildQueue = queue:new(),
     WaitQueue = queue:new(),
     {ok, WorkerList} = create_workers(?GV(build_workers_number, Settings, 5)),
@@ -111,10 +110,11 @@ job_free_worker([{Pid, SomeRef}|Other], ToBuild, OldW) ->
 -spec create_workers(WorkerNumber :: non_neg_integer()) -> 
     {ok, [{Pid :: pid(), none}]}.
 create_workers(WorkerNumber) ->
-    caterpillar_worker_sup:start_link(),
+    logging:info_msg("starting ~B build workers and worker supervisor: ~p ~n", 
+        [WorkerNumber, caterpillar_worker_sup:start_link()]),
     create_workers(WorkerNumber, []).
 create_workers(0, Acc) ->
-    Acc;
+    {ok, Acc};
 create_workers(WorkerNumber, Acc) ->
     {ok, Pid} = supervisor:start_child(caterpillar_worker_sup, []),
     create_workers(WorkerNumber - 1, [{Pid, none}|Acc]).
@@ -201,12 +201,14 @@ get_build_candidate(both, State) ->
 
 -spec init_plugins(VCSPlugins :: [plugin_def()]) -> [Pid :: pid()].
 init_plugins(VCSPlugins) ->
-    lists:map(
+    logging:info_msg("initializing VCS plugins: ~p", [VCSPlugins]),
+    {ok, lists:map(
         fun({Plugin, PluginSettings}) -> 
+                logging:info_msg("starting ~p", Plugin),
                 {ok, Pid} = Plugin:start(PluginSettings),
-                erlang:monitor(Pid),
+                erlang:monitor(process, Pid),
                 Pid 
-        end, VCSPlugins).
+        end, VCSPlugins)}.
 
 -spec check_build_deps(Candidate :: #rev_def{}, State :: #state{}) -> true|false.
 check_build_deps(Candidate, State) ->
