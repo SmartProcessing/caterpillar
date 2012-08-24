@@ -15,4 +15,6 @@ start(_StartType, _StartArgs) ->
     caterpillar_sup:start_link().
 
 stop(_State) ->
+    application:stop(cowboy),
+    application:stop(loggin),
     ok.

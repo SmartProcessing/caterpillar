@@ -9,7 +9,6 @@
 -record(state, {
         vcs_plugins=[],
         deps,
-        unpack_dir,
         main_queue,
         wait_queue,
         next_to_build,
@@ -23,20 +22,21 @@ start_link(Settings) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, Settings, []).
 
 init(Settings) ->
-    logging:info_msg("starting caterpillar:~n", []),
+    logging:info_msg("starting caterpillar", []),
     VCSPlugins = ?GV(vcs_plugins, Settings, [{caterpillar_git_local, []}]),
     {ok, Plugins} = init_plugins(VCSPlugins),
-    Unpack = ?GV(unpack_dir, Settings),
+    logging:info_msg("plugins initialized"),
     {ok, Deps} = dets:open_file(deps,
         [{file, ?GV(deps, Settings, "/var/lib/smprc/caterpillar/deps")}]),
     BuildQueue = queue:new(),
     WaitQueue = queue:new(),
     {ok, WorkerList} = create_workers(?GV(build_workers_number, Settings, 5)),
     logging:info_msg("workers initialized"),
+    caterpillar_api:start(),
+    logging:info_msg("api started"),
     {ok, #state{
             vcs_plugins=Plugins,
             deps=Deps,
-            unpack_dir=Unpack,
             main_queue=BuildQueue,
             wait_queue=WaitQueue,
             workers=WorkerList,
