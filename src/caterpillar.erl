@@ -2,10 +2,12 @@
 -include_lib("caterpillar.hrl").
 -behaviour(gen_server).
 
+-export([start_link/1]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2,
+         terminate/2, code_change/3]).
+
 -record(state, {
         vcs_plugins=[],
-        build_plugins=[],
-        platform_plugins=[],
         deps,
         unpack_dir,
         main_queue,
@@ -16,53 +18,23 @@
 
 -type plugin_def() :: {PluginName :: atom(), PluginArguments :: [term()]}.
 
-%% ------------------------------------------------------------------
-%% API Function Exports
-%% ------------------------------------------------------------------
 
--export([start_link/0]).
-
-%% ------------------------------------------------------------------
-%% gen_server Function Exports
-%% ------------------------------------------------------------------
-
--export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-         terminate/2, code_change/3]).
-
-%% ------------------------------------------------------------------
-%% API Function Definitions
-%% ------------------------------------------------------------------
-
-start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
-
-%% ------------------------------------------------------------------
-%% gen_server Function Definitions
-%% ------------------------------------------------------------------
+start_link(Settings) ->
+    io:format("Starting caterpillar gen_serv: ~n", []),
+    gen_server:start_link({local, ?MODULE}, ?MODULE, Settings, []).
 
 init(Settings) ->
+    io:format("Starting caterpillar:~n", []),
     VCSPlugins = ?GV(vcs_plugins, Settings, [caterpillar_git_local]),
     {ok, Plugins} = init_plugins(VCSPlugins),
     Unpack = ?GV(unpack_dir, Settings),
     {ok, Deps} = dets:open_file(deps,
         ?GV(deps, Settings, "/var/lib/smprc/caterpillar/stats")),
-    BuildPlugins = ?GV(
-        build_plugins, 
-        Settings, 
-        [{deb, caterpillar_deb_plugin}]
-    ),
-    PlatformPlugins = ?GV(
-        platform_plugins, 
-        Settings, 
-        [{default, caterpillar_default_builder}]
-    ),
     BuildQueue = queue:new(),
     WaitQueue = queue:new(),
     {ok, WorkerList} = create_workers(?GV(build_workers_number, Settings, 5)),
     {ok, #state{
             vcs_plugins=Plugins,
-            build_plugins=BuildPlugins,
-            platform_plugins=PlatformPlugins,
             deps=Deps,
             unpack_dir=Unpack,
             main_queue=BuildQueue,

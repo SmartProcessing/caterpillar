@@ -1,6 +1,11 @@
 -module(caterpillar_worker).
+-include("caterpillar.hrl").
 -behaviour(gen_server).
--define(SERVER, ?MODULE).
+
+-record(state, {
+    build_plugins       :: [{atom(), list()}],
+    platform_plugins    :: [{atom(), list()}]
+}).
 
 %% ------------------------------------------------------------------
 %% API Function Exports
@@ -26,9 +31,22 @@ start_link() ->
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init(Args) ->
+init(Settings) ->
     io:format("caterpillar worker started~n", []),
-    {ok, {state, Args}}.
+    BuildPlugins = ?GV(
+        build_plugins, 
+        Settings, 
+        [{deb, caterpillar_deb_plugin}]
+    ),
+    PlatformPlugins = ?GV(
+        platform_plugins, 
+        Settings, 
+        [{default, caterpillar_default_builder}]
+    ),
+    {ok, #state{
+        build_plugins=BuildPlugins,
+        platform_plugins=PlatformPlugins
+    }}.
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
