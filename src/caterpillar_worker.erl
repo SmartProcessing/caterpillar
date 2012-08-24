@@ -35,7 +35,6 @@ start_link(Settings) ->
 %% ------------------------------------------------------------------
 
 init(Settings) ->
-    io:format("caterpillar worker started~n", []),
     BuildPlugins = ?GV(
         build_plugins, 
         Settings, 

@@ -23,7 +23,7 @@ start_link(Settings) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, Settings, []).
 
 init(Settings) ->
-    logging:info_msg("Starting caterpillar:~n", []),
+    logging:info_msg("starting caterpillar:~n", []),
     VCSPlugins = ?GV(vcs_plugins, Settings, [{caterpillar_git_local, []}]),
     {ok, Plugins} = init_plugins(VCSPlugins),
     Unpack = ?GV(unpack_dir, Settings),
@@ -32,6 +32,7 @@ init(Settings) ->
     BuildQueue = queue:new(),
     WaitQueue = queue:new(),
     {ok, WorkerList} = create_workers(?GV(build_workers_number, Settings, 5)),
+    logging:info_msg("workers initialized"),
     {ok, #state{
             vcs_plugins=Plugins,
             deps=Deps,
@@ -116,8 +117,14 @@ create_workers(WorkerNumber) ->
 create_workers(0, Acc) ->
     {ok, Acc};
 create_workers(WorkerNumber, Acc) ->
-    {ok, Pid} = supervisor:start_child(caterpillar_worker_sup, []),
-    create_workers(WorkerNumber - 1, [{Pid, none}|Acc]).
+    case supervisor:start_child(caterpillar_worker_sup, []) of
+        {ok, Pid} ->
+            logging:info_msg("build worker started at ~p", [Pid]),
+            create_workers(WorkerNumber - 1, [{Pid, none}|Acc]);
+        Other ->
+            logging:error_msg("failed to start build worker: ~p", [Other]),
+            {error, error}
+    end.
 
 -spec list_building_revs(State :: #state{}) -> {ok, [#rev_def{}]}.
 list_building_revs(State) ->
@@ -204,7 +211,7 @@ init_plugins(VCSPlugins) ->
     logging:info_msg("initializing VCS plugins: ~p", [VCSPlugins]),
     {ok, lists:map(
         fun({Plugin, PluginSettings}) -> 
-                logging:info_msg("starting ~p", Plugin),
+                logging:info_msg("starting ~p", [Plugin]),
                 {ok, Pid} = Plugin:start(PluginSettings),
                 erlang:monitor(process, Pid),
                 Pid 

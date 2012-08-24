@@ -7,7 +7,7 @@
 %% ------------------------------------------------------------------
 
 -export([start/1]).
--export([start_link/0]).
+-export([start_link/1]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -20,18 +20,18 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
-start(Args) ->
-    gen_server:start_link(?MODULE, Args, []).
+start(Settings) ->
+    gen_server:start_link(?MODULE, Settings, []).
 
-start_link() ->
-    gen_server:start_link(?MODULE, [], []).
+start_link(Settings) ->
+    gen_server:start_link(?MODULE, [Settings], []).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init(Args) ->
-    {ok, Args}.
+init(Settings) ->
+    {ok, {state, Settings}}.
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.

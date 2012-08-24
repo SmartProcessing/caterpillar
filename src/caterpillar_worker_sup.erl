@@ -53,7 +53,7 @@ init(Settings) ->
     {ok, {{simple_one_for_one, 3, 60}, 
             [{
                 caterpillar_worker, 
-                {caterpillar_worker, start_link, Settings},
+                {caterpillar_worker, start_link, [Settings]},
                 permanent,
                 5000,
                 worker,
