@@ -21,6 +21,11 @@ handle_action(<<"newrepo">>, Args, Settings) ->
     PluginName = ?GV(<<"plugin">>, Args),
     Parent = ?GV(parent_pid, Settings),
     gen_server:call(Parent, {newrepo, PluginName, Name});
+handle_action(<<"delrepo">>, Args, Settings) ->
+    Name = ?GV(<<"name">>, Args),
+    PluginName = ?GV(<<"plugin">>, Args),
+    Parent = ?GV(parent_pid, Settings),
+    gen_server:call(Parent, {delrepo, PluginName, Name});
 handle_action(Other, _Args, _Settings) ->
     logging:error_msg("invalid action: ~p", [Other]),
     {error, not_implemented}.
