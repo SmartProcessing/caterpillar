@@ -11,7 +11,7 @@ list_unresolved_dependencies(DepTree, Candidate) ->
     {ok, lists:filter(
         fun(X) ->
             case fetch_dependencies(DepTree, X) of
-                {ok, {VersionSpec, State, _Obj, _Subj}} ->
+                {ok, {_VersionSpec, State, _Obj, _Subj}} ->
                     State /= built;
                 _Other ->
                     true
