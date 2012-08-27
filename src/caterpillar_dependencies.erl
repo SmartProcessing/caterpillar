@@ -5,13 +5,13 @@
 -type dependencie_record() :: {version(), atom(), [version()], [version()]}.
 
 -spec list_unresolved_dependencies(reference(), #rev_def{}) ->
-    {ok, Unresolved :: list()}.
+    {ok, Unresolved :: [version()]}.
 list_unresolved_dependencies(DepTree, Candidate) ->
-    Deps = Candidate#rev_def.dep_subject,
+    Deps = Candidate#rev_def.dep_object,
     {ok, lists:filter(
         fun(X) ->
             case fetch_dependencies(DepTree, X) of
-                {ok, {_VersionSpec, State, _Obj, _Subj}} ->
+                {ok, {VersionSpec, State, _Obj, _Subj}} ->
                     State /= built;
                 _Other ->
                     true

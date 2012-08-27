@@ -2,13 +2,16 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("caterpillar.hrl").
 
--ifdef(EUNIT).
+-ifdef(TEST).
 
 setup() ->
     application:start(loggins),
-    application:start(caterpillar).
+    application:start(caterpillar),
+    dets:open_file('test', [{file, "test.dets"}]).
 
 cleanup(_Ign) ->
+    dets:close('test'),
+    os:cmd("rm test.dets"),
     application:stop(caterpillar).
 
 caterpillar_init_test() ->

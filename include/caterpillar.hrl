@@ -7,7 +7,7 @@
     branch          :: binary(),
     tag             :: binary(),
     build_id        :: integer(),
-    dep_subject     :: list(),
+    dep_object      :: [version()],
     platform_spec   :: term()
 }).
 
