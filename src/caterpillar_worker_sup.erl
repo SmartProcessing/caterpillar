@@ -45,10 +45,6 @@ start_link(Settings) ->
     {ok, Pid}.
 
 
-%% ===================================================================
-%% Supervisor callbacks
-%% ===================================================================
-
 init(Settings) ->
     {ok, {{simple_one_for_one, 3, 60}, 
             [{
@@ -59,4 +55,3 @@ init(Settings) ->
                 worker,
                 [caterpillar_worker]
             }]}}.
-

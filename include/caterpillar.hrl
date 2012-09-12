@@ -12,8 +12,23 @@
 }).
 
 -record(build_info, {
-    state=none      :: success|error|none
+    state           :: success|error|none,
+    package_spec    :: list(),
+    description     :: list(),
+    diff            :: list(),
+    log             :: list(),
+    test_info       :: list()
 }).
+
+-record(pkg_config, {
+    name            :: binary(),
+    dependencies    :: [#rev_def{}],
+    platforms       :: [binary()],
+    builders        :: [binary()],
+    architectures   :: [binary()],
+    maintainers     :: [binary()]
+}).
+
 
 -type version() :: 
     {
@@ -22,6 +37,6 @@
         Tag         :: binary()
     }.
 
--type plugin_def() :: {PluginName :: atom(), PluginArguments :: [term()]}.
+-type plugin_def() :: {atom(), [term()]}.
 
 -type dependencie_record() :: {version(), atom(), [version()], [version()]}.
