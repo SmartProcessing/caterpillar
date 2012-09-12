@@ -15,8 +15,6 @@
         workers=[]
     }).
 
--type plugin_def() :: {PluginName :: atom(), PluginArguments :: [term()]}.
-
 
 start_link(Settings) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, Settings, []).
@@ -44,7 +42,7 @@ init(Settings) ->
         }
     }.
 
-handle_call({newref, RevDef}, _From, State) ->
+handle_call({newref, RevDef, _RevInfo}, _From, State) ->
     Queue = queue:in(RevDef, State#state.main_queue),
     QueuedState = State#state{main_queue=Queue},
     case State#state.next_to_build of
@@ -54,8 +52,12 @@ handle_call({newref, RevDef}, _From, State) ->
             {ok, NewState} = try_build(QueuedState)
     end,
     {reply, ok, NewState};
-handle_call({built, _Worker, RevDef}, _From, State) ->
+handle_call({built, _Worker, RevDef, _BuildInfo}, _From, State) ->
     caterpillar_deps:update(State#state.deps, RevDef),
+    {ok, ScheduledState} = schedule_build(State),
+    {ok, NewState} = try_build(ScheduledState),
+    {reply, ok, NewState};
+handle_call({err_built, _Worker, _RevDef, _BuildInfo}, _From, State) ->
     {ok, ScheduledState} = schedule_build(State),
     {ok, NewState} = try_build(ScheduledState),
     {reply, ok, NewState};
@@ -79,11 +81,7 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-%% ------------------------------------------------------------------
-%% Internal Function Definitions
-%% ------------------------------------------------------------------
-
-%% Build section
+%% Build
 %% ------------------------------------------------------------------
 
 -spec try_build(State :: #state{}) -> {ok, NewState :: #state{}}.
@@ -145,7 +143,7 @@ number_free_workers(State) ->
             end, State#state.workers)}.
 
 
-%% Scheduling section
+%% Scheduling
 %% ------------------------------------------------------------------
 
 -spec schedule_build(State :: #state{}) -> {ok, NewState :: #state{}}.
@@ -208,7 +206,7 @@ get_build_candidate(both, State) ->
     end.
 
 
-%% External communication section
+%% External communication
 %% ------------------------------------------------------------------
 
 -spec init_plugins(VCSPlugins :: [plugin_def()]) -> 

@@ -2,8 +2,6 @@
 -include("caterpillar.hrl").
 -export([check_intersection/3, list_unresolved_dependencies/2]).
 
--type dependencie_record() :: {version(), atom(), [version()], [version()]}.
-
 -spec list_unresolved_dependencies(reference(), #rev_def{}) ->
     {ok, Unresolved :: [version()]}.
 list_unresolved_dependencies(DepTree, Candidate) ->

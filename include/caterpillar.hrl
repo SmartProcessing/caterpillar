@@ -11,6 +11,10 @@
     platform_spec   :: term()
 }).
 
+-record(build_info, {
+    state=none      :: success|error|none
+}).
+
 -type version() :: 
     {
         Name        :: binary(),
@@ -18,4 +22,6 @@
         Tag         :: binary()
     }.
 
+-type plugin_def() :: {PluginName :: atom(), PluginArguments :: [term()]}.
 
+-type dependencie_record() :: {version(), atom(), [version()], [version()]}.
