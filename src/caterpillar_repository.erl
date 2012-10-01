@@ -2,6 +2,8 @@
 
 -behaviour(gen_server).
 
+-include_lib("caterpillar_repository_internal.hrl").
+
 -export([start_link/1, stop/0]).
 -export([init/1, handle_info/2, handle_cast/2, handle_call/3, terminate/2, code_change/3]).
 
@@ -18,7 +20,11 @@ stop() ->
 init(Args) ->
     RepositoryRoot = filename:absname(proplists:get_value(repository_root, Args, ".")),
     ArchiveRoot = filename:absname(proplists:get_value(archive_root, Args, "/var/lib/caterpillar/repository/archive")),
-    {ok, []}.
+    State = #state{
+        repository_root = RepositoryRoot,
+        archive_root = ArchiveRoot
+    },
+    {ok, State}.
 
 
 

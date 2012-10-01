@@ -38,5 +38,5 @@ code_change(_Old, State, _Extra) ->
     {ok, State}.
 
 
-terminate(Reason, State) ->
+terminate(Reason, _State) ->
     error_logger:info_msg("caterpillar_router down with reason: ~p~n", [Reason]).
