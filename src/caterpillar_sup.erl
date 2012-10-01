@@ -13,7 +13,7 @@
 %% ===================================================================
 
 start_link() ->
-    logging:info_msg("starting caterpillar supervisor"),
+    error_logger:info_msg("starting caterpillar supervisor"),
     case application:get_env(caterpillar, handler) of
         undefined ->
             {error, settings_not_set};

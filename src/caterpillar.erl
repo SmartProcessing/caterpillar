@@ -20,18 +20,18 @@ start_link(Settings) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, Settings, []).
 
 init(Settings) ->
-    logging:info_msg("starting caterpillar", []),
-    VCSPlugins = ?GV(vcs_plugins, Settings, [{caterpillar_git_local, []}]),
+    error_logger:info_msg("starting caterpillar", []),
+    VCSPlugins = ?GV(vcs_plugins, Settings, [{caterpillar_buildnet_handler, []}]),
     {ok, Plugins} = init_plugins(VCSPlugins),
-    logging:info_msg("plugins initialized"),
+    error_logger:info_msg("plugins initialized"),
     {ok, Deps} = dets:open_file(deps,
         [{file, ?GV(deps, Settings, "/var/lib/smprc/caterpillar/deps")}]),
     BuildQueue = queue:new(),
     WaitQueue = queue:new(),
     {ok, WorkerList} = create_workers(?GV(build_workers_number, Settings, 5)),
-    logging:info_msg("workers initialized"),
+    error_logger:info_msg("workers initialized"),
     caterpillar_api:start(),
-    logging:info_msg("api started"),
+    error_logger:info_msg("api started"),
     {ok, #state{
             vcs_plugins=Plugins,
             deps=Deps,
@@ -114,7 +114,7 @@ job_free_worker([{Pid, SomeRef}|Other], ToBuild, OldW) ->
 -spec create_workers(WorkerNumber :: non_neg_integer()) -> 
     {ok, [{Pid :: pid(), none}]}.
 create_workers(WorkerNumber) ->
-    logging:info_msg("starting ~B build workers and worker supervisor: ~p ~n", 
+    error_logger:info_msg("starting ~B build workers and worker supervisor: ~p ~n", 
         [WorkerNumber, caterpillar_worker_sup:start_link()]),
     create_workers(WorkerNumber, []).
 create_workers(0, Acc) ->
@@ -122,10 +122,10 @@ create_workers(0, Acc) ->
 create_workers(WorkerNumber, Acc) ->
     case supervisor:start_child(caterpillar_worker_sup, []) of
         {ok, Pid} ->
-            logging:info_msg("build worker started at ~p", [Pid]),
+            error_logger:info_msg("build worker started at ~p", [Pid]),
             create_workers(WorkerNumber - 1, [{Pid, none}|Acc]);
         Other ->
-            logging:error_msg("failed to start build worker: ~p", [Other]),
+            error_logger:error_msg("failed to start build worker: ~p", [Other]),
             {error, error}
     end.
 
@@ -212,10 +212,10 @@ get_build_candidate(both, State) ->
 -spec init_plugins(VCSPlugins :: [plugin_def()]) -> 
     [{Plugin :: atom(), Pid :: pid()}].
 init_plugins(VCSPlugins) ->
-    logging:info_msg("initializing VCS plugins: ~p", [VCSPlugins]),
+    error_logger:info_msg("initializing VCS plugins: ~p", [VCSPlugins]),
     {ok, lists:map(
         fun({Plugin, PluginSettings}) -> 
-                logging:info_msg("starting ~p", [Plugin]),
+                error_logger:info_msg("starting ~p", [Plugin]),
                 {ok, Pid} = Plugin:start(PluginSettings),
                 erlang:monitor(process, Pid),
                 {Plugin, Pid}

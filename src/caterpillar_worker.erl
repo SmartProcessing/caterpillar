@@ -1,6 +1,7 @@
 -module(caterpillar_worker).
 -include("caterpillar.hrl").
 -behaviour(gen_server).
+-define(DEFAULT_BUILD_PATH, "/srv/caterpillar").
 
 -record(state, {
     build_plugins       :: [{atom(), list()}],
@@ -33,7 +34,7 @@ init(Settings) ->
     BuildPath = ?GV(
         build_path, 
         Settings, 
-        "/srv/caterpillar"
+        ?DEFAULT_BUILD_PATH 
     ),
     {ok, #state{
         build_plugins=BuildPlugins,
