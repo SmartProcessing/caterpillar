@@ -5,7 +5,6 @@
 -export([start/2, stop/1]).
 
 start(_StartType, _StartArgs) ->
-    application:start(logging),
     application:start(cowboy),
     caterpillar_sup:start_link().
 

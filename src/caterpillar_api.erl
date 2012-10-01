@@ -12,7 +12,7 @@ start() ->
     end,
     Port = ?GV(port, APISet, 39567),
     Dispatch = [{'_', [{'_', caterpillar_api_handler, [APISet]}]}],
-    logging:info_msg("starting api: ~p",
+    error_logger:info_msg("starting api: ~p",
         [catch cowboy:start_listener(
         caterpillar_api_listener,
         100,
