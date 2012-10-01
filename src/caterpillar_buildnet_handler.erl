@@ -1,4 +1,4 @@
--module(caterpillar_git_local).
+-module(caterpillar_buildnet_handler).
 -behaviour(gen_server).
 -define(SERVER, ?MODULE).
 
@@ -15,7 +15,7 @@ start_link(Settings) ->
     gen_server:start_link(?MODULE, [Settings], []).
 
 init(Settings) ->
-    logging:info_msg("starting caterpillar_git_local plugin~n", []),
+    logging:info_msg("starting caterpillar_buildnet_handler plugin~n", []),
     {ok, {state, Settings}}.
 
 

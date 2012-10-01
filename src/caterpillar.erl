@@ -21,7 +21,7 @@ start_link(Settings) ->
 
 init(Settings) ->
     logging:info_msg("starting caterpillar", []),
-    VCSPlugins = ?GV(vcs_plugins, Settings, [{caterpillar_git_local, []}]),
+    VCSPlugins = ?GV(vcs_plugins, Settings, [{caterpillar_buildnet_handler, []}]),
     {ok, Plugins} = init_plugins(VCSPlugins),
     logging:info_msg("plugins initialized"),
     {ok, Deps} = dets:open_file(deps,
