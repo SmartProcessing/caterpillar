@@ -1,12 +1,11 @@
-{application, caterpillar,
- [
-  {description, ""},
-  {vsn, "1"},
-  {registered, []},
-  {applications, [
-                  kernel,
-                  stdlib
-                 ]},
-  {mod, {caterpillar_app, []}},
-  {env, []}
- ]}.
+{application, caterpillar, [
+    {description, ""},
+    {vsn, "1"},
+    {registered, []},
+    {applications, [
+        kernel,
+        stdlib
+    ]},
+    {mod, {caterpillar_app, []}},
+    {env, []}
+]}.

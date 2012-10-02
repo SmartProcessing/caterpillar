@@ -2,9 +2,13 @@
 -include("caterpillar.hrl").
 
 -export([get_version_by_revdef/1, build_pipe/2]).
+-export([pipe/3]).
+-export([read_build_id/1, write_build_id/2]).
+-export([branch_to_archive/2, archive_to_branch/1]).
+-export([list_dir/1]).
+
 
 -type function_spec()   :: {function(), [term()]}.
-
 
 -spec read_build_id(Filename::file:filename()) -> BuildId::pos_integer().
 -spec write_build_id(Filename::file:filename(), BuildId::pos_integer()) -> ok | {error, Reason::term()}.
@@ -35,7 +39,7 @@ pipe([{Name, Fun}|T], InitialResult, State) ->
         {stop, NewResult} -> {ok, NewResult};
         {error, Reason} -> {error, Reason};
         Error ->
-            error_logger:error_msg("pipe unmatched result: ~p~n", [Error]), 
+            error_logger:error_msg("pipe unmatched result in ~p: ~p~n", [Name, Error]), 
             {error, {pipe, Error}}
     end.
 

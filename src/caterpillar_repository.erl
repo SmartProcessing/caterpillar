@@ -41,7 +41,7 @@ handle_call(_Msg, _From, State) ->
     {reply, {error, bad_msg}, State}.
 
 
-terminate(Reason, State) ->
+terminate(Reason, _State) ->
     error_logger:info_msg("caterpillar_repository down with reason ~p~n", [Reason]).
 
 

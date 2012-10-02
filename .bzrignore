@@ -1,1 +1,16 @@
 .eunit
+ebin/caterpillar.app
+ebin/caterpillar.beam
+ebin/caterpillar_api.beam
+ebin/caterpillar_api_handler.beam
+ebin/caterpillar_app.beam
+ebin/caterpillar_buildnet_handler.beam
+ebin/caterpillar_dependencies.beam
+ebin/caterpillar_notifier.beam
+ebin/caterpillar_repository.beam
+ebin/caterpillar_repository_plugin.beam
+ebin/caterpillar_router.beam
+ebin/caterpillar_sup.beam
+ebin/caterpillar_utils.beam
+ebin/caterpillar_worker.beam
+ebin/caterpillar_worker_sup.beam
