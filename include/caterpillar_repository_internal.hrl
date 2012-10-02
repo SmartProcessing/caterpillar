@@ -1,8 +1,10 @@
 -ifndef(caterpillar_repository_internal).
 -define(caterpillar_repository_internal, true).
 
--define(ARCHIVE_PATH, "/var/lib/caterpillar/repository/archive").
+-define(ARCHIVE_ROOT, "/var/lib/caterpillar/repository/archive").
+-define(REPOSITORY_ROOT, "/srv/repository").
 -define(SCAN_INTERVAL, 600).
+-define(DETS, "/var/lib/caterpillar/repository/repository.db").
 
 -record(state, {
     ets :: ets:tab(),

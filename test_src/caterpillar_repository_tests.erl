@@ -5,7 +5,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("caterpillar_repository_internal.hrl").
 
--define(ARGS, [{vcs_plugin, test_vcs_plugin}]).
+-define(ARGS, [{vcs_plugin, test_vcs_plugin}, {repository_db, "repo.db"}]).
 
 
 tty_off() ->
@@ -20,7 +20,7 @@ tty_on() ->
 start_link_test_() ->
 {setup,
     fun() -> ok end,
-    fun(_) -> ok = caterpillar_repository:stop() end,
+    fun(_) -> ok = caterpillar_repository:stop(), file:delete("repo.db") end,
     fun() ->
         Res = caterpillar_repository:start_link(?ARGS),
         ?assertMatch({ok, _}, Res),
@@ -34,7 +34,7 @@ start_link_test_() ->
 stop_test_() ->
 {setup,
     fun() -> caterpillar_repository:start_link(?ARGS) end,
-    fun(_) -> catch erlang:exit(whereis(caterpillar_repository), kill) end,
+    fun(_) -> catch erlang:exit(whereis(caterpillar_repository), kill), file:delete("repo.db") end,
     fun() ->
         Pid = whereis(caterpillar_repository),
         ?assert(is_pid(Pid)),
@@ -111,3 +111,30 @@ scan_repository_test_() ->
         }
     ]
 ]}.
+
+
+init_test_() ->
+{foreach,
+    fun() -> ok end,
+    fun(_) -> file:delete("repo.db") end,
+[
+    {"successful init", fun() ->
+        Res = caterpillar_repository:init([{vcs_plugin, test_vcs_plugin}, {repository_db, "repo.db"}]),
+        ?assertMatch({ok, _}, Res),
+        {ok, State} = Res,
+        ?assertEqual(State#state.scan_interval, ?SCAN_INTERVAL * 1000),
+        ?assertEqual(erlang:read_timer(State#state.scan_timer), 0),
+        ?assertEqual(State#state.archive_root, ?ARCHIVE_ROOT),
+        ?assertEqual(State#state.repository_root, ?REPOSITORY_ROOT),
+        ?assertEqual(State#state.vcs_plugin, test_vcs_plugin),
+        ?assertEqual(State#state.vcs_state, state),
+        ?assertEqual(ets:info(State#state.ets), ets:info(caterpillar_repository)),
+        ?assertEqual(State#state.dets, "repo.db")
+    end},
+    {"init failed, cant reach dets database", fun() ->
+        ?assertEqual(
+            {caterpillar_repository, {dets, {error, {file_error, "no_such_directory/repo_db", enoent}}}},
+            catch caterpillar_repository:init([{repository_db, "no_such_directory/repo_db"}])
+        )
+    end}
+]}. 

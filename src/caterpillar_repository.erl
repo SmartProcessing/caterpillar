@@ -18,18 +18,37 @@ stop() ->
 
 
 init(Args) ->
+    Dets = case dets:open_file(proplists:get_value(repository_db, Args, ?DETS), [{access, read_write}]) of
+        {ok, D} -> D;
+        Error -> 
+            error_logger:error_msg("caterpillar_repository dets initialization error: ~p~n", [Error]),
+            throw({caterpillar_repository, {dets, Error}})
+    end,
     State = vcs_init(
         #state{
-            repository_root = filename:absname(proplists:get_value(repository_root, Args, ".")),
-            archive_root = filename:absname(proplists:get_value(archive_root, Args, ?ARCHIVE_PATH)),
-            scan_interval = proplists:get_value(scan_interval, Args, ?SCAN_INTERVAL)
+            ets = ets:new(?MODULE, [named_table, protected]),
+            dets = Dets,
+            repository_root = filename:absname(proplists:get_value(repository_root, Args, ?REPOSITORY_ROOT)),
+            archive_root = filename:absname(proplists:get_value(archive_root, Args, ?ARCHIVE_ROOT)),
+            scan_interval = proplists:get_value(scan_interval, Args, ?SCAN_INTERVAL) * 1000,
+            scan_timer = scan_repository(0)
         },
         Args
     ),
-    {ok, scan_repository(State)}.
+    {ok, State}.
 
 
 
+handle_info(scan_repository, State) ->
+    spawn(fun() ->
+        case catch scan_pipe(State) of
+            {ok, NewPackages} ->
+                gen_server:call(?MODULE, {new_packages, NewPackages}, infinity);
+            Error ->
+                error_logger:error_msg("scan pipe failed with: ~p~n", [Error])
+        end
+    end),
+    {noreply, scan_repository(State)};
 handle_info(_Msg, State) ->
     {noreply, State}.
 
@@ -84,3 +103,11 @@ scan_repository(#state{scan_interval=SI, scan_timer=ST}=State) ->
     State#state{scan_timer=scan_repository(SI)};
 scan_repository(Delay) when is_integer(Delay), Delay >= 0 ->
     erlang:send_after(Delay, self(), scan_repository).
+
+
+
+%----
+
+scan_pipe(State) ->
+    FunList = [],
+    caterpillar_utils:pipe(FunList, [], State).
