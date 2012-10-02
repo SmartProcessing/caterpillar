@@ -1,6 +1,8 @@
 -ifndef(caterpillar_repository_internal).
 -define(caterpillar_repository_internal, true).
 
+-define(ARCHIVE_PATH, "/var/lib/caterpillar/repository/archive").
+
 -record(state, {
     ets :: ets:tab(),
     dets :: dets:tab(),

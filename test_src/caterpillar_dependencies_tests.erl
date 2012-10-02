@@ -2,6 +2,12 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("caterpillar.hrl").
 
+-on_load(tty_off/0).
+
+
+tty_off() -> 
+    error_logger:tty(false).
+
 -ifdef(TEST).
 
 setup() ->

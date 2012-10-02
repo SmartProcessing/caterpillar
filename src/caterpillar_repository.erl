@@ -18,11 +18,9 @@ stop() ->
 
 
 init(Args) ->
-    RepositoryRoot = filename:absname(proplists:get_value(repository_root, Args, ".")),
-    ArchiveRoot = filename:absname(proplists:get_value(archive_root, Args, "/var/lib/caterpillar/repository/archive")),
     State = #state{
-        repository_root = RepositoryRoot,
-        archive_root = ArchiveRoot
+        repository_root = filename:absname(proplists:get_value(repository_root, Args, ".")),
+        archive_root = filename:absname(proplists:get_value(archive_root, Args, ?ARCHIVE_PATH))
     },
     {ok, State}.
 

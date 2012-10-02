@@ -2,6 +2,13 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("caterpillar.hrl").
 
+-on_load(tty_off/0).
+
+
+tty_off() ->
+    error_logger:tty(false).
+
+
 -ifdef(TEST).
 
 setup() ->
@@ -16,9 +23,7 @@ cleanup(_Ign) ->
 
 caterpillar_init_test() ->
     {ok, [Settings]} = file:consult("../test.config"),
-    ?debugFmt("Settings=~p", [Settings]),
     CaterpillarSettings = proplists:get_value(caterpillar, Settings),
-    HandlerSettings = proplists:get_value(handler, CaterpillarSettings),
-    ?debugFmt("Init settings: ~p~n", [caterpillar:init(HandlerSettings)]).
+    HandlerSettings = proplists:get_value(handler, CaterpillarSettings).
 
 -endif.

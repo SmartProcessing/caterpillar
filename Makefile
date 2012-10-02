@@ -5,7 +5,7 @@ LOG_PATH = "/var/log/caterpillar/"
 ETC_PATH = "/etc/caterpillar/"
 
 
-.PHONY: clean, test, compile, devel, package
+.PHONY: clean test compile devel package
 
 REBAR = rebar
 clean:
@@ -14,7 +14,7 @@ clean:
 compile:
 	$(REBAR) compile
 
-test: clean
+test:
 	$(REBAR) -C rebar.test.config eunit
 
 devel: clean compile
