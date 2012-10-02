@@ -7,11 +7,7 @@
 
 
 tty_off() ->
-    test_support:tty_off().
-
-
-afafa_test() ->
-    ?assert(false).
+    error_logger:tty(false).
 
 
 pipe_test_() ->
@@ -21,7 +17,7 @@ pipe_test_() ->
     {Message, fun() ->
         ?assertEqual(
             Result,
-            buildnet_utils:pipe(FunList, PrevRes, State)
+            caterpillar_utils:pipe(FunList, PrevRes, State)
         )
     end} || {Message, {FunList, PrevRes, State}, Result} <- [
         {
@@ -62,7 +58,7 @@ read_build_id_test_() ->
         Setup(),
         ?assertEqual(
             Result,
-            buildnet_utils:read_build_id(?BUILD_ID)
+            caterpillar_utils:read_build_id(?BUILD_ID)
         )
     end} || {Message, Setup, Result} <- [
         {
@@ -103,13 +99,13 @@ write_build_id_test_()->
     {Message, fun() -> 
         ?assertEqual(
             Result,
-            buildnet_utils:write_build_id(?BUILD_ID, BuildId)
+            caterpillar_utils:write_build_id(?BUILD_ID, BuildId)
         ),
         Check()
     end} || {Message, Check, BuildId, Result} <- [
         {
             "build_id file not exists",
-            fun() -> ?assertEqual(buildnet_utils:read_build_id(?BUILD_ID), 1) end,
+            fun() -> ?assertEqual(caterpillar_utils:read_build_id(?BUILD_ID), 1) end,
             1,
             ok 
         },
@@ -132,7 +128,7 @@ check_build_id_file_test_() ->
         Setup(),
         ?assertEqual(
             ok,
-            buildnet_utils:check_build_id_file(?BUILD_ID)
+            caterpillar_utils:check_build_id_file(?BUILD_ID)
         ),
         Check()
     end} || {Message, Setup, Check} <- [
