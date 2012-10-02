@@ -4,7 +4,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-
+-define(ARGS, [{vcs_plugin, test_vcs_plugin}]).
 
 
 tty_off() ->
@@ -21,7 +21,7 @@ start_link_test_() ->
     fun() -> ok end,
     fun(_) -> ok = caterpillar_repository:stop() end,
     fun() ->
-        Res = caterpillar_repository:start_link([]),
+        Res = caterpillar_repository:start_link(?ARGS),
         ?assertMatch({ok, _}, Res),
         {ok, Pid} = Res,
         ?assertEqual(Pid, whereis(caterpillar_repository))
@@ -32,7 +32,7 @@ start_link_test_() ->
 
 stop_test_() ->
 {setup,
-    fun() -> caterpillar_repository:start_link([]) end,
+    fun() -> caterpillar_repository:start_link(?ARGS) end,
     fun(_) -> catch erlang:exit(whereis(caterpillar_repository), kill) end,
     fun() ->
         Pid = whereis(caterpillar_repository),

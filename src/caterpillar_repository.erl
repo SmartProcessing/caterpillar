@@ -18,10 +18,13 @@ stop() ->
 
 
 init(Args) ->
-    State = #state{
-        repository_root = filename:absname(proplists:get_value(repository_root, Args, ".")),
-        archive_root = filename:absname(proplists:get_value(archive_root, Args, ?ARCHIVE_PATH))
-    },
+    State = vcs_init(
+        #state{
+            repository_root = filename:absname(proplists:get_value(repository_root, Args, ".")),
+            archive_root = filename:absname(proplists:get_value(archive_root, Args, ?ARCHIVE_PATH))
+        },
+        Args
+    ),
     {ok, State}.
 
 
@@ -47,3 +50,15 @@ terminate(Reason, _State) ->
 
 code_change(_Old, State, _Extra) ->
     {ok, State}.
+
+
+
+%-------
+
+
+-spec vcs_init(State::#state{}, Args::proplists:property()) -> NewState::#state{}.
+
+vcs_init(State, Args) ->
+    VcsPlugin = proplists:get_value(vcs_plugin, Args),
+    VcsState = VcsPlugin:init(proplists:get_value(vcs_plugin_init, Args, [])),
+    State#state{vcs_plugin=VcsPlugin, vcs_state=VcsState}.

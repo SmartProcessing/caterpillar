@@ -24,6 +24,6 @@ cleanup(_Ign) ->
 caterpillar_init_test() ->
     {ok, [Settings]} = file:consult("../test.config"),
     CaterpillarSettings = proplists:get_value(caterpillar, Settings),
-    HandlerSettings = proplists:get_value(handler, CaterpillarSettings).
+    _HandlerSettings = proplists:get_value(handler, CaterpillarSettings).
 
 -endif.

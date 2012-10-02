@@ -6,7 +6,7 @@
 behaviour_info(callbacks) ->
     [
         {init, 1},
-        {terminate, 0},
+        {terminate, 1},
         {checkout_branch, 3},
         {get_diff, 5},
         {get_changelog, 5},

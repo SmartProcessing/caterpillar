@@ -8,6 +8,8 @@
     dets :: dets:tab(),
     repository_root :: string(),
     archive_root :: string(),
+    vcs_plugin :: atom(),
+    vcs_state :: term(),
     scan_timer :: reference(),
     scan_timer_interval = 600 :: non_neg_integer()
 }).
