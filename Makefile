@@ -3,14 +3,24 @@ include ../../devel-tools/trunk/Makefile.mk
 LIB_PATH = "/var/lib/caterpillar/"
 LOG_PATH = "/var/log/caterpillar/"
 ETC_PATH = "/etc/caterpillar/"
+REBAR = rebar
+BEAMS = $(patsubst src/%.erl, ebin/%.beam, $(wildcard src/*.erl))
+TEST_BEAMS = $(patsubst test_src/%.erl, ebin/%.beam, $(wildcard test_src/*.erl))
 
+ifdef EXPORT_ALL
+	ERLC_FLAGS += +export_all
+endif
 
 .PHONY: clean test compile devel package export_all test_compile
 
 
-REBAR = rebar
+ebin/%.beam: test_src/%.erl
+	$(ERLC_LIBS) $(ERLC) $(ERLC_FLAGS) -o $(EBIN) $<
+
+
 clean:
 	$(REBAR) clean
+
 
 compile:
 	$(REBAR) compile
@@ -21,9 +31,11 @@ export_all:
 	$(MAKE) EXPORT_ALL=true test_compile
 
 
-test_compile:
-	erlc -Iinclude +export_all -o ebin src/*.erl test_src/*.erl
-	
+ech:
+	@echo $(BEAMS)
+
+test_compile: $(BEAMS) $(TEST_BEAMS)
+
 
 test: export_all
 	$(ERL) -pa ebin/ -env ERL_LIBS "$(NORMALIZED_LIBS)" -noshell \
