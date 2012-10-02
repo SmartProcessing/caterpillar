@@ -7,7 +7,8 @@
 
 
 tty_off() ->
-    error_logger:tty(false).
+    test_support:tty_off().
+    %error_logger:tty(false).
 
 
 pipe_test_() ->

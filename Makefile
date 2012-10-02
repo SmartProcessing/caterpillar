@@ -5,7 +5,8 @@ LOG_PATH = "/var/log/caterpillar/"
 ETC_PATH = "/etc/caterpillar/"
 
 
-.PHONY: clean test compile devel package
+.PHONY: clean test compile devel package export_all test_compile
+
 
 REBAR = rebar
 clean:
@@ -14,12 +15,26 @@ clean:
 compile:
 	$(REBAR) compile
 
-test:
-	$(REBAR) -C rebar.test.config eunit
+
+
+export_all:
+	$(MAKE) EXPORT_ALL=true test_compile
+
+
+test_compile:
+	erlc -Iinclude +export_all -o ebin src/*.erl test_src/*.erl
+	
+
+test: export_all
+	$(ERL) -pa ebin/ -env ERL_LIBS "$(NORMALIZED_LIBS)" -noshell \
+    	-eval 'test_runner:start({dir, "ebin"}, [verbose, {test_timeout, 15000}])' \
+    	-s init stop 
+
+
 
 devel: clean compile
 	erl -pa ebin -env ERL_LIBS="$(NORMALIZED_LIBS)" \
-		-conig test.config -eval "application:start(caterpillar)."
+		-config test.config -eval "application:start(caterpillar)."
 			 
 
 
