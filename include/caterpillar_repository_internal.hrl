@@ -2,6 +2,7 @@
 -define(caterpillar_repository_internal, true).
 
 -define(ARCHIVE_PATH, "/var/lib/caterpillar/repository/archive").
+-define(SCAN_INTERVAL, 600).
 
 -record(state, {
     ets :: ets:tab(),
@@ -11,7 +12,7 @@
     vcs_plugin :: atom(),
     vcs_state :: term(),
     scan_timer :: reference(),
-    scan_timer_interval = 600 :: non_neg_integer()
+    scan_interval :: non_neg_integer()
 }).
 
 -endif.

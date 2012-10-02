@@ -9,7 +9,10 @@ TEST_BEAMS = $(patsubst test_src/%.erl, ebin/%.beam, $(wildcard test_src/*.erl))
 
 ifdef EXPORT_ALL
 	ERLC_FLAGS += +export_all
+else
+	ERLC_FLAGS += -Werror
 endif
+
 
 .PHONY: clean test compile devel package export_all test_compile
 

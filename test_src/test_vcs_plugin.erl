@@ -8,7 +8,7 @@
 -export([is_branch/3, is_repository/2]).
 
 
-init(_Args) -> ok.
+init(_Args) -> {ok, state}.
 
 
 terminate(_State) -> ok.

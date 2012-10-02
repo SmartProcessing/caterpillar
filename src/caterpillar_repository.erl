@@ -21,11 +21,12 @@ init(Args) ->
     State = vcs_init(
         #state{
             repository_root = filename:absname(proplists:get_value(repository_root, Args, ".")),
-            archive_root = filename:absname(proplists:get_value(archive_root, Args, ?ARCHIVE_PATH))
+            archive_root = filename:absname(proplists:get_value(archive_root, Args, ?ARCHIVE_PATH)),
+            scan_interval = proplists:get_value(scan_interval, Args, ?SCAN_INTERVAL)
         },
         Args
     ),
-    {ok, State}.
+    {ok, scan_repository(State)}.
 
 
 
@@ -59,6 +60,27 @@ code_change(_Old, State, _Extra) ->
 -spec vcs_init(State::#state{}, Args::proplists:property()) -> NewState::#state{}.
 
 vcs_init(State, Args) ->
+    case catch vcs_init_(State, Args) of
+        #state{}=NewState -> NewState;
+        Error ->
+            error_logger:error_msg("vcs_init failed with: ~p~n", [Error]),
+            exit({vcs_init, failed})
+    end.
+
+
+vcs_init_(State, Args) ->
     VcsPlugin = proplists:get_value(vcs_plugin, Args),
-    VcsState = VcsPlugin:init(proplists:get_value(vcs_plugin_init, Args, [])),
-    State#state{vcs_plugin=VcsPlugin, vcs_state=VcsState}.
+    case VcsPlugin:init(proplists:get_value(vcs_plugin_init, Args, [])) of
+        {ok, VcsState} ->
+            State#state{vcs_plugin=VcsPlugin, vcs_state=VcsState};
+        Error -> Error
+    end.
+
+
+-spec scan_repository(#state{}|non_neg_integer()) -> #state{}|reference().
+
+scan_repository(#state{scan_interval=SI, scan_timer=ST}=State) ->
+    catch erlang:cancel_timer(ST),
+    State#state{scan_timer=scan_repository(SI)};
+scan_repository(Delay) when is_integer(Delay), Delay >= 0 ->
+    erlang:send_after(Delay, self(), scan_repository).
