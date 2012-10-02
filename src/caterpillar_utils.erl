@@ -1,5 +1,6 @@
 -module(caterpillar_utils).
--include("caterpillar.hrl").
+
+-include_lib("caterpillar.hrl").
 
 -export([get_version_by_revdef/1, build_pipe/2]).
 -export([pipe/3]).
