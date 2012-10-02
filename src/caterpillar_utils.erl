@@ -5,8 +5,8 @@
 -export([get_version_by_revdef/1, build_pipe/2]).
 -export([pipe/3]).
 -export([read_build_id/1, write_build_id/2]).
--export([branch_to_archive/2, archive_to_branch/1]).
--export([list_dir/1]).
+-export([package_to_archive/2, archive_to_package/1]).
+-export([list_packages/1, del_dir/1]).
 
 
 -type function_spec()   :: {function(), [term()]}.
@@ -77,25 +77,52 @@ check_build_id_file(Filename) ->
 
 
 
-branch_to_archive(Repo, Branch) ->
+package_to_archive(Repo, Branch) ->
     string:join([Repo, Branch], "__ARCHIVE__").
 
 
-archive_to_branch(Archive) ->
+archive_to_package(Archive) ->
     [Repo, Branch] = string:tokens(Archive, "__ARCHIVE__"),
     {Repo, Branch}.
 
 
 
-list_dir(Path) ->
-    {ok, List} = file:list_dir(Path),
-    list_dir(List, []).
+list_packages(Path) ->
+    case file:list_dir(Path) of
+        {ok, List} -> list_packages(List, []);
+        Error -> Error
+    end.
 
 
-list_dir([], Accum) ->
+list_packages([], Accum) ->
     {ok, Accum};
-list_dir([ [$.|_]|O ], Accum) ->
-    list_dir(O, Accum);
-list_dir([ H|O ], Accum) ->
-    list_dir(O, [H|Accum]).
+list_packages([ [$.|_]|O ], Accum) ->
+    list_packages(O, Accum);
+list_packages([ H|O ], Accum) ->
+    list_packages(O, [H|Accum]).
+
+
+del_dir(Dir) ->
+    case filelib:is_dir(Dir) of
+        true ->
+            {ok, All} = file:list_dir(Dir),
+            del_dir(Dir, All);
+        false ->
+            file:delete(Dir) 
+    end.
+
+
+del_dir(Dir, [H|T]) when H /= "." andalso H /= ".." ->
+    AbsPath = filename:join(Dir, H),
+    case filelib:is_dir(AbsPath) of
+        false ->
+            file:delete(AbsPath);
+        true ->
+            del_dir(AbsPath)
+    end,
+    del_dir(Dir, T);
+del_dir(Dir, [_|T]) ->
+    del_dir(Dir, T);
+del_dir(Dir, []) ->
+    file:del_dir(Dir).
 

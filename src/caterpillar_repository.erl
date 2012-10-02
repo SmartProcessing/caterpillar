@@ -57,11 +57,19 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 
+
+handle_call(get_packages, _From, State) ->
+    {reply, [], State};
+
+handle_call({new_packages, Packages}, _From, State) ->
+    {reply, ok, State};
+
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 
 handle_call(_Msg, _From, State) ->
     {reply, {error, bad_msg}, State}.
+
 
 
 terminate(Reason, _State) ->
@@ -109,5 +117,26 @@ scan_repository(Delay) when is_integer(Delay), Delay >= 0 ->
 %----
 
 scan_pipe(State) ->
-    FunList = [],
-    caterpillar_utils:pipe(FunList, [], State).
+    FunList = [
+        {get_packages, fun get_packages/2},
+        {get_brances, fun get_branches/2},
+        {clean_packages, fun clean_packages/2},
+        {export_packages, fun export_packages/2},
+        {archive_packages, fun archive_packages/2}
+    ],
+    caterpillar_utils:pipe(FunList, none, State).
+
+
+
+get_packages(_, #state{repository_root=RR}=State) ->
+    case caterpillar_utils:list_dir(RR) of
+        {ok, []} -> {error, {get_packages, "nothing in repository"}};
+        {ok, Files} -> {ok, Files};
+        Error -> {error, {get_packages, Error}}
+    end.
+
+
+get_branches(Files, State) -> ok.
+clean_packages(Files, State) -> ok.
+export_packages(Files, State) -> ok.
+archive_packages(Files, State) -> ok.

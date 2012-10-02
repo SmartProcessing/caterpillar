@@ -138,3 +138,23 @@ init_test_() ->
         )
     end}
 ]}. 
+
+
+
+get_packages_test_() ->
+{foreachx,
+    fun(Directories) -> [filelib:ensure_dir(Dir) || Dir <- Directories] end,
+    fun(Directories, _) -> [caterpillar_utils:del_dir(Dir) || Dir <- Directories] end,
+[
+    {Setup, fun(_, _) ->
+        {Message, fun() ->
+            ?assertEqual(
+                Result,
+                caterpillar_repository:get_packages('_', State)
+            )
+        end}
+    end} || {Message, Setup, State, Result} <- [
+
+
+    ]
+]}.

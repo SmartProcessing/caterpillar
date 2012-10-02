@@ -150,3 +150,81 @@ check_build_id_file_test_() ->
     ]
 ]}.
 
+
+
+package_to_archive_to_package_test_() ->
+{foreach,
+    fun() -> ok end,
+[
+    {Message, fun() ->
+        ?assertEqual(
+            Archive,
+            caterpillar_utils:package_to_archive(Package, Branch)
+        ),
+        ?assertEqual(
+            {Package, Branch},
+            caterpillar_utils:archive_to_package(Archive)
+        )
+    end} || {Message, Package, Branch, Archive} <- [
+        {
+            "valid package n repo",
+            "package",
+            "branch",
+            "package__ARCHIVE__branch"
+        }
+    ]
+]}.
+
+
+
+list_packages_test_() ->
+{foreachx,
+    fun(Setup) -> [filelib:ensure_dir(Dir) || Dir <- Setup] end,
+    fun(Setup, _) ->  [file:del_dir(Dir) || Dir <- Setup] end,
+[
+    {Setup, fun(_, _) ->
+        {Message, fun() ->
+            ?assertEqual(
+                Result,
+                caterpillar_utils:list_packages(Path)
+            )
+        end}
+    end} || {Message, Setup, Path, Result} <- [
+        {
+            "list packages in existing dir",
+            ["__test/package1/", "__test/package2/", "__test/package3/", "__test"],
+            "__test",
+            {ok, ["package1", "package2", "package3"]}
+        },
+        {
+            "bad path, dir not exists",
+            [],
+            "__test",
+            {error, enoent}
+        }
+    ]
+]}.
+
+
+del_dir_test_() ->
+{foreachx,
+    fun(Setup) -> [filelib:ensure_dir(Dir) || Dir <- Setup] end,
+    fun(_, _) ->  ok end,
+[
+    {Setup, fun(Setup, _) ->
+        {Message, fun() ->
+            ?assertEqual(
+                ok,
+                caterpillar_utils:del_dir(Package)
+            ),
+            [?assert(not filelib:is_dir(Dir)) || Dir <- Setup]
+        end}
+    end} || {Message, Setup, Package, Result} <- [
+        {
+            "delete nested directories",
+            ["__test/package1/", "__test/package2/", "__test/package3/", "__test"],
+            "__test",
+            ok
+        }
+    ]
+]}.
