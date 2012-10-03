@@ -278,7 +278,7 @@ archive_packages([], [], _State) ->
     {error, {archive_packages, "nothing archived"}};
 
 archive_packages([], Accum, _State) ->
-    {ok, Accum};
+    {ok, lists:reverse(Accum)};
 
 archive_packages([{Package, Branch, Rev}=Data|O], Accum, #state{export_root=ER, archive_root=AR}=State) ->
     ExportPath = filename:join([ER, Package, Branch]),
