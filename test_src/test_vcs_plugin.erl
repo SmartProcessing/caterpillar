@@ -3,7 +3,7 @@
 -behaviour(caterpillar_repository_plugin).
 
 -export([init/1, terminate/1]).
--export([checkout_branch/3, export_branch/4, get_branches/2]).
+-export([export_branch/4, get_branches/2]).
 -export([get_changelog/5, get_diff/5, get_revno/3]).
 -export([is_branch/3, is_repository/2]).
 
@@ -12,9 +12,6 @@ init(_Args) -> {ok, state}.
 
 
 terminate(_State) -> ok.
-
-
-checkout_branch(_State, _Repo, _Branch) -> ok.
 
 
 export_branch(_State, _Repo, _Branch, _ExportPath) -> ok.
@@ -29,7 +26,7 @@ get_changelog(_State, _Repo, _Branch, _PrevRevision, _CurrentRevision) -> ok.
 get_diff(_State, _Repo, _Branch, _PrevRevision, _CurrentRevision) -> ok.
 
 
-get_revno(_State, "crash", "me") -> exit(some_reason);
+get_revno(_State, "__test/crash", "me") -> exit(some_reason);
 get_revno(_State, _Package, _Branch) -> {ok, 1}.
 
 

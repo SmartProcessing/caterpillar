@@ -28,8 +28,9 @@ init(Args) ->
         #state{
             ets = ets:new(?MODULE, [named_table, protected]),
             dets = Dets, %{{Package, Branch}, ArchiveName, LastRevision, BuildId}
-            repository_root = filename:absname(proplists:get_value(repository_root, Args, ?REPOSITORY_ROOT)),
-            archive_root = filename:absname(proplists:get_value(archive_root, Args, ?ARCHIVE_ROOT)),
+            repository_root = ensure_dir(proplists:get_value(repository_root, Args, ?REPOSITORY_ROOT)),
+            export_root = ensure_dir(proplists:get_value(export_root, Args, ?EXPORT_ROOT)),
+            archive_root = ensure_dir(proplists:get_value(archive_root, Args, ?ARCHIVE_ROOT)),
             scan_interval = proplists:get_value(scan_interval, Args, ?SCAN_INTERVAL) * 1000,
             scan_timer = scan_repository(0)
         },
@@ -37,6 +38,11 @@ init(Args) ->
     ),
     {ok, State}.
 
+
+ensure_dir(Path) ->
+    AbsPath = filename:absname(Path ++ "/"),
+    filelib:ensure_dir(AbsPath),
+    AbsPath.
 
 
 handle_info(scan_repository, State) ->
@@ -133,9 +139,10 @@ get_packages(_, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSSt
     case caterpillar_utils:list_packages(RR) of
         {ok, []} -> {error, {get_packages, "nothing in repository"}};
         {ok, Packages} ->
-            AbsPackages = [filename:join(RR, Package) || Package <- Packages],
-            FilterFun = fun(Package) -> VCSPlugin:is_repository(VCSState, Package) end,
-            case catch lists:filter(FilterFun, AbsPackages) of
+            FilterFun = fun(Package) ->
+                VCSPlugin:is_repository(VCSState, filename:join(RR, Package))
+            end,
+            case catch lists:filter(FilterFun, Packages) of
                 [] -> {error, {get_packages, "no repositories available"}};
                 Repos when is_list(Repos) -> {ok, Repos};
                 Error -> {error, {get_packages, {plugin_bad_return, Error}}}
@@ -154,14 +161,15 @@ get_branches([], [], _State) ->
 get_branches([], Branches, _State) ->
     {ok, lists:sort(Branches)};
 
-get_branches([Package|O], Accum, #state{vcs_plugin=VCSPlugin, vcs_state=VCSState}=State) ->
-    NewAccum = case caterpillar_utils:list_packages(Package) of
+get_branches([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSState}=State) ->
+    AbsPackage = filename:join(RR, Package),
+    NewAccum = case caterpillar_utils:list_packages(AbsPackage) of
         {ok, []} -> 
             error_logger:info_msg("no branches in ~p~n", [Package]),
             Accum;
         {ok, RawBranches} -> 
             FoldFun = fun(Branch, Acc) ->
-                case catch VCSPlugin:is_branch(VCSState, Package, Branch) of
+                case catch VCSPlugin:is_branch(VCSState, AbsPackage, Branch) of
                     true ->
                         [{Package, Branch}|Acc];
                     false ->
@@ -211,6 +219,8 @@ find_modified_packages([], Acc, _State) ->
 find_modified_packages([{Package, Branch}|O], Accum, State) ->
     VCSPlugin = State#state.vcs_plugin,
     VCSState = State#state.vcs_state,
+    RR = State#state.repository_root,
+    AbsPackage = filename:join(RR, Package),
     DetsResult = dets:select(
         State#state.dets,
         [{{{'$1', '$2'}, '_', '$3', '_'}, [{'==', '$1', Package}, {'==', '$2', Branch}], ['$3']}]
@@ -219,7 +229,7 @@ find_modified_packages([{Package, Branch}|O], Accum, State) ->
         [] -> none;
         [R] -> R
     end,
-    NewAccum = case catch VCSPlugin:get_revno(VCSState, Package, Branch) of
+    NewAccum = case catch VCSPlugin:get_revno(VCSState, AbsPackage, Branch) of
         {ok, Revno} when Revno /= DetsRevno -> [{Package, Branch, Revno}|Accum];
         {ok, _} -> Accum;
         Error -> 
@@ -232,8 +242,18 @@ find_modified_packages([{Package, Branch}|O], Accum, State) ->
     find_modified_packages(O, NewAccum, State).
 
 
+export_packages(Packages, State) -> 
+    export_packages(Packages, [], State).
 
 
+export_packages([], [], _State) ->
+    {error, {export_packages, "nothing exported"}};
 
-export_packages(_Files, _State) -> ok.
+export_packages([], Accum, _State) ->
+    {ok, lists:reverse(Accum)};
+
+export_packages([Package|O], Accum, #state{export_root=ER}=State) ->
+    {ok, []}.
+
+
 archive_packages(_Files, _State) -> ok.

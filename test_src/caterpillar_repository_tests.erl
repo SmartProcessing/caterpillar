@@ -161,7 +161,7 @@ get_packages_test_() ->
         {
             "listing packages in not empty repo",
             ["__test/package1/", "__test/package2/", "__test/package3/"],
-            {ok, ["__test/package1", "__test/package2"]}
+            {ok, ["package1", "package2"]}
         },
         {
             "repository root not exists",
@@ -206,20 +206,20 @@ get_branches_test_() ->
         {
             "no branches in repos",
             ["__test/package1/", "__test/package2/"],
-            ["__test/package1", "__test/package2"],
+            ["package1", "package2"],
             {error, {get_branches, "no branches in repositories"}}
         },
         {
             "one branch in one repo",
             ["__test/package1/branch1/", "__test/package2/"],
-            ["__test/package1"],
-            {ok, [{"__test/package1", "branch1"}]}
+            ["package1"],
+            {ok, [{"package1", "branch1"}]}
         },
         {
             "few branches in different repos",
             ["__test/package1/branch1/", "__test/package2/branch2/"],
-            ["__test/package1", "__test/package2"],
-            {ok, [{"__test/package1", "branch1"}, {"__test/package2", "branch2"}]}
+            ["package1", "package2"],
+            {ok, [{"package1", "branch1"}, {"package2", "branch2"}]}
         },
         {
             "plugin exits on branch check",
@@ -227,8 +227,8 @@ get_branches_test_() ->
                 "__test/package1/exit/", "__test/package1/branch1/",
                 "__test/package2/throw/", "__test/package2/branch2/"
             ],
-            ["__test/package1", "__test/package2"],
-            {ok, [{"__test/package1", "branch1"}, {"__test/package2", "branch2"}]}
+            ["package1", "package2"],
+            {ok, [{"package1", "branch1"}, {"package2", "branch2"}]}
         }
     ]
 ]}.
@@ -286,7 +286,7 @@ find_modified_packages_test_() ->
     fun(Setup) ->
         {ok, D} = dets:open_file("test.dets", [{access, read_write}]),
         [dets:insert(D, {X, archive, R, build_id}) || {X, R} <- Setup],
-        #state{dets=D, vcs_plugin=test_vcs_plugin}
+        #state{dets=D, vcs_plugin=test_vcs_plugin, repository_root="__test"}
     end,
     fun(_, _) ->
         dets:close("test.dets"), file:delete("test.dets")
@@ -325,4 +325,12 @@ find_modified_packages_test_() ->
             {error, {find_modified_packages, "no packages modified"}}
         }
     ]
+]}.
+
+
+export_packages_test_() ->
+{foreach,
+    fun() -> ok end,
+[
+
 ]}.
