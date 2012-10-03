@@ -161,7 +161,10 @@ get_packages_test_() ->
         {
             "listing packages in not empty repo",
             ["__test/package1/", "__test/package2/", "__test/package3/"],
-            {ok, ["package1", "package2"]}
+            {ok, [
+                #package{name="package1"},
+                #package{name="package2"}
+            ]}
         },
         {
             "repository root not exists",
@@ -206,20 +209,22 @@ get_branches_test_() ->
         {
             "no branches in repos",
             ["__test/package1/", "__test/package2/"],
-            ["package1", "package2"],
+            [#package{name=X} || X <- ["package1", "package2"]],
             {error, {get_branches, "no branches in repositories"}}
         },
         {
             "one branch in one repo",
             ["__test/package1/branch1/", "__test/package2/"],
-            ["package1"],
-            {ok, [{"package1", "branch1"}]}
+            [#package{name="package1"}],
+            {ok, [#package{name="package1", branch="branch1"}]}
         },
         {
             "few branches in different repos",
             ["__test/package1/branch1/", "__test/package2/branch2/"],
-            ["package1", "package2"],
-            {ok, [{"package1", "branch1"}, {"package2", "branch2"}]}
+            [#package{name=X} || X <- ["package1", "package2"]],
+            {ok, [#package{name=Name, branch=Branch} || {Name, Branch} <- [
+                {"package1", "branch1"}, {"package2", "branch2"}
+            ]]}
         },
         {
             "plugin exits on branch check",
@@ -227,8 +232,10 @@ get_branches_test_() ->
                 "__test/package1/exit/", "__test/package1/branch1/",
                 "__test/package2/throw/", "__test/package2/branch2/"
             ],
-            ["package1", "package2"],
-            {ok, [{"package1", "branch1"}, {"package2", "branch2"}]}
+            [#package{name=X} || X <- ["package1", "package2"]],
+            {ok, [#package{name=Name, branch=Branch} || {Name, Branch} <- [
+                {"package1", "branch1"}, {"package2", "branch2"}
+            ]]}
         }
     ]
 ]}.
@@ -261,20 +268,26 @@ clean_packages_test_() ->
         {
             "nothing in dets, clean message not sent",
             [],
-            [{"package1", "branch1"}, {"package2", "branch2"}],
+            [#package{name=Name, branch=Branch} || {Name, Branch} <- [
+                {"package1", "branch1"}, {"package2", "branch2"}
+            ]],
             timeout
         },
         {
             "something in dets, but nothing to delete",
             [{"package1", "branch1"}],
-            [{"package1", "branch1"}, {"package2", "branch2"}],
+            [#package{name=Name, branch=Branch} || {Name, Branch} <- [
+                {"package1", "branch1"}, {"package2", "branch2"}
+            ]],
             timeout
         },
         {
             "deleting missing branches n packages",
             [{"package1", "branch1"}, {"package3", "branch3"}],
-            [{"package1", "branch1"}, {"package2", "branch2"}],
-            {'$gen_cast', {clean_packages, [{"package3","branch3"}]}}
+            [#package{name=Name, branch=Branch} || {Name, Branch} <- [
+                {"package1", "branch1"}, {"package2", "branch2"}
+            ]],
+            {'$gen_cast', {clean_packages, [#package{name="package3", branch="branch3"}]}}
         }
     ]
 ]}.
@@ -296,32 +309,41 @@ find_modified_packages_test_() ->
         {Message, fun() ->
             ?assertEqual(
                 Result,
-                caterpillar_repository:find_modified_packages(Branches, State)
+                caterpillar_repository:find_modified_packages(Packages, State)
             )
         end}
-    end} || {Message, Setup,  Branches, Result} <- [
+    end} || {Message, Setup, Packages, Result} <- [
         {
             "new package (package2/branch2)",
             [{{"package1", "branch1"}, 1}],
-            [{"package1", "branch1"}, {"package2", "branch2"}],
-            {ok, [{"package2", "branch2", 1}]}
+            [#package{name=Name, branch=Branch} || {Name, Branch} <- [
+                {"package1", "branch1"}, {"package2", "branch2"}
+            ]],
+            {ok, [#package{name="package2", branch="branch2", revno=1}]}
         },
         {
             "both packages not modified",
             [{{"package1", "branch1"}, 1}, {{"package2", "branch2"}, 1}],
-            [{"package1", "branch1"}, {"package2", "branch2"}],
+            [#package{name=Name, branch=Branch} || {Name, Branch} <- [
+                {"package1", "branch1"}, {"package2", "branch2"}
+            ]],
             {error,{find_modified_packages,"no packages modified"}}
         },
         {
             "both packages modified",
             [{{"package1", "branch1"}, 10}, {{"package2", "branch2"}, 10}],
-            [{"package1", "branch1"}, {"package2", "branch2"}],
-            {ok, [{"package1", "branch1", 1}, {"package2", "branch2", 1}]}
+            [#package{name=Name, branch=Branch} || {Name, Branch} <- [
+                {"package1", "branch1"}, {"package2", "branch2"}
+            ]],
+            {ok, [
+                #package{name="package1", branch="branch1", revno=1},
+                #package{name="package2", branch="branch2", revno=1}
+            ]}
         },
         {
             "plugin returns bad response",
             [],
-            [{"crash", "me"}],
+            [#package{name="crash", branch="me"}],
             {error, {find_modified_packages, "no packages modified"}}
         }
     ]
@@ -370,16 +392,19 @@ export_packages_test_() ->
         {
             "export of new packages",
             ["__test/package1/branch1/"],
-            [{"package1", "branch1", rev}],
+            [#package{name="package1", branch="branch1", revno=rev}],
             fun() -> ok end,
-            {ok, [{"package1", "branch1", rev}]}
+            {ok, [#package{name="package1", branch="branch1", revno=rev}]}
         },
         {
             "some branch not exported",
             ["__test/package1/branch1/", "__test/package2/no_export/"],
-            [{"package1", "branch1", rev}, {"package2", "no_export", rev}],
+            [
+                #package{name="package1", branch="branch1", revno=rev},
+                #package{name="package2", branch="no_export", revno=rev}
+            ],
             fun() -> ok end,
-            {ok, [{"package1", "branch1", rev}]}
+            {ok, [#package{name="package1", branch="branch1", revno=rev}]}
         },
         {
             "checking previous version cleaned",
@@ -387,14 +412,14 @@ export_packages_test_() ->
                 "__test/package1/branch1/some_data/",
                 "__test_export/package1/branch1/some_data/"
             ],
-            [{"package1", "branch1", rev}],
+            [#package{name="package1", branch="branch1", revno=rev}],
             fun() -> 
                 ?assertEqual(
                     caterpillar_utils:list_packages("__test_export/package1/branch1/"),
                     {ok, []}
                 )
             end,
-            {ok, [{"package1", "branch1", rev}]}
+            {ok, [#package{name="package1", branch="branch1", revno=rev}]}
         }
     ]
 ]}.
@@ -436,12 +461,12 @@ archive_packages_test_() ->
                 "__test_export/package/branch/dir2/"
                 
             ],
-            [{"package", "branch", rev}],
+            [#package{name="package", branch="branch", revno=rev}],
             fun() ->
                 {ok, Names} = erl_tar:table("__test_archive/package__ARCHIVE__branch", [compressed]),
                 ?assertEqual(lists:sort(Names), ["package/branch/dir1", "package/branch/dir2"])
             end,
-            {ok, [{"package", "branch", rev}]}
+            {ok, [#package{name="package", branch="branch", revno=rev}]}
         }
     ]
 ]}.

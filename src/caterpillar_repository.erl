@@ -139,12 +139,17 @@ get_packages(_, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSSt
     case caterpillar_utils:list_packages(RR) of
         {ok, []} -> {error, {get_packages, "nothing in repository"}};
         {ok, Packages} ->
-            FilterFun = fun(Package) ->
-                VCSPlugin:is_repository(VCSState, filename:join(RR, Package))
+            FoldFun = fun(Package, Accum) ->
+                case VCSPlugin:is_repository(VCSState, filename:join(RR, Package)) of
+                    true -> [#package{name=Package} | Accum];
+                    false ->
+                        error_logger:info_msg("~p is not repository~n", [Package]),
+                        Accum
+                end 
             end,
-            case catch lists:filter(FilterFun, Packages) of
+            case catch lists:foldl(FoldFun, [], Packages) of
                 [] -> {error, {get_packages, "no repositories available"}};
-                Repos when is_list(Repos) -> {ok, Repos};
+                Repos when is_list(Repos) -> {ok, lists:reverse(Repos)};
                 Error -> {error, {get_packages, {plugin_bad_return, Error}}}
             end;
         Error -> {error, {get_packages, Error}}
@@ -162,7 +167,7 @@ get_branches([], Branches, _State) ->
     {ok, lists:sort(Branches)};
 
 get_branches([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSState}=State) ->
-    AbsPackage = filename:join(RR, Package),
+    AbsPackage = filename:join(RR, Package#package.name),
     NewAccum = case caterpillar_utils:list_packages(AbsPackage) of
         {ok, []} -> 
             error_logger:info_msg("no branches in ~p~n", [Package]),
@@ -171,7 +176,7 @@ get_branches([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugin
             FoldFun = fun(Branch, Acc) ->
                 case catch VCSPlugin:is_branch(VCSState, AbsPackage, Branch) of
                     true ->
-                        [{Package, Branch}|Acc];
+                        [Package#package{branch=Branch}|Acc];
                     false ->
                         error_logger:info_msg("~p/~p not a branch~n", [Package, Branch]), 
                         Acc;
@@ -199,9 +204,13 @@ get_branches([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugin
 
 clean_packages(Branches, #state{dets=Dets}) -> 
     DetsBranches = dets:select(Dets, [{{'$1', '_', '_', '_'}, [], ['$1']}]),
-    case DetsBranches -- Branches of
+    case DetsBranches -- [{Name, Branch} || #package{name=Name, branch=Branch} <- Branches] of
         [] -> ok;
-        ToClean -> gen_server:cast(?MODULE, {clean_packages, ToClean})
+        ToClean ->
+            gen_server:cast(
+                ?MODULE,
+                {clean_packages, [#package{name=Name, branch=Branch} || {Name, Branch} <- ToClean]}
+            )
     end,
     {ok, Branches}.
 
@@ -216,26 +225,30 @@ find_modified_packages([], [], _State) ->
 find_modified_packages([], Acc, _State) ->
     {ok, lists:reverse(Acc)};
 
-find_modified_packages([{Package, Branch}|O], Accum, State) ->
+find_modified_packages([Package|O], Accum, State) ->
     VCSPlugin = State#state.vcs_plugin,
     VCSState = State#state.vcs_state,
     RR = State#state.repository_root,
-    AbsPackage = filename:join(RR, Package),
+    AbsPackage = filename:join(RR, Package#package.name),
     DetsResult = dets:select(
         State#state.dets,
-        [{{{'$1', '$2'}, '_', '$3', '_'}, [{'==', '$1', Package}, {'==', '$2', Branch}], ['$3']}]
+        [{{
+            {'$1', '$2'}, '_', '$3', '_'},
+            [{'==', '$1', Package#package.name},
+            {'==', '$2', Package#package.branch}], ['$3']
+        }]
     ),
     DetsRevno = case DetsResult of
         [] -> none;
         [R] -> R
     end,
-    NewAccum = case catch VCSPlugin:get_revno(VCSState, AbsPackage, Branch) of
-        {ok, Revno} when Revno /= DetsRevno -> [{Package, Branch, Revno}|Accum];
+    NewAccum = case catch VCSPlugin:get_revno(VCSState, AbsPackage, Package#package.branch) of
+        {ok, Revno} when Revno /= DetsRevno -> [Package#package{revno=Revno}|Accum];
         {ok, _} -> Accum;
         Error -> 
             error_logger:error_msg(
                 "find_modified_packages error: ~p~n on ~p/~p~n",
-                [Error, Package, Branch]
+                [Error, Package#package.name, Package#package.branch]
             ),
             Accum
     end,
@@ -252,18 +265,20 @@ export_packages([], [], _State) ->
 export_packages([], Accum, _State) ->
     {ok, lists:reverse(Accum)};
 
-export_packages([{Package, Branch, Rev}|O], Accum, #state{export_root=ER, repository_root=RR}=State) ->
+export_packages([Package|O], Accum, #state{export_root=ER, repository_root=RR}=State) ->
     VCSPlugin = State#state.vcs_plugin,
     VCSState = State#state.vcs_state,
-    AbsExport = filename:join([ER, Package, Branch]),
-    AbsPackage = filename:join(RR, Package),
+    PackageName = Package#package.name,
+    PackageBranch = Package#package.branch,
+    AbsExport = filename:join([ER, PackageName, PackageBranch]),
+    AbsPackage = filename:join(RR, PackageName),
     caterpillar_utils:del_dir(AbsExport),
     filelib:ensure_dir(AbsExport ++ "/"),
-    NewAccum = case catch VCSPlugin:export(VCSState, AbsPackage, Branch, AbsExport) of
-        ok -> [{Package, Branch, Rev}|Accum];
+    NewAccum = case catch VCSPlugin:export(VCSState, AbsPackage, PackageBranch, AbsExport) of
+        ok -> [Package|Accum];
         Error ->
             error_logger:error_msg(
-                "export_packages error ~p~n at ~p/~p(~p)~n", [Error, Package, Branch, Rev]
+                "export_packages error ~p~n at ~p/~p~n", [Error, PackageName, PackageBranch]
             ),
             Accum
     end,
@@ -280,18 +295,20 @@ archive_packages([], [], _State) ->
 archive_packages([], Accum, _State) ->
     {ok, lists:reverse(Accum)};
 
-archive_packages([{Package, Branch, Rev}=Data|O], Accum, #state{export_root=ER, archive_root=AR}=State) ->
-    ExportPath = filename:join([ER, Package, Branch]),
+archive_packages([Package|O], Accum, #state{export_root=ER, archive_root=AR}=State) ->
+    PackageName = Package#package.name,
+    PackageBranch = Package#package.branch,
+    ExportPath = filename:join([ER, PackageName, PackageBranch]),
     Archive = filename:join(
         AR,
-        caterpillar_utils:package_to_archive(Package, Branch)
+        caterpillar_utils:package_to_archive(PackageName, PackageBranch)
     ),
     Result = (catch begin
         Tar = case erl_tar:open(Archive, [write, compressed]) of
             {ok, T} -> T;
             ErrT -> throw(ErrT)
         end,
-        case erl_tar:add(Tar, ExportPath, filename:join(Package, Branch), []) of
+        case erl_tar:add(Tar, ExportPath, filename:join(PackageName, PackageBranch), []) of
             ok -> ok;
             ErrAd -> throw(ErrAd)
         end,
@@ -299,11 +316,11 @@ archive_packages([{Package, Branch, Rev}=Data|O], Accum, #state{export_root=ER, 
         ok
     end),
     NewAccum = case Result of
-        ok -> [Data|Accum];
+        ok -> [Package|Accum];
         Error ->
             error_logger:error_msg(
-                "archive_packages error: ~p~n at ~p/~p(~p)~n",
-                [Error, Package, Branch, Rev]
+                "archive_packages error: ~p~n at ~p/~p~n",
+                [Error, PackageName, PackageBranch]
             ),
             Accum
     end,

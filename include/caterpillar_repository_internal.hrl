@@ -19,4 +19,13 @@
     scan_interval :: non_neg_integer()
 }).
 
+-record(package, {
+    name :: string(),
+    branch :: string(),
+    revno :: term(),
+    archive :: string(),
+    diff :: binary(),
+    changelog :: binary()
+}).
+
 -endif.
