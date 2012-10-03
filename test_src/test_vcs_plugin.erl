@@ -29,7 +29,8 @@ get_changelog(_State, _Repo, _Branch, _PrevRevision, _CurrentRevision) -> ok.
 get_diff(_State, _Repo, _Branch, _PrevRevision, _CurrentRevision) -> ok.
 
 
-get_revno(_State, _Repo, _Branch) -> ok.
+get_revno(_State, "crash", "me") -> exit(some_reason);
+get_revno(_State, _Package, _Branch) -> {ok, 1}.
 
 
 is_branch(_State, "__test/package1", "branch1") -> true;

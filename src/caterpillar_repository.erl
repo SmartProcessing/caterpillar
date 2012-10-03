@@ -121,6 +121,7 @@ scan_pipe(State) ->
         {get_packages, fun get_packages/2},
         {get_brances, fun get_branches/2},
         {clean_packages, fun clean_packages/2},
+        {find_modified_packages, fun find_modified_packages/2},
         {export_packages, fun export_packages/2},
         {archive_packages, fun archive_packages/2}
     ],
@@ -190,12 +191,48 @@ get_branches([Package|O], Accum, #state{vcs_plugin=VCSPlugin, vcs_state=VCSState
 
 clean_packages(Branches, #state{dets=Dets}) -> 
     DetsBranches = dets:select(Dets, [{{'$1', '_', '_', '_'}, [], ['$1']}]),
-    error_logger:error_msg("~p~n", [DetsBranches]),
     case DetsBranches -- Branches of
         [] -> ok;
         ToClean -> gen_server:cast(?MODULE, {clean_packages, ToClean})
     end,
     {ok, Branches}.
+
+
+find_modified_packages(Branches, State) ->
+    find_modified_packages(Branches, [], State).
+
+
+find_modified_packages([], [], _State) ->
+    {error, {find_modified_packages, "no packages modified"}};
+
+find_modified_packages([], Acc, _State) ->
+    {ok, lists:reverse(Acc)};
+
+find_modified_packages([{Package, Branch}|O], Accum, State) ->
+    VCSPlugin = State#state.vcs_plugin,
+    VCSState = State#state.vcs_state,
+    DetsResult = dets:select(
+        State#state.dets,
+        [{{{'$1', '$2'}, '_', '$3', '_'}, [{'==', '$1', Package}, {'==', '$2', Branch}], ['$3']}]
+    ),
+    DetsRevno = case DetsResult of
+        [] -> none;
+        [R] -> R
+    end,
+    NewAccum = case catch VCSPlugin:get_revno(VCSState, Package, Branch) of
+        {ok, Revno} when Revno /= DetsRevno -> [{Package, Branch, Revno}|Accum];
+        {ok, _} -> Accum;
+        Error -> 
+            error_logger:error_msg(
+                "find_modified_packages error: ~p~n on ~p/~p~n",
+                [Error, Package, Branch]
+            ),
+            Accum
+    end,
+    find_modified_packages(O, NewAccum, State).
+
+
+
 
 
 export_packages(_Files, _State) -> ok.

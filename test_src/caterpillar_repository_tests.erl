@@ -33,7 +33,7 @@ start_link_test_() ->
 
 stop_test_() ->
 {setup,
-    fun() -> caterpillar_repository:start_link(?ARGS) end,
+    fun() -> {ok, Pid} = caterpillar_repository:start_link(?ARGS) end,
     fun(_) -> catch erlang:exit(whereis(caterpillar_repository), kill), file:delete("repo.db") end,
     fun() ->
         Pid = whereis(caterpillar_repository),
@@ -275,6 +275,54 @@ clean_packages_test_() ->
             [{"package1", "branch1"}, {"package3", "branch3"}],
             [{"package1", "branch1"}, {"package2", "branch2"}],
             {'$gen_cast', {clean_packages, [{"package3","branch3"}]}}
+        }
+    ]
+]}.
+
+
+
+find_modified_packages_test_() ->
+{foreachx,
+    fun(Setup) ->
+        {ok, D} = dets:open_file("test.dets", [{access, read_write}]),
+        [dets:insert(D, {X, archive, R, build_id}) || {X, R} <- Setup],
+        #state{dets=D, vcs_plugin=test_vcs_plugin}
+    end,
+    fun(_, _) ->
+        dets:close("test.dets"), file:delete("test.dets")
+    end,
+[
+    {Setup, fun(_, State) ->
+        {Message, fun() ->
+            ?assertEqual(
+                Result,
+                caterpillar_repository:find_modified_packages(Branches, State)
+            )
+        end}
+    end} || {Message, Setup,  Branches, Result} <- [
+        {
+            "new package (package2/branch2)",
+            [{{"package1", "branch1"}, 1}],
+            [{"package1", "branch1"}, {"package2", "branch2"}],
+            {ok, [{"package2", "branch2", 1}]}
+        },
+        {
+            "both packages not modified",
+            [{{"package1", "branch1"}, 1}, {{"package2", "branch2"}, 1}],
+            [{"package1", "branch1"}, {"package2", "branch2"}],
+            {error,{find_modified_packages,"no packages modified"}}
+        },
+        {
+            "both packages modified",
+            [{{"package1", "branch1"}, 10}, {{"package2", "branch2"}, 10}],
+            [{"package1", "branch1"}, {"package2", "branch2"}],
+            {ok, [{"package1", "branch1", 1}, {"package2", "branch2", 1}]}
+        },
+        {
+            "plugin returns bad response",
+            [],
+            [{"crash", "me"}],
+            {error, {find_modified_packages, "no packages modified"}}
         }
     ]
 ]}.
