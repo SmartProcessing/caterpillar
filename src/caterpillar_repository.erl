@@ -48,8 +48,8 @@ ensure_dir(Path) ->
 handle_info(scan_repository, State) ->
     spawn(fun() ->
         case catch scan_pipe(State) of
-            {ok, NewPackages} ->
-                gen_server:call(?MODULE, {new_packages, NewPackages}, infinity);
+            {ok, Packages} ->
+                gen_server:call(?MODULE, {new_packages, Packages}, infinity);
             Error ->
                 error_logger:error_msg("scan pipe failed with: ~p~n", [Error])
         end
@@ -281,6 +281,7 @@ archive_packages([], Accum, _State) ->
     {ok, Accum};
 
 archive_packages([{Package, Branch, Rev}=Data|O], Accum, #state{export_root=ER, archive_root=AR}=State) ->
+    ExportPath = filename:join([ER, Package, Branch]),
     Archive = filename:join(
         AR,
         caterpillar_utils:package_to_archive(Package, Branch)
@@ -290,7 +291,7 @@ archive_packages([{Package, Branch, Rev}=Data|O], Accum, #state{export_root=ER, 
             {ok, T} -> T;
             ErrT -> throw(ErrT)
         end,
-        case erl_tar:add(Tar, Archive, filename:join(Package, Branch) ++ "/", []) of
+        case erl_tar:add(Tar, ExportPath, filename:join(Package, Branch), []) of
             ok -> ok;
             ErrAd -> throw(ErrAd)
         end,
@@ -307,4 +308,3 @@ archive_packages([{Package, Branch, Rev}=Data|O], Accum, #state{export_root=ER, 
             Accum
     end,
     archive_packages(O, NewAccum, State).
-    

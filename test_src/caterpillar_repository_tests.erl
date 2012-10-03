@@ -431,12 +431,16 @@ archive_packages_test_() ->
         },
         {
             "package successfuly archived",
-            ["__test_export/package/branch/"],
+            [
+                "__test_export/package/branch/dir1/",
+                "__test_export/package/branch/dir2/"
+                
+            ],
             [{"package", "branch", rev}],
             fun() ->
                 ?assertEqual(
                     erl_tar:table("__test_archive/package__ARCHIVE__branch", [compressed]),
-                    {ok,["package/branch/"]}
+                    {ok,["package/branch/dir2", "package/branch/dir1"]} 
                 )
             end,
             {ok, [{"package", "branch", rev}]}
