@@ -3,7 +3,7 @@
 -behaviour(caterpillar_repository_plugin).
 
 -export([init/1, terminate/1]).
--export([export_branch/4, get_branches/2]).
+-export([export/4, get_branches/2]).
 -export([get_changelog/5, get_diff/5, get_revno/3]).
 -export([is_branch/3, is_repository/2]).
 
@@ -14,7 +14,8 @@ init(_Args) -> {ok, state}.
 terminate(_State) -> ok.
 
 
-export_branch(_State, _Repo, _Branch, _ExportPath) -> ok.
+export(_State, _Repo, "no_export", _ExportPath) -> error;
+export(_State, _Repo, _Branch, ExportPath) -> filelib:ensure_dir(ExportPath ++ "/").
 
 
 get_branches(_State, _Repo) -> [].

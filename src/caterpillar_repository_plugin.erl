@@ -13,6 +13,6 @@ behaviour_info(callbacks) ->
         {is_repository, 2},
         {is_branch, 3},
         {get_branches, 2},
-        {export_branch, 4}
+        {export, 4}
     ];
 behaviour_info(_) -> undefined.

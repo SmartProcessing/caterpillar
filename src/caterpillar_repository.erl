@@ -252,8 +252,22 @@ export_packages([], [], _State) ->
 export_packages([], Accum, _State) ->
     {ok, lists:reverse(Accum)};
 
-export_packages([Package|O], Accum, #state{export_root=ER}=State) ->
-    {ok, []}.
+export_packages([{Package, Branch, Rev}|O], Accum, #state{export_root=ER, repository_root=RR}=State) ->
+    VCSPlugin = State#state.vcs_plugin,
+    VCSState = State#state.vcs_state,
+    AbsExport = filename:join([ER, Package, Branch]),
+    AbsPackage = filename:join(RR, Package),
+    caterpillar_utils:del_dir(AbsExport),
+    filelib:ensure_dir(AbsExport ++ "/"),
+    NewAccum = case catch VCSPlugin:export(VCSState, AbsPackage, Branch, AbsExport) of
+        ok -> [{Package, Branch, Rev}|Accum];
+        Error ->
+            error_logger:error_msg(
+                "export_packages error ~p~n at ~p/~p(~p)~n", [Error, Package, Branch, Rev]
+            ),
+            Accum
+    end,
+    export_packages(O, NewAccum, State).
 
 
 archive_packages(_Files, _State) -> ok.

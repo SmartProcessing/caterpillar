@@ -329,8 +329,47 @@ find_modified_packages_test_() ->
 
 
 export_packages_test_() ->
-{foreach,
-    fun() -> ok end,
+{foreachx,
+    fun(Directories) ->
+        [filelib:ensure_dir(Dir) || Dir <- Directories],
+        #state{repository_root="__test", export_root="__test_export", vcs_plugin=test_vcs_plugin}
+    end,
+    fun(_, #state{repository_root=RR, export_root=ER}) ->
+        [caterpillar_utils:del_dir(D) || D <- [RR, ER]]
+    end,
 [
-
+    {Setup, fun(_, State) ->
+        {Message, fun() ->
+            ?assertEqual(
+                Result,
+                caterpillar_repository:export_packages(Packages, State)
+            ),
+            RR = State#state.repository_root,
+            ER = State#state.export_root,
+            RepoPackages = caterpillar_utils:list_packages(RR),
+            ExprPackages = caterpillar_utils:list_packages(RR),
+            ?assertEqual(
+                RepoPackages,
+                ExprPackages
+            ),
+            {ok, ListedPackages} = RepoPackages,
+            [?assertEqual(
+                caterpillar_utils:list_packages(filename:join(RR, Package)),
+                caterpillar_utils:list_packages(filename:join(ER, Package))
+            ) || Package <- ListedPackages]
+        end}
+    end} || {Message, Setup, Packages, Result} <- [
+        {
+            "export of new packages",
+            ["__test/package1/branch1/"],
+            [{"package1", "branch1", rev}],
+            {ok, [{"package1", "branch1", rev}]}
+        },
+        {
+            "some branch not exported",
+            ["__test/package1/branch1/", "__test/package2/no_export/"],
+            [{"package1", "branch1", rev}, {"package2", "no_export", rev}],
+            {ok, [{"package1", "branch1", rev}]}
+        }
+    ]
 ]}.
