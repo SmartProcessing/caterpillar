@@ -270,4 +270,41 @@ export_packages([{Package, Branch, Rev}|O], Accum, #state{export_root=ER, reposi
     export_packages(O, NewAccum, State).
 
 
-archive_packages(_Files, _State) -> ok.
+archive_packages(Packages, State) -> 
+    archive_packages(Packages, [], State).
+
+
+archive_packages([], [], _State) ->
+    {error, {archive_packages, "nothing archived"}};
+
+archive_packages([], Accum, _State) ->
+    {ok, Accum};
+
+archive_packages([{Package, Branch, Rev}=Data|O], Accum, #state{export_root=ER, archive_root=AR}=State) ->
+    Archive = filename:join(
+        AR,
+        caterpillar_utils:package_to_archive(Package, Branch)
+    ),
+    Result = (catch begin
+        Tar = case erl_tar:open(Archive, [write, compressed]) of
+            {ok, T} -> T;
+            ErrT -> throw(ErrT)
+        end,
+        case erl_tar:add(Tar, Archive, filename:join(Package, Branch) ++ "/", []) of
+            ok -> ok;
+            ErrAd -> throw(ErrAd)
+        end,
+        erl_tar:close(Tar),
+        ok
+    end),
+    NewAccum = case Result of
+        ok -> [Data|Accum];
+        Error ->
+            error_logger:error_msg(
+                "archive_packages error: ~p~n at ~p/~p(~p)~n",
+                [Error, Package, Branch, Rev]
+            ),
+            Accum
+    end,
+    archive_packages(O, NewAccum, State).
+    

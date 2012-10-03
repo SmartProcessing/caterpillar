@@ -361,6 +361,13 @@ export_packages_test_() ->
         end}
     end} || {Message, Setup, Packages, Check, Result} <- [
         {
+            "nothing exported",
+            ["__test/"],
+            [],
+            fun() -> ok end,
+            {error, {export_packages, "nothing exported"}}
+        },
+        {
             "export of new packages",
             ["__test/package1/branch1/"],
             [{"package1", "branch1", rev}],
@@ -388,6 +395,51 @@ export_packages_test_() ->
                 )
             end,
             {ok, [{"package1", "branch1", rev}]}
+        }
+    ]
+]}.
+
+
+
+archive_packages_test_() ->
+{foreachx,
+    fun(Directories) ->
+        tty_on(),
+        Dirs = Directories++["__test_archive/", "__test_export/"],
+        [filelib:ensure_dir(Dir) || Dir <- Dirs],
+        #state{archive_root="__test_archive", export_root="__test_export", vcs_plugin=test_vcs_plugin}
+    end,
+    fun(_, #state{archive_root=AR, export_root=ER}) ->
+        [caterpillar_utils:del_dir(D) || D <- [AR, ER]]
+    end,
+[
+    {Setup, fun(_, State) ->
+        {Message, fun() ->
+            ?assertEqual(
+                Result,
+                caterpillar_repository:archive_packages(Packages, State)
+            ),
+            Check()
+        end}
+    end} || {Message, Setup, Packages, Check, Result} <- [
+        {
+            "nothing archived",
+            [], 
+            [],
+            fun() -> ok end,
+            {error, {archive_packages, "nothing archived"}}
+        },
+        {
+            "package successfuly archived",
+            ["__test_export/package/branch/"],
+            [{"package", "branch", rev}],
+            fun() ->
+                ?assertEqual(
+                    erl_tar:table("__test_archive/package__ARCHIVE__branch", [compressed]),
+                    {ok,["package/branch/"]}
+                )
+            end,
+            {ok, [{"package", "branch", rev}]}
         }
     ]
 ]}.
