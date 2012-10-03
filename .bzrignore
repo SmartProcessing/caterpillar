@@ -14,3 +14,4 @@ ebin/caterpillar_sup.beam
 ebin/caterpillar_utils.beam
 ebin/caterpillar_worker.beam
 ebin/caterpillar_worker_sup.beam
+*.beam
