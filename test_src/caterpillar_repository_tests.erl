@@ -356,19 +356,37 @@ export_packages_test_() ->
             [?assertEqual(
                 caterpillar_utils:list_packages(filename:join(RR, Package)),
                 caterpillar_utils:list_packages(filename:join(ER, Package))
-            ) || Package <- ListedPackages]
+            ) || Package <- ListedPackages],
+            Check()
         end}
-    end} || {Message, Setup, Packages, Result} <- [
+    end} || {Message, Setup, Packages, Check, Result} <- [
         {
             "export of new packages",
             ["__test/package1/branch1/"],
             [{"package1", "branch1", rev}],
+            fun() -> ok end,
             {ok, [{"package1", "branch1", rev}]}
         },
         {
             "some branch not exported",
             ["__test/package1/branch1/", "__test/package2/no_export/"],
             [{"package1", "branch1", rev}, {"package2", "no_export", rev}],
+            fun() -> ok end,
+            {ok, [{"package1", "branch1", rev}]}
+        },
+        {
+            "checking previous version cleaned",
+            [
+                "__test/package1/branch1/some_data/",
+                "__test_export/package1/branch1/some_data/"
+            ],
+            [{"package1", "branch1", rev}],
+            fun() -> 
+                ?assertEqual(
+                    caterpillar_utils:list_packages("__test_export/package1/branch1/"),
+                    {ok, []}
+                )
+            end,
             {ok, [{"package1", "branch1", rev}]}
         }
     ]
