@@ -232,3 +232,49 @@ get_branches_test_() ->
         }
     ]
 ]}.
+
+
+clean_packages_test_() ->
+{foreachx,
+    fun(Setup) ->
+        {ok, D} = dets:open_file("test.dets", [{access, read_write}]),
+        [dets:insert(D, {X, archive, revision, build_id}) || X <- Setup],
+        #state{dets=D}
+    end,
+    fun(_, _) ->
+        dets:close("test.dets"), file:delete("test.dets")
+    end,
+[
+    {Setup, fun(_, State) ->
+        {Message, fun() ->
+            register(caterpillar_repository, self()),
+            ?assertEqual(
+                {ok, Branches},
+                caterpillar_repository:clean_packages(Branches, State)
+            ),
+            ?assertEqual(
+                RecvResult,
+                receive Msg -> Msg after 10 -> timeout end
+            )
+        end}
+    end} || {Message, Setup, Branches, RecvResult} <- [
+        {
+            "nothing in dets, clean message not sent",
+            [],
+            [{"package1", "branch1"}, {"package2", "branch2"}],
+            timeout
+        },
+        {
+            "something in dets, but nothing to delete",
+            [{"package1", "branch1"}],
+            [{"package1", "branch1"}, {"package2", "branch2"}],
+            timeout
+        },
+        {
+            "deleting missing branches n packages",
+            [{"package1", "branch1"}, {"package3", "branch3"}],
+            [{"package1", "branch1"}, {"package2", "branch2"}],
+            {'$gen_cast', {clean_packages, [{"package3","branch3"}]}}
+        }
+    ]
+]}.

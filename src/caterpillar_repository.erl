@@ -27,7 +27,7 @@ init(Args) ->
     State = vcs_init(
         #state{
             ets = ets:new(?MODULE, [named_table, protected]),
-            dets = Dets,
+            dets = Dets, %{{Package, Branch}, ArchiveName, LastRevision, BuildId}
             repository_root = filename:absname(proplists:get_value(repository_root, Args, ?REPOSITORY_ROOT)),
             archive_root = filename:absname(proplists:get_value(archive_root, Args, ?ARCHIVE_ROOT)),
             scan_interval = proplists:get_value(scan_interval, Args, ?SCAN_INTERVAL) * 1000,
@@ -188,7 +188,15 @@ get_branches([Package|O], Accum, #state{vcs_plugin=VCSPlugin, vcs_state=VCSState
     get_branches(O, NewAccum, State).
 
 
+clean_packages(Branches, #state{dets=Dets}) -> 
+    DetsBranches = dets:select(Dets, [{{'$1', '_', '_', '_'}, [], ['$1']}]),
+    error_logger:error_msg("~p~n", [DetsBranches]),
+    case DetsBranches -- Branches of
+        [] -> ok;
+        ToClean -> gen_server:cast(?MODULE, {clean_packages, ToClean})
+    end,
+    {ok, Branches}.
 
-clean_packages(_Files, _State) -> ok.
+
 export_packages(_Files, _State) -> ok.
 archive_packages(_Files, _State) -> ok.

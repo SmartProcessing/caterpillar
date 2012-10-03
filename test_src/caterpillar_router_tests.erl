@@ -17,7 +17,7 @@ tty_on() ->
 start_link_test_() ->
 {setup,
     fun() -> ok end,
-    fun(_) -> ok = caterpillar_router:stop() end,
+    fun(_) -> catch caterpillar_router:stop() end,
     fun() ->
         Res = caterpillar_router:start_link([]),
         ?assertMatch({ok, _}, Res),
@@ -35,7 +35,8 @@ stop_test_() ->
         Pid = global:whereis_name(caterpillar_router),
         ?assert(is_pid(Pid)),
         ?assert(is_process_alive(Pid)),
-        ok = caterpillar_router:stop(),
+        caterpillar_router:stop(),
+        timer:sleep(1),
         ?assert(not is_process_alive(Pid))
     end
 }.
