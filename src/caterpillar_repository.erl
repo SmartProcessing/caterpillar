@@ -151,18 +151,26 @@ get_branches([], [], _State) ->
     {error, {get_branches, "no branches in repositories"}};
 
 get_branches([], Branches, _State) ->
-    {ok, Branches};
+    {ok, lists:sort(Branches)};
 
 get_branches([Package|O], Accum, #state{vcs_plugin=VCSPlugin, vcs_state=VCSState}=State) ->
     NewAccum = case caterpillar_utils:list_packages(Package) of
-        {ok, []} -> Accum;
+        {ok, []} -> 
+            error_logger:info_msg("no branches in ~p~n", [Package]),
+            Accum;
         {ok, RawBranches} -> 
             FoldFun = fun(Branch, Acc) ->
-                case VCSPlugin:is_branch(VCSState, Package, Branch) of
+                case catch VCSPlugin:is_branch(VCSState, Package, Branch) of
                     true ->
                         [{Package, Branch}|Acc];
                     false ->
                         error_logger:info_msg("~p/~p not a branch~n", [Package, Branch]), 
+                        Acc;
+                    Err ->
+                        error_logger:error_msg(
+                            "get_branches error: ~p~n on ~p/~p~n",
+                            [Err, Package, Branch]
+                        ),
                         Acc
                 end
             end,
@@ -174,7 +182,7 @@ get_branches([Package|O], Accum, #state{vcs_plugin=VCSPlugin, vcs_state=VCSState
                     Accum
             end;
         Error -> 
-            error_logger:error_msg("get_branches error on ~p~n", [Package]),
+            error_logger:error_msg("get_branches error: ~p~n on ~p~n", [Error, Package]),
             Accum
     end,
     get_branches(O, NewAccum, State).

@@ -87,7 +87,7 @@ scan_repository_test_() ->
         },
         {
             "scan_repository received integer as parameter, timer fires",
-            fun(Ref) ->
+            fun(_Ref) ->
                 timer:sleep(1),
                 ?assertEqual(
                     receive Any -> Any after 10 -> timeout end,
@@ -98,7 +98,7 @@ scan_repository_test_() ->
         },
         {
             "scan_repository received state as parameter with not cancelled timer, timer fires",
-            fun(Ref) ->
+            fun(_Ref) ->
                 ?assertEqual(
                     receive Any -> Any after 10 -> timeout end,
                     scan_repository
@@ -211,9 +211,24 @@ get_branches_test_() ->
         },
         {
             "one branch in one repo",
-            ["__test/package1/branch1/"],
+            ["__test/package1/branch1/", "__test/package2/"],
             ["__test/package1"],
             {ok, [{"__test/package1", "branch1"}]}
+        },
+        {
+            "few branches in different repos",
+            ["__test/package1/branch1/", "__test/package2/branch2/"],
+            ["__test/package1", "__test/package2"],
+            {ok, [{"__test/package1", "branch1"}, {"__test/package2", "branch2"}]}
+        },
+        {
+            "plugin exits on branch check",
+            [
+                "__test/package1/exit/", "__test/package1/branch1/",
+                "__test/package2/throw/", "__test/package2/branch2/"
+            ],
+            ["__test/package1", "__test/package2"],
+            {ok, [{"__test/package1", "branch1"}, {"__test/package2", "branch2"}]}
         }
     ]
 ]}.

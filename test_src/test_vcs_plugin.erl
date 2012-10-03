@@ -33,6 +33,9 @@ get_revno(_State, _Repo, _Branch) -> ok.
 
 
 is_branch(_State, "__test/package1", "branch1") -> true;
+is_branch(_State, "__test/package2", "branch2") -> true;
+is_branch(_State, "__test/package1", "exit") -> exit(some_reason);
+is_branch(_State, "__test/package2", "throw") -> throw(some_reason);
 is_branch(_State, _Package, _Branch) -> throw({_Package, _Branch}),false.
 
 
