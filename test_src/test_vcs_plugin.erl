@@ -32,7 +32,8 @@ get_diff(_State, _Repo, _Branch, _PrevRevision, _CurrentRevision) -> ok.
 get_revno(_State, _Repo, _Branch) -> ok.
 
 
-is_branch(_State, _Repo, _Branch) -> ok.
+is_branch(_State, "__test/package1", "branch1") -> true;
+is_branch(_State, _Package, _Branch) -> throw({_Package, _Branch}),false.
 
 
 is_repository(_State, "__test/package1") -> true;

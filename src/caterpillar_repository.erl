@@ -143,7 +143,44 @@ get_packages(_, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSSt
     end.
 
 
-get_branches(_Files, _State) -> ok.
+get_branches(Packages, State) ->
+    get_branches(Packages, [],  State).
+
+
+get_branches([], [], _State) ->
+    {error, {get_branches, "no branches in repositories"}};
+
+get_branches([], Branches, _State) ->
+    {ok, Branches};
+
+get_branches([Package|O], Accum, #state{vcs_plugin=VCSPlugin, vcs_state=VCSState}=State) ->
+    NewAccum = case caterpillar_utils:list_packages(Package) of
+        {ok, []} -> Accum;
+        {ok, RawBranches} -> 
+            FoldFun = fun(Branch, Acc) ->
+                case VCSPlugin:is_branch(VCSState, Package, Branch) of
+                    true ->
+                        [{Package, Branch}|Acc];
+                    false ->
+                        error_logger:info_msg("~p/~p not a branch~n", [Package, Branch]), 
+                        Acc
+                end
+            end,
+            case catch lists:foldl(FoldFun, Accum, RawBranches) of
+                Branches when is_list(Branches) ->
+                    Branches;
+                Error ->
+                    error_logger:error_msg("get_branches fold error: ~p~n on ~p~n", [Error, Package]),
+                    Accum
+            end;
+        Error -> 
+            error_logger:error_msg("get_branches error on ~p~n", [Package]),
+            Accum
+    end,
+    get_branches(O, NewAccum, State).
+
+
+
 clean_packages(_Files, _State) -> ok.
 export_packages(_Files, _State) -> ok.
 archive_packages(_Files, _State) -> ok.

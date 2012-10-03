@@ -40,6 +40,7 @@ stop_test_() ->
         ?assert(is_pid(Pid)),
         ?assert(is_process_alive(Pid)),
         ?assertEqual(ok, caterpillar_repository:stop()),
+        timer:sleep(1),
         ?assert(not is_process_alive(Pid))
     end
 }.
@@ -153,7 +154,7 @@ get_packages_test_() ->
         {Message, fun() ->
             ?assertEqual(
                 Result,
-                catch caterpillar_repository:get_packages('_', State)
+                caterpillar_repository:get_packages('_', State)
             )
         end}
     end} || {Message, Setup, Result} <- [
@@ -181,6 +182,38 @@ get_packages_test_() ->
             "repository plugin throws exception",
             ["__test/throw/"],
             {error, {get_packages, {plugin_bad_return, some_reason}}}
+        }
+    ]
+]}.
+
+
+get_branches_test_() ->
+{foreachx,
+    fun(Directories) ->
+        [filelib:ensure_dir(Dir) || Dir <- Directories],
+        #state{repository_root="__test", vcs_plugin=test_vcs_plugin}
+    end,
+    fun(Directories, _) -> [caterpillar_utils:del_dir(Dir) || Dir <- Directories ++ ["__test"]] end,
+[
+    {Setup, fun(_, State) ->
+        {Message, fun() ->
+            ?assertEqual(
+                Result,
+                catch caterpillar_repository:get_branches(Packages, State)
+            )
+        end} 
+    end} || {Message, Setup, Packages, Result} <- [
+        {
+            "no branches in repos",
+            ["__test/package1/", "__test/package2/"],
+            ["__test/package1", "__test/package2"],
+            {error, {get_branches, "no branches in repositories"}}
+        },
+        {
+            "one branch in one repo",
+            ["__test/package1/branch1/"],
+            ["__test/package1"],
+            {ok, [{"__test/package1", "branch1"}]}
         }
     ]
 ]}.
