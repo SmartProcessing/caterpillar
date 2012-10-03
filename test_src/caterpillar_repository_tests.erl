@@ -143,18 +143,39 @@ init_test_() ->
 
 get_packages_test_() ->
 {foreachx,
-    fun(Directories) -> [filelib:ensure_dir(Dir) || Dir <- Directories] end,
-    fun(Directories, _) -> [caterpillar_utils:del_dir(Dir) || Dir <- Directories] end,
+    fun(Directories) ->
+        [filelib:ensure_dir(Dir) || Dir <- Directories],
+        #state{repository_root="__test", vcs_plugin=test_vcs_plugin}
+    end,
+    fun(Directories, _) -> [caterpillar_utils:del_dir(Dir) || Dir <- Directories ++ ["__test"]] end,
 [
-    {Setup, fun(_, _) ->
+    {Setup, fun(_, State) ->
         {Message, fun() ->
             ?assertEqual(
                 Result,
-                caterpillar_repository:get_packages('_', State)
+                catch caterpillar_repository:get_packages('_', State)
             )
         end}
-    end} || {Message, Setup, State, Result} <- [
-
-
+    end} || {Message, Setup, Result} <- [
+        {
+            "listing packages in not empty repo",
+            ["__test/package1/", "__test/package2/", "__test/package3/"],
+            {ok, ["__test/package1", "__test/package2"]}
+        },
+        {
+            "repository root not exists",
+            [],
+            {error, {get_packages, {error, enoent}}}
+        },
+        {
+            "repository root empty",
+            ["__test/"],
+            {error, {get_packages, "nothing in repository"}}
+        },
+        {
+            "repository plugin exits",
+            ["__test/exit/"],
+            {error, {get_packages, {plugin_bad_return, {'EXIT',some_reason}}}}
+        }
     ]
 ]}.

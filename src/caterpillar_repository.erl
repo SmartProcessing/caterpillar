@@ -128,10 +128,17 @@ scan_pipe(State) ->
 
 
 
-get_packages(_, #state{repository_root=RR}) ->
-    case caterpillar_utils:list_dir(RR) of
+get_packages(_, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSState}) ->
+    case caterpillar_utils:list_packages(RR) of
         {ok, []} -> {error, {get_packages, "nothing in repository"}};
-        {ok, Files} -> {ok, Files};
+        {ok, Packages} ->
+            AbsPackages = [filename:join(RR, Package) || Package <- Packages],
+            FilterFun = fun(Package) -> VCSPlugin:is_repository(VCSState, Package) end,
+            case catch lists:filter(FilterFun, AbsPackages) of
+                [] -> {error, {get_packages, "no repositories available"}};
+                Repos when is_list(Repos) -> {ok, Repos};
+                Error -> {error, {get_packages, {plugin_bad_return, Error}}}
+            end;
         Error -> {error, {get_packages, Error}}
     end.
 

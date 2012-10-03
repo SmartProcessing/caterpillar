@@ -35,4 +35,7 @@ get_revno(_State, _Repo, _Branch) -> ok.
 is_branch(_State, _Repo, _Branch) -> ok.
 
 
-is_repository(_State, _Repo) -> ok.
+is_repository(_State, "__test/package1") -> true;
+is_repository(_State, "__test/package2") -> true;
+is_repository(_State, "__test/exit") -> exit(some_reason);
+is_repository(_State, _Repo) -> false.
