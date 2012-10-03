@@ -176,6 +176,11 @@ get_packages_test_() ->
             "repository plugin exits",
             ["__test/exit/"],
             {error, {get_packages, {plugin_bad_return, {'EXIT',some_reason}}}}
+        },
+        {
+            "repository plugin throws exception",
+            ["__test/throw/"],
+            {error, {get_packages, {plugin_bad_return, some_reason}}}
         }
     ]
 ]}.
