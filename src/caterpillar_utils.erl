@@ -95,7 +95,7 @@ list_packages(Path) ->
 
 
 list_packages([], Accum) ->
-    {ok, Accum};
+    {ok, lists:sort(Accum)};
 list_packages([ [$.|_]|O ], Accum) ->
     list_packages(O, Accum);
 list_packages([ H|O ], Accum) ->

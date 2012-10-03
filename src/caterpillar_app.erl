@@ -10,5 +10,4 @@ start(_StartType, _StartArgs) ->
 
 stop(_State) ->
     application:stop(cowboy),
-    application:stop(loggin),
     ok.
