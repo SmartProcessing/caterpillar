@@ -438,10 +438,8 @@ archive_packages_test_() ->
             ],
             [{"package", "branch", rev}],
             fun() ->
-                ?assertEqual(
-                    erl_tar:table("__test_archive/package__ARCHIVE__branch", [compressed]),
-                    {ok,["package/branch/dir2", "package/branch/dir1"]} 
-                )
+                {ok, Names} = erl_tar:table("__test_archive/package__ARCHIVE__branch", [compressed]),
+                ?assertEqual(lists:sort(Names), ["package/branch/dir1", "package/branch/dir2"])
             end,
             {ok, [{"package", "branch", rev}]}
         }
