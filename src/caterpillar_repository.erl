@@ -64,6 +64,9 @@ handle_info(_Msg, State) ->
     {noreply, State}.
 
 
+handle_cast({clean_packages, Packages}, State) ->
+    clean_packages(State, Packages),
+    {noreply, State};
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -125,6 +128,22 @@ scan_repository(Delay) when is_integer(Delay), Delay >= 0 ->
     erlang:send_after(Delay, self(), scan_repository).
 
 
+clean_packages(_State, []) ->
+    ok;
+clean_packages(#state{dets=D, export_root=ER, archive_root=AR, repository_root=RR}=State, [Package|O]) ->
+    Name = Package#package.name,
+    Branch = Package#package.branch,
+    AbsEr = filename:join(ER, Name),
+    file:delete(filename:join(AR, caterpillar_utils:package_to_archive(Name, Branch))),
+    dets:delete(D, {Name, Branch}),
+    caterpillar_utils:del_dir(filename:join(AbsEr, Branch)),
+    case catch caterpillar_utils:list_packages(AbsEr) of
+        {ok, []} -> caterpillar_utils:del_dir(AbsEr);
+        _ -> ok
+    end,
+    clean_packages(State, O).
+
+
 
 %----
 
@@ -132,7 +151,7 @@ scan_pipe(State) ->
     FunList = [
         {get_packages, fun get_packages/2},
         {get_brances, fun get_branches/2},
-        {clean_packages, fun clean_packages/2},
+        {cast_clean_packages, fun cast_clean_packages/2},
         {find_modified_packages, fun find_modified_packages/2},
         {export_packages, fun export_packages/2},
         {archive_packages, fun archive_packages/2},
@@ -210,7 +229,7 @@ get_branches([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugin
     get_branches(O, NewAccum, State).
 
 
-clean_packages(Branches, #state{dets=Dets}) -> 
+cast_clean_packages(Branches, #state{dets=Dets}) -> 
     DetsBranches = dets:select(Dets, [{{'$1', '_', '_', '_'}, [], ['$1']}]),
     case DetsBranches -- [{Name, Branch} || #package{name=Name, branch=Branch} <- Branches] of
         [] -> ok;

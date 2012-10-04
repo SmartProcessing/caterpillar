@@ -17,10 +17,6 @@ endif
 .PHONY: clean test compile devel package export_all test_compile
 
 
-ebin/%.beam: src/%.erl
-	$(ERLC_LIBS) $(ERLC) $(ERLC_FLAGS) -o $(EBIN) $<
-
-
 ebin/%.beam: test_src/%.erl
 	$(ERLC_LIBS) $(ERLC) $(ERLC_FLAGS) -o $(EBIN) $<
 
