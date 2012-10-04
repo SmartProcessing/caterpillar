@@ -47,9 +47,9 @@ test: export_all
 
 
 
-devel: clean compile
-	erl -pa ebin -env ERL_LIBS="$(NORMALIZED_LIBS)" \
-		-config test.config -eval "application:start(caterpillar)."
+devel: compile
+	$(ERL) -pa ebin -env ERL_LIBS "$(NORMALIZED_LIBS)" -config test.config \
+		-s caterpillar_app start_node
 			 
 
 
