@@ -5,8 +5,8 @@
 
 behaviour_info(callbacks) ->
     [
-        {init, 1},
-        {terminate, 1},
+        {init_plugin, 1},
+        {terminate_plugin, 1},
         {get_diff, 5},
         {get_changelog, 5},
         {get_revno, 3},

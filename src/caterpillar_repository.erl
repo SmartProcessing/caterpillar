@@ -73,7 +73,8 @@ handle_call(_Msg, _From, State) ->
 
 
 
-terminate(Reason, _State) ->
+terminate(Reason, #state{vcs_plugin=VCSPlugin, vcs_state=VCSState}=State) ->
+    error_logger:info_msg("terminating ~p: ~p~n", [VCSPlugin, VCSPlugin:terminate_plugin(VCSState)]),
     error_logger:info_msg("caterpillar_repository down with reason ~p~n", [Reason]).
 
 
@@ -104,7 +105,7 @@ vcs_init(State, Args) ->
 
 vcs_init_(State, Args) ->
     VcsPlugin = proplists:get_value(vcs_plugin, Args),
-    case VcsPlugin:init(proplists:get_value(vcs_plugin_init, Args, [])) of
+    case VcsPlugin:init_plugin(proplists:get_value(vcs_plugin_init, Args, [])) of
         {ok, VcsState} ->
             State#state{vcs_plugin=VcsPlugin, vcs_state=VcsState};
         Error -> Error

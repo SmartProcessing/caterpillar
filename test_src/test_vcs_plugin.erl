@@ -2,16 +2,16 @@
 
 -behaviour(caterpillar_repository_plugin).
 
--export([init/1, terminate/1]).
+-export([init_plugin/1, terminate_plugin/1]).
 -export([export/4, get_branches/2]).
 -export([get_changelog/5, get_diff/5, get_revno/3]).
 -export([is_branch/3, is_repository/2]).
 
 
-init(_Args) -> {ok, state}.
+init_plugin(_Args) -> {ok, state}.
 
 
-terminate(_State) -> ok.
+terminate_plugin(_State) -> ok.
 
 
 export(_State, _Repo, "no_export", _ExportPath) -> error;
