@@ -239,10 +239,12 @@ ensure_dir_test_() ->
         {Message, fun() ->
             ?assert(not filelib:is_dir(Dir)),
             caterpillar_utils:ensure_dir(Dir),
-            ?assert(filelib:is_dir(Dir))
+            ?assert(filelib:is_dir(Dir)),
+            ?assertEqual(caterpillar_utils:list_packages(Dir), {ok, []})
         end}
     end} || {Message, Dir} <- [
         {"dir passed without '/' in the end", "ensure_dir1"},
-        {"dir passed with '/' in the end", "ensure_dir/"}
+        {"dir passed with '/' in the end", "ensure_dir/"},
+        {"dir passed with few '/' in the end", "ensure_dir////"}
     ]
 ]}.
