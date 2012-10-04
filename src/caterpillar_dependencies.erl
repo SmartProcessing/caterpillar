@@ -1,6 +1,7 @@
 -module(caterpillar_dependencies).
--include("caterpillar.hrl").
+-include_lib("caterpillar.hrl").
 -export([check_intersection/3, list_unresolved_dependencies/2]).
+-export([update_dependencies/2]).
 
 -spec list_unresolved_dependencies(reference(), #rev_def{}) ->
     {ok, Unresolved :: [version()]}.
@@ -18,20 +19,18 @@ list_unresolved_dependencies(DepTree, Candidate) ->
 
 -spec check_intersection(reference(), #rev_def{}, [#rev_def{}]) -> 
     {ok, independent|dependent}.
+%% @doc Check whether the packages that are building now 
+%% have in dependecies or depends on current build candidate
 check_intersection(DepTree, Candidate, CheckList) ->
     CandidateVersion = ?VERSION(Candidate),
+    CandidateDeps = Candidate#rev_def.dep_object,
     Intersect = lists:foldl(
         fun(BuildUnit, Res) ->
             BuildVersion = ?VERSION(BuildUnit), 
-            case fetch_dependencies(DepTree, BuildVersion) of
-                {ok, {BuildVersion, _State, Object, Subject}} ->
-                    Res or 
-                        lists:member(CandidateVersion, Object) or
-                        lists:member(CandidateVersion, Subject);
-                _Other ->
-                    %% fall dear, something that shouldn't be built is building
-                    {error, no_building_rev_info}
-            end
+            BuildDeps = BuildUnit#rev_def.dep_object,
+            IsDepObject = lists:member(CandidateVersion, BuildDeps),
+            IsDepSubject = lists:member(BuildVersion, CandidateDeps),
+            Res or IsDepObject or IsDepSubject
         end, false, CheckList),
     case Intersect of
         true ->
@@ -47,7 +46,37 @@ fetch_dependencies(DepTree, Version) ->
         [{BuildVersion, State, Object, Subject}|_] ->
             {ok, {BuildVersion, State, Object, Subject}};
         [] ->
-            {error, no_rev_info};
+            {ok, []};
         _Other ->
             {error, dets_error}
     end.
+
+
+-spec update_dependencies(reference(), #rev_def{}) -> 
+    {ok, done}|{error, Reason :: atom()}.
+update_dependencies(DepTree, Rev) ->
+    Version = ?VERSION(Rev),
+    DepObject = Rev#rev_def.dep_object, 
+    update_subjects(DepTree, DepObject, Version),
+    DepSubject = case dets:lookup(DepTree, Version) of
+        [{Version, _, _, Subj}|_] ->
+            Subj;
+        _Other ->
+            []
+    end,
+    dets:insert(DepTree,
+        {Version, built, DepObject, DepSubject}),
+    {ok, done}.
+
+
+update_subjects(_, [], _) ->
+    {ok, done};
+update_subjects(DepTree, [Version|Other], NewRef) ->
+    [{Version, BuildInfo, Object, Subject}|_] = dets:lookup(DepTree, Version),
+    case lists:member(NewRef, Object) of
+        true ->
+            ok;
+        false ->
+            dets:insert(DepTree, {Version, BuildInfo, Object, Subject})
+    end,
+    update_subjects(DepTree, Other, NewRef).

@@ -53,7 +53,7 @@ handle_call({newref, RevDef, _RevInfo}, _From, State) ->
     end,
     {reply, ok, NewState};
 handle_call({built, _Worker, RevDef, _BuildInfo}, _From, State) ->
-    caterpillar_deps:update(State#state.deps, RevDef),
+    caterpillar_dependencies:update(State#state.deps, RevDef),
     {ok, ScheduledState} = schedule_build(State),
     {ok, NewState} = try_build(ScheduledState),
     {reply, ok, NewState};
@@ -227,7 +227,7 @@ check_build_deps(Candidate, State) ->
             State#state.deps, Candidate) of
         {ok, []} ->
             {ok, NowBuilding} = list_building_revs(State),
-            {ok, Res} = caterpillar_dependencies:check_list(
+            {ok, Res} = caterpillar_dependencies:check_intersection(
                 State#state.deps,
                 Candidate,
                 NowBuilding),

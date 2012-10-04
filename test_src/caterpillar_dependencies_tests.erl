@@ -39,7 +39,8 @@ setup() ->
             wait,
             [
                 {<<"smprc-test">>, <<"trunk">>, <<>>},
-                {<<"pequen">>, <<"trunk">>, <<>>}],
+                {<<"pequen">>, <<"trunk">>, <<>>}
+            ],
             []
         }
     ],
@@ -81,5 +82,37 @@ list_unresolved_dependencies_test_() ->
                 {ok, [{<<"pequen">>, <<"trunk">>, <<"">>}]})
         end
     }.
+
+check_intersection_test() ->
+    Rev1 = #rev_def{
+        name = <<"caterpillar">>, 
+        revision = <<"xf123123gjkdf">>,
+        branch = <<"trunk">>,
+        tag = <<>>,
+        build_id = 3,
+        dep_object = [{<<"smprc-test">>, <<"trunk">>, <<>>}]},
+    Rev2  =  #rev_def{
+        name = <<"new_test">>,
+        revision = <<"ajsdasdkads">>,
+        branch = <<"trunk">>,
+        tag = <<>>,
+        build_id = 3,
+        dep_object = [{<<"smprc-test">>, <<"trunk">>, <<>>}, {<<"smprc-caterpillar">>, trunk, <<>>}]},
+    Rev3  =  #rev_def{
+        name = <<"destiny">>,
+        revision = <<"ajsD4sdkads">>,
+        branch = <<"trunk">>,
+        tag = <<>>,
+        build_id = 6,
+        dep_object = [{<<"pequen">>, <<"trunk">>, <<>>}, {<<"smprc-test">>, trunk, <<>>}]},
+    Rev4  =  #rev_def{
+        name = <<"depends_on_destiny">>,
+        revision = <<"dajfhf987sdf9">>,
+        branch = <<"trunk">>,
+        tag = <<>>,
+        build_id = 6,
+        dep_object = [{<<"destiny">>, <<"trunk">>, <<>>}, {<<"smprc-test">>, trunk, <<>>}]},
+    ?assertEqual({ok, independent}, caterpillar_dependencies:check_intersection('test', Rev4, [])),
+    ?assertEqual({ok, dependent}, caterpillar_dependencies:check_intersection('test', Rev4, [Rev3, Rev2, Rev1])).
 
 -endif.
