@@ -18,7 +18,7 @@ init(Settings) ->
 
 
 init_logging(Settings) ->
-    error_logger:add_handler(caterpillar_rotating_log_handler, Settings).
+    error_logger:add_report_handler(caterpillar_rotating_log_handler, Settings).
 
 
 init_net_kernel(Settings) ->
