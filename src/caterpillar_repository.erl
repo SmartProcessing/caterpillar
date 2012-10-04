@@ -130,7 +130,7 @@ scan_repository(Delay) when is_integer(Delay), Delay >= 0 ->
 
 clean_packages(_State, []) ->
     ok;
-clean_packages(#state{dets=D, export_root=ER, archive_root=AR, repository_root=RR}=State, [Package|O]) ->
+clean_packages(#state{dets=D, export_root=ER, archive_root=AR}=State, [Package|O]) ->
     Name = Package#package.name,
     Branch = Package#package.branch,
     AbsEr = filename:join(ER, Name),
