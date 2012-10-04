@@ -73,7 +73,7 @@ handle_call(_Msg, _From, State) ->
 
 
 
-terminate(Reason, #state{vcs_plugin=VCSPlugin, vcs_state=VCSState}=State) ->
+terminate(Reason, #state{vcs_plugin=VCSPlugin, vcs_state=VCSState}) ->
     error_logger:info_msg("terminating ~p: ~p~n", [VCSPlugin, VCSPlugin:terminate_plugin(VCSState)]),
     error_logger:info_msg("caterpillar_repository down with reason ~p~n", [Reason]).
 

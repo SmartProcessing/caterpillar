@@ -155,6 +155,7 @@ handle_call(_, _, State) ->
 
 
 terminate(Reason, State) ->
+    error_logger:info_msg("caterpillar_bzr_plugin terminated with reason: ~p~n", [Reason]),
     catch erlang:port_close(State#state.port),
     ok.
 
