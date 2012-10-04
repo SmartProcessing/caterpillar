@@ -530,6 +530,7 @@ clean_packages_test_() ->
     fun(Packages) ->
         ER = "__test_export",
         AR = "__test_archive",
+        [caterpillar_utils:ensure_dir(Dir) || Dir <- [ER, AR]],
         {ok, D} = dets:open_file("test.dets", [{access, read_write}]),
         [
             begin
@@ -594,7 +595,19 @@ clean_packages_test_() ->
             [#package{name=N, branch=B} || {N, B} <- [{"p1", "b1"}, {"p1", "b2"}, {"p2", "b2"}]],
             [#package{name="p1", branch="b1"}, #package{name="p1", branch="b2"}],
             [#package{name="p2", branch="b2"}]
-        }
+        },
+        {
+            "all packages cleaned",
+            [#package{name=N, branch=B} || {N, B} <- [{"p1", "b1"}, {"p1", "b2"}, {"p2", "b2"}]],
+            [#package{name=N, branch=B} || {N, B} <- [{"p1", "b1"}, {"p1", "b2"}, {"p2", "b2"}]],
+            []
+        },
+        {
+            "no such packages, clean_packages should not crash",
+            [],
+            [#package{name=N, branch=B} || {N, B} <- [{"p1", "b1"}, {"p1", "b2"}, {"p2", "b2"}]],
+            []
+        }            
     ]
 ]}.
         
