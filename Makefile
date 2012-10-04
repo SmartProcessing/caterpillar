@@ -49,7 +49,7 @@ test: export_all
 
 devel: compile
 	$(ERL) -pa ebin -env ERL_LIBS "$(NORMALIZED_LIBS)" -config test.config \
-		-s caterpillar_app start_node
+	#	-s caterpillar_app start
 			 
 
 

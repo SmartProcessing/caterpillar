@@ -3,27 +3,29 @@
 -behaviour(supervisor).
 
 -export([start_link/0]).
-
 -export([init/1]).
 
 
 start_link() ->
-    error_logger:info_msg("starting caterpillar supervisor~n"),
-    case application:get_env(caterpillar, handler) of
-        undefined ->
-            {error, settings_not_set};
-        {ok, Settings} ->
-            supervisor:start_link(?MODULE, Settings)
-    end.
+    supervisor:start_link({local, ?MODULE}, ?MODULE, application:get_all_env(caterpillar)).
 
 
 init(Settings) ->
-    {ok, {{one_for_one, 4, 3600}, 
-            [{
-                caterpillar, 
-                {caterpillar, start_link, [Settings]},
-                permanent,
-                5000,
-                worker,
-                [caterpillar]
-            }]}}.
+    NetKernel = init_net_kernel(proplists:get_value(net_kernel, Settings, [])),
+    Services = init_services(proplists:get_value(services, Settings, [])),
+    {ok, {{one_for_one, 4, 3600}, Services ++ [NetKernel]}}.
+
+
+init_net_kernel(Settings) ->
+    {caterpillar_net_kernel, {caterpillar_net_kernel, start_link, [Settings]}, transient, 5000, worker, []}.
+
+
+init_services(Services) ->
+    init_services(Services, []).
+
+
+init_services([], Accum) ->
+    lists:reverse(Accum);
+init_services([{Name, Settings}|O], Accum) ->
+    Service = {Name, {Name, start_link, [Settings]}, transient, 5000, worker, []},
+    init_services(O, [Service|Accum]).

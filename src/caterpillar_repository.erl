@@ -39,11 +39,6 @@ init(Args) ->
     {ok, State}.
 
 
-ensure_dir(Path) ->
-    AbsPath = filename:absname(Path ++ "/"),
-    filelib:ensure_dir(AbsPath),
-    AbsPath.
-
 
 handle_info(scan_repository, State) ->
     spawn(fun() ->
@@ -88,6 +83,12 @@ code_change(_Old, State, _Extra) ->
 
 
 %-------
+
+
+ensure_dir(Path) ->
+    AbsPath = filename:absname(Path ++ "/"),
+    filelib:ensure_dir(AbsPath),
+    AbsPath.
 
 
 -spec vcs_init(State::#state{}, Args::proplists:property()) -> NewState::#state{}.
