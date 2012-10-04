@@ -10,11 +10,15 @@ TEST_BEAMS = $(patsubst test_src/%.erl, ebin/%.beam, $(wildcard test_src/*.erl))
 ifdef EXPORT_ALL
 	ERLC_FLAGS += +export_all
 else
-	ERLC_FLAGS += -Werror
+	ERLC_FLAGS += -Werror -pa $(EBIN)
 endif
 
 
 .PHONY: clean test compile devel package export_all test_compile
+
+
+ebin/%.beam: src/%.erl
+	$(ERLC_LIBS) $(ERLC) $(ERLC_FLAGS) -o $(EBIN) $<
 
 
 ebin/%.beam: test_src/%.erl
@@ -22,7 +26,8 @@ ebin/%.beam: test_src/%.erl
 
 
 clean:
-	$(REBAR) clean
+	rm -f erl_crash.dump
+	rm -f $(EBIN)/*.beam
 
 
 compile:
@@ -47,7 +52,7 @@ test: export_all
 
 
 
-devel: $(BEAMS) $(TEST_BEAMS)
+devel: $(TEST_BEAMS) $(BEAMS) 
 	$(ERL) -pa ebin -env ERL_LIBS "$(NORMALIZED_LIBS)" -config test.config \
 		-s caterpillar_app start
 			 

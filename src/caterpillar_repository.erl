@@ -44,6 +44,14 @@ init(Args) ->
 
 handle_info(scan_repository, State) ->
     spawn(fun() ->
+        Self = self(),
+        case catch register(scan_pipe_caterpillar_repository, Self) of
+            true -> ok;
+            _Err ->
+                error_logger:error_msg("scan_pipe already in process~n"),
+                exit(normal)
+        end,
+        error_logger:info_msg("scan pipe started at ~p~n", [Self]),
         case catch scan_pipe(State) of
             {ok, Packages} ->
                 gen_server:call(?MODULE, {new_packages, Packages}, infinity);

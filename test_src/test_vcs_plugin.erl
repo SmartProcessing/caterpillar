@@ -8,16 +8,36 @@
 -export([is_branch/3, is_repository/2]).
 
 
+-type vcs_state()::term().
+-type package()::filelib:dirname().
+-type branch()::string().
+-type revno()::term().
+
+-spec init_plugin(Args::term()) -> {ok, vcs_state()}.
+-spec terminate_plugin(vcs_state()) -> no_return().
+-spec export(vcs_state(), package(), branch(), filelib:dirname()) -> ok | {error, Reason::term()}.
+-spec get_branches(vcs_state(), package()) -> {ok, [branch()]} | {error, Reason::term()}.
+-spec get_revno(vcs_state(), package(), branch()) -> {ok, revno()} | {error, Reason::term()}.
+-spec get_diff(vcs_state(), package(), branch(), Old::revno(), Current::revno()) ->
+    {ok, Diff::binary()} | {error, Reason::term()}.
+-spec get_changelog(vcs_state(), package(), branch(), Old::revno(), Current::revno()) ->
+    {ok, Changelog::binary()} | {error, Reason::term()}.
+-spec is_branch(vcs_state(), package(), branch()) -> boolean().
+-spec is_repository(vcs_state(), package()) -> boolean().
+
+
+
 init_plugin(_Args) -> {ok, state}.
 
 
 terminate_plugin(_State) -> ok.
 
 
-export(_State, _Repo, "no_export", _ExportPath) -> error;
-export(_State, _Repo, _Branch, ExportPath) -> filelib:ensure_dir(ExportPath ++ "/").
+export(_State, _Package, "no_export", _ExportPath) -> error;
+export(_State, _Package, _Branch, ExportPath) -> filelib:ensure_dir(ExportPath ++ "/").
 
 
+get_branches(_State, "test_repo/sleep") -> timer:sleep(12000), {ok, []};
 get_branches(_State, Package) -> caterpillar_utils:list_packages(Package).
 
 
@@ -42,8 +62,9 @@ is_branch(_State, "__test/package2", "throw") -> throw(some_reason);
 is_branch(_State, _Package, _Branch) -> throw({_Package, _Branch}),false.
 
 
+is_repository(_State, "test_repo/sleep") -> true;
 is_repository(_State, "__test/package1") -> true;
 is_repository(_State, "__test/package2") -> true;
 is_repository(_State, "__test/exit") -> exit(some_reason);
 is_repository(_State, "__test/throw") -> throw(some_reason);
-is_repository(_State, _Repo) -> false.
+is_repository(_State, _Package) -> false.
