@@ -3,6 +3,8 @@
 -behaviour(gen_server).
 
 -include_lib("caterpillar_repository_internal.hrl").
+-define(GV, proplists:get_value).
+
 
 -export([start_link/1, stop/0]).
 -export([init/1, handle_info/2, handle_cast/2, handle_call/3, terminate/2, code_change/3]).
@@ -18,7 +20,7 @@ stop() ->
 
 
 init(Args) ->
-    Dets = case dets:open_file(proplists:get_value(repository_db, Args, ?DETS), [{access, read_write}]) of
+    Dets = case dets:open_file(?GV(repository_db, Args, ?DETS), [{access, read_write}]) of
         {ok, D} -> D;
         Error -> 
             error_logger:error_msg("caterpillar_repository dets initialization error: ~p~n", [Error]),
@@ -28,10 +30,10 @@ init(Args) ->
         #state{
             ets = ets:new(?MODULE, [named_table, protected]),
             dets = Dets, %{{Package, Branch}, ArchiveName, LastRevision, BuildId}
-            repository_root = ensure_dir(proplists:get_value(repository_root, Args, ?REPOSITORY_ROOT)),
-            export_root = ensure_dir(proplists:get_value(export_root, Args, ?EXPORT_ROOT)),
-            archive_root = ensure_dir(proplists:get_value(archive_root, Args, ?ARCHIVE_ROOT)),
-            scan_interval = proplists:get_value(scan_interval, Args, ?SCAN_INTERVAL) * 1000,
+            repository_root = caterpillar_utils:ensure_dir(?GV(repository_root, Args, ?REPOSITORY_ROOT)),
+            export_root = caterpillar_utils:ensure_dir(?GV(export_root, Args, ?EXPORT_ROOT)),
+            archive_root = caterpillar_utils:ensure_dir(?GV(archive_root, Args, ?ARCHIVE_ROOT)),
+            scan_interval = ?GV(scan_interval, Args, ?SCAN_INTERVAL) * 1000,
             scan_timer = scan_repository(0)
         },
         Args
@@ -86,12 +88,6 @@ code_change(_Old, State, _Extra) ->
 %-------
 
 
-ensure_dir(Path) ->
-    AbsPath = filename:absname(Path ++ "/"),
-    filelib:ensure_dir(AbsPath),
-    AbsPath.
-
-
 -spec vcs_init(State::#state{}, Args::proplists:property()) -> NewState::#state{}.
 
 vcs_init(State, Args) ->
@@ -104,8 +100,8 @@ vcs_init(State, Args) ->
 
 
 vcs_init_(State, Args) ->
-    VcsPlugin = proplists:get_value(vcs_plugin, Args),
-    case VcsPlugin:init_plugin(proplists:get_value(vcs_plugin_init, Args, [])) of
+    VcsPlugin = ?GV(vcs_plugin, Args),
+    case VcsPlugin:init_plugin(?GV(vcs_plugin_init, Args, [])) of
         {ok, VcsState} ->
             State#state{vcs_plugin=VcsPlugin, vcs_state=VcsState};
         Error -> Error
@@ -280,7 +276,7 @@ export_packages([Package|O], Accum, #state{export_root=ER, repository_root=RR}=S
     AbsExport = filename:join([ER, PackageName, PackageBranch]),
     AbsPackage = filename:join(RR, PackageName),
     caterpillar_utils:del_dir(AbsExport),
-    filelib:ensure_dir(AbsExport ++ "/"),
+    caterpillar_utils:ensure_dir(AbsExport),
     NewAccum = case catch VCSPlugin:export(VCSState, AbsPackage, PackageBranch, AbsExport) of
         ok -> [Package|Accum];
         Error ->

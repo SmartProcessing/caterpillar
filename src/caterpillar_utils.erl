@@ -7,6 +7,7 @@
 -export([read_build_id/1, write_build_id/2]).
 -export([package_to_archive/2, archive_to_package/1]).
 -export([list_packages/1, del_dir/1]).
+-export([ensure_dir/1]).
 
 
 -type function_spec()   :: {function(), [term()]}.
@@ -126,3 +127,7 @@ del_dir(Dir, [_|T]) ->
 del_dir(Dir, []) ->
     file:del_dir(Dir).
 
+
+
+ensure_dir(Path) ->
+    filelib:ensure_dir(Path ++ "/"), Path.

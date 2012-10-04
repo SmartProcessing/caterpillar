@@ -211,13 +211,13 @@ del_dir_test_() ->
     fun(Setup) -> [filelib:ensure_dir(Dir) || Dir <- Setup] end,
     fun(_, _) ->  ok end,
 [
-    {Setup, fun(Setup, _) ->
+    {Setup, fun(Setup_, _) ->
         {Message, fun() ->
             ?assertEqual(
                 ok,
                 caterpillar_utils:del_dir(Package)
             ),
-            [?assert(not filelib:is_dir(Dir)) || Dir <- Setup]
+            [?assert(not filelib:is_dir(Dir)) || Dir <- Setup_]
         end}
     end} || {Message, Setup, Package, Result} <- [
         {
@@ -226,5 +226,23 @@ del_dir_test_() ->
             "__test",
             ok
         }
+    ]
+]}.
+
+
+ensure_dir_test_() ->
+{foreachx,
+    fun(Dir) -> caterpillar_utils:del_dir(Dir) end,
+    fun(Dir, _) -> caterpillar_utils:del_dir(Dir) end,
+[
+    {Dir, fun(_, _) ->
+        {Message, fun() ->
+            ?assert(not filelib:is_dir(Dir)),
+            caterpillar_utils:ensure_dir(Dir),
+            ?assert(filelib:is_dir(Dir))
+        end}
+    end} || {Message, Dir} <- [
+        {"dir passed without '/' in the end", "ensure_dir1"},
+        {"dir passed with '/' in the end", "ensure_dir/"}
     ]
 ]}.
