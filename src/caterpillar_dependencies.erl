@@ -1,6 +1,6 @@
 -module(caterpillar_dependencies).
 -include_lib("caterpillar.hrl").
--export([check_intersection/3, list_unresolved_dependencies/2]).
+-export([check_intersection/2, list_unresolved_dependencies/2]).
 -export([update_dependencies/2]).
 
 -spec list_unresolved_dependencies(reference(), #rev_def{}) ->
@@ -17,11 +17,11 @@ list_unresolved_dependencies(DepTree, Candidate) ->
             end
         end, Deps)}.
 
--spec check_intersection(reference(), #rev_def{}, [#rev_def{}]) -> 
+-spec check_intersection(#rev_def{}, [#rev_def{}]) -> 
     {ok, independent|dependent}.
 %% @doc Check whether the packages that are building now 
 %% have in dependecies or depends on current build candidate
-check_intersection(DepTree, Candidate, CheckList) ->
+check_intersection(Candidate, CheckList) ->
     CandidateVersion = ?VERSION(Candidate),
     CandidateDeps = Candidate#rev_def.dep_object,
     Intersect = lists:foldl(

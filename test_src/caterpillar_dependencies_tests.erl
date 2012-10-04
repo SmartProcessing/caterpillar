@@ -112,7 +112,7 @@ check_intersection_test() ->
         tag = <<>>,
         build_id = 6,
         dep_object = [{<<"destiny">>, <<"trunk">>, <<>>}, {<<"smprc-test">>, trunk, <<>>}]},
-    ?assertEqual({ok, independent}, caterpillar_dependencies:check_intersection('test', Rev4, [])),
-    ?assertEqual({ok, dependent}, caterpillar_dependencies:check_intersection('test', Rev4, [Rev3, Rev2, Rev1])).
+    ?assertEqual({ok, independent}, caterpillar_dependencies:check_intersection(Rev4, [])),
+    ?assertEqual({ok, dependent}, caterpillar_dependencies:check_intersection(Rev4, [Rev3, Rev2, Rev1])).
 
 -endif.

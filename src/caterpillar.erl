@@ -228,7 +228,6 @@ check_build_deps(Candidate, State) ->
         {ok, []} ->
             {ok, NowBuilding} = list_building_revs(State),
             {ok, Res} = caterpillar_dependencies:check_intersection(
-                State#state.deps,
                 Candidate,
                 NowBuilding),
             Res;
