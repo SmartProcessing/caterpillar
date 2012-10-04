@@ -28,6 +28,7 @@ init(Args) ->
     end,
     State = vcs_init(
         #state{
+            build_id_file = caterpillar_utils:ensure_dir(?GV(build_id_file, Args, ?BUILD_ID_FILE)),
             ets = ets:new(?MODULE, [named_table, protected]),
             dets = Dets, %{{Package, Branch}, ArchiveName, LastRevision, BuildId}
             repository_root = caterpillar_utils:ensure_dir(?GV(repository_root, Args, ?REPOSITORY_ROOT)),
@@ -53,7 +54,7 @@ handle_info(scan_repository, State) ->
         end,
         error_logger:info_msg("scan pipe started at ~p~n", [Self]),
         case catch scan_pipe(State) of
-            {ok, Packages} ->
+            {ok, Packages} when Packages /= [] ->
                 gen_server:call(?MODULE, {new_packages, Packages}, infinity);
             Error ->
                 error_logger:error_msg("scan pipe failed with: ~p~n", [Error])
@@ -75,7 +76,13 @@ handle_cast(_Msg, State) ->
 handle_call(get_packages, _From, State) ->
     {reply, [], State};
 
-handle_call({new_packages, _Packages}, _From, State) ->
+handle_call({new_packages, Packages}, _From, #state{dets=D, build_id_file=BIF}=State) ->
+    BuildId = caterpillar_utils:read_build_id(BIF) + 1,
+    [
+        dets:insert(D, {{Name, Branch}, Archive, Revno, BuildId}) ||
+        #package{name=Name, branch=Branch, archive=Archive, current_revno=Revno} <- Packages
+    ],
+    caterpillar_utils:write_build_id(BIF, BuildId),
     {reply, ok, State};
 
 handle_call(stop, _From, State) ->
@@ -329,10 +336,8 @@ archive_packages([Package|O], Accum, #state{export_root=ER, archive_root=AR}=Sta
     PackageName = Package#package.name,
     PackageBranch = Package#package.branch,
     ExportPath = filename:join([ER, PackageName, PackageBranch]),
-    Archive = filename:join(
-        AR,
-        caterpillar_utils:package_to_archive(PackageName, PackageBranch)
-    ),
+    ArchiveName = caterpillar_utils:package_to_archive(PackageName, PackageBranch),
+    Archive = filename:join(AR, ArchiveName),
     Result = (catch begin
         Tar = case erl_tar:open(Archive, [write, compressed]) of
             {ok, T} -> T;
@@ -346,7 +351,7 @@ archive_packages([Package|O], Accum, #state{export_root=ER, archive_root=AR}=Sta
         ok
     end),
     NewAccum = case Result of
-        ok -> [Package|Accum];
+        ok -> [Package#package{archive=ArchiveName}|Accum];
         Error ->
             error_logger:error_msg(
                 "archive_packages error: ~p~n at ~p/~p~n",

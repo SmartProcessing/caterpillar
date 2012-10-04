@@ -465,7 +465,11 @@ archive_packages_test_() ->
                 {ok, Names} = erl_tar:table("__test_archive/package__ARCHIVE__branch", [compressed]),
                 ?assertEqual(lists:sort(Names), ["package/branch/dir1", "package/branch/dir2"])
             end,
-            {ok, [#package{name="package", branch="branch", current_revno=rev}]}
+            {ok, [#package{
+                name="package", branch="branch",
+                archive="package__ARCHIVE__branch",
+                current_revno=rev
+            }]}
         }
     ]
 ]}.
@@ -543,8 +547,9 @@ clean_packages_test_() ->
         ],
         #state{dets=D, export_root=ER, archive_root=AR, vcs_plugin=test_vcs_plugin}
     end,
-    fun(Packages, #state{dets=D, archive_root=AR, export_root=ER}) ->
-        dets:close(D), file:delete(D),
+    fun(_Packages, #state{dets=D, archive_root=AR, export_root=ER}) ->
+        dets:close(D),
+        file:delete(D),
         [caterpillar_utils:del_dir(Dir) || Dir <- [AR, ER]]
     end,
 [
@@ -612,3 +617,47 @@ clean_packages_test_() ->
 ]}.
         
 
+
+%%
+%% gen_server callback tests
+%%
+
+
+handle_call_test_() ->
+{foreachx,
+    fun(#state{dets=D}=State) ->
+        {ok, D} = dets:open_file(D, [{access, read_write}]),
+        State
+    end,
+    fun(_, #state{build_id_file=BIF, dets=D}) ->
+        dets:close(D),
+        [file:delete(F) || F <- [D, BIF]]
+    end,
+[
+    {Setup, fun(_, State) ->
+        {Message, fun() ->
+            ?assertEqual(
+                Result,
+                caterpillar_repository:handle_call(Request, from, State)
+            ),
+            Check(State)
+        end}
+    end} || {Message, Request, Setup, Check, Result} <- [
+        {
+            "new_packages test",
+            {new_packages, [#package{}]},
+            #state{build_id_file="test_build_id_file", dets="test_d"},
+            fun(#state{build_id_file=BIF, dets=D}) -> 
+                ?assertEqual(
+                    caterpillar_utils:read_build_id(BIF),
+                    2
+                ),
+                ?assertEqual(
+                    [{{undefined, undefined}, undefined, undefined, 2}],
+                    dets:select(D, [{'$1', [], ['$1']}])
+                )
+            end,
+            {reply, ok, #state{build_id_file="test_build_id_file", dets="test_d"}}
+        }
+    ]
+]}.
