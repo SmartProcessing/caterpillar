@@ -18,13 +18,17 @@ export(_State, _Repo, "no_export", _ExportPath) -> error;
 export(_State, _Repo, _Branch, ExportPath) -> filelib:ensure_dir(ExportPath ++ "/").
 
 
-get_branches(_State, _Repo) -> [].
+get_branches(_State, Package) -> caterpillar_utils:list_packages(Package).
 
 
-get_changelog(_State, _Repo, _Branch, _PrevRevision, _CurrentRevision) -> ok.
+get_changelog(_State, _Package, "branch1", _, _) -> {ok, <<"branch1 changelog">>};
+get_changelog(_State, _Package, "branch2", _, _) -> exit(some_error);
+get_changelog(_State, _Package, _Branch, _PrevRevision, _CurrentRevision) -> ok.
 
 
-get_diff(_State, _Repo, _Branch, _PrevRevision, _CurrentRevision) -> ok.
+get_diff(_State, _Package, "branch1", _, _) -> {ok, <<"branch1 diff">>};
+get_diff(_State, _Pacakge, "branch2", _, _) -> throw("error");
+get_diff(_State, _Package, _Branch, _PrevRevision, _CurrentRevision) -> ok.
 
 
 get_revno(_State, "__test/crash", "me") -> exit(some_reason);

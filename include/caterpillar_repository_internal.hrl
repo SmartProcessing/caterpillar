@@ -22,10 +22,11 @@
 -record(package, {
     name :: string(),
     branch :: string(),
-    revno :: term(),
+    old_revno = none :: term(),
+    current_revno :: term(),
     archive :: string(),
-    diff :: binary(),
-    changelog :: binary()
+    diff = <<>> :: binary(),
+    changelog = <<>> :: binary()
 }).
 
 -endif.

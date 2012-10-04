@@ -319,7 +319,7 @@ find_modified_packages_test_() ->
             [#package{name=Name, branch=Branch} || {Name, Branch} <- [
                 {"package1", "branch1"}, {"package2", "branch2"}
             ]],
-            {ok, [#package{name="package2", branch="branch2", revno=1}]}
+            {ok, [#package{name="package2", branch="branch2", current_revno=1}]}
         },
         {
             "both packages not modified",
@@ -336,8 +336,8 @@ find_modified_packages_test_() ->
                 {"package1", "branch1"}, {"package2", "branch2"}
             ]],
             {ok, [
-                #package{name="package1", branch="branch1", revno=1},
-                #package{name="package2", branch="branch2", revno=1}
+                #package{name="package1", branch="branch1", current_revno=1, old_revno=10},
+                #package{name="package2", branch="branch2", current_revno=1, old_revno=10}
             ]}
         },
         {
@@ -392,19 +392,19 @@ export_packages_test_() ->
         {
             "export of new packages",
             ["__test/package1/branch1/"],
-            [#package{name="package1", branch="branch1", revno=rev}],
+            [#package{name="package1", branch="branch1", current_revno=rev}],
             fun() -> ok end,
-            {ok, [#package{name="package1", branch="branch1", revno=rev}]}
+            {ok, [#package{name="package1", branch="branch1", current_revno=rev}]}
         },
         {
             "some branch not exported",
             ["__test/package1/branch1/", "__test/package2/no_export/"],
             [
-                #package{name="package1", branch="branch1", revno=rev},
-                #package{name="package2", branch="no_export", revno=rev}
+                #package{name="package1", branch="branch1", current_revno=rev},
+                #package{name="package2", branch="no_export", current_revno=rev}
             ],
             fun() -> ok end,
-            {ok, [#package{name="package1", branch="branch1", revno=rev}]}
+            {ok, [#package{name="package1", branch="branch1", current_revno=rev}]}
         },
         {
             "checking previous version cleaned",
@@ -412,14 +412,14 @@ export_packages_test_() ->
                 "__test/package1/branch1/some_data/",
                 "__test_export/package1/branch1/some_data/"
             ],
-            [#package{name="package1", branch="branch1", revno=rev}],
+            [#package{name="package1", branch="branch1", current_revno=rev}],
             fun() -> 
                 ?assertEqual(
                     caterpillar_utils:list_packages("__test_export/package1/branch1/"),
                     {ok, []}
                 )
             end,
-            {ok, [#package{name="package1", branch="branch1", revno=rev}]}
+            {ok, [#package{name="package1", branch="branch1", current_revno=rev}]}
         }
     ]
 ]}.
@@ -429,7 +429,6 @@ export_packages_test_() ->
 archive_packages_test_() ->
 {foreachx,
     fun(Directories) ->
-        tty_on(),
         Dirs = Directories++["__test_archive/", "__test_export/"],
         [filelib:ensure_dir(Dir) || Dir <- Dirs],
         #state{archive_root="__test_archive", export_root="__test_export", vcs_plugin=test_vcs_plugin}
@@ -461,12 +460,67 @@ archive_packages_test_() ->
                 "__test_export/package/branch/dir2/"
                 
             ],
-            [#package{name="package", branch="branch", revno=rev}],
+            [#package{name="package", branch="branch", current_revno=rev}],
             fun() ->
                 {ok, Names} = erl_tar:table("__test_archive/package__ARCHIVE__branch", [compressed]),
                 ?assertEqual(lists:sort(Names), ["package/branch/dir1", "package/branch/dir2"])
             end,
-            {ok, [#package{name="package", branch="branch", revno=rev}]}
+            {ok, [#package{name="package", branch="branch", current_revno=rev}]}
         }
     ]
 ]}.
+
+
+
+get_diff_test_() ->
+{foreach,
+    fun() -> #state{vcs_plugin=test_vcs_plugin, repository_root=""} end,
+[
+    fun(State) ->
+        {Message, fun() ->
+            ?assertEqual(
+                Result,
+                caterpillar_repository:get_diff(Packages, State)
+            )
+        end}
+    end || {Message, Packages, Result} <- [
+        {
+            "plugin returns valid response",
+            [#package{name="package1", branch="branch1"}],
+            {ok, [#package{name="package1", branch="branch1", diff= <<"branch1 diff">>}]}
+        },
+        { 
+            "error while getting diff",
+            [#package{name="package2", branch="branch2"}],
+            {ok, [#package{name="package2", branch="branch2", diff= <<"cant get diff">>}]}
+        }
+    ]
+]}.
+
+
+
+get_changelog_test_() ->
+{foreach,
+    fun() -> #state{vcs_plugin=test_vcs_plugin, repository_root=""} end,
+[
+    fun(State) ->
+        {Message, fun() ->
+            ?assertEqual(
+                Result,
+                caterpillar_repository:get_changelog(Packages, State)
+            )
+        end}
+    end || {Message, Packages, Result} <- [
+        {
+            "plugin returns valid response",
+            [#package{name="package1", branch="branch1"}],
+            {ok, [#package{name="package1", branch="branch1", changelog= <<"branch1 changelog">>}]}
+        },
+        { 
+            "error while getting changelog",
+            [#package{name="package2", branch="branch2"}],
+            {ok, [#package{name="package2", branch="branch2", changelog= <<"cant get changelog">>}]}
+        }
+    ]
+]}.
+
