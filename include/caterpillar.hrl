@@ -1,6 +1,15 @@
 -define(GV, proplists:get_value).
 -define(VERSION, caterpillar_utils:get_version_by_revdef).
 
+
+-record(archive, {
+    name            :: binary(),
+    branch          :: binary(),
+    tag             :: binary(),
+    build_id        :: binary(),
+    archive         :: pid()
+}).
+
 -record(rev_def, {
     name            :: binary(), 
     revision        :: binary(), 
