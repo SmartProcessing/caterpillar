@@ -61,6 +61,11 @@ handle_info(scan_repository, State) ->
         end
     end),
     {noreply, scan_repository(State)};
+
+handle_info({'DOWN', Ref, _Type, _Pid, _Reason}, #state{ets=Ets}=State) ->
+    ets:delete(Ets, Ref),
+    {noreply, State};
+
 handle_info(_Msg, State) ->
     {noreply, State}.
 
@@ -72,6 +77,14 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 
+
+handle_call({register, {Ident, Pid}}, _, #state{ets=Ets}=State) when is_pid(Pid) ->
+    case ets:lookup(Ets, Ident) of 
+        [] -> ok;
+        _Something -> error_logger:info_msg("register warning: already got subscriber with this ident~n")
+    end,
+    ets:insert(Ets, {erlang:monitor(process, Pid), Ident, Pid}),
+    {reply, ok, State};
 
 handle_call(get_packages, _From, #state{dets=D}=State) ->
     Packages = dets:select(D, [{{'$1', '_', '_', '_'}, [], ['$1']}]),

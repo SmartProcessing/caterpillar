@@ -700,3 +700,58 @@ handle_call_get_packages_test_() ->
         }
     ]
 ]}.
+
+
+handle_call_register_test_() ->
+{foreachx,
+    fun(Subscribers) ->
+        Ets = ets:new(t, [public]),
+        ets:insert(Ets, Subscribers),
+        #state{ets=Ets}
+    end,
+    fun(_, #state{ets=Ets}) ->
+        ets:delete(Ets)
+    end,
+[
+    {Setup, fun(_, State) ->
+        {Message, fun() ->
+            ?assertMatch(
+                {_, Result, _},
+                caterpillar_repository:handle_call(Request, from, State)
+            ),
+            Check(State)
+        end}
+    end} || {Message, Setup, Check, Request, Result} <- [
+        {
+            "ets empty",
+            [],
+            fun(#state{ets=Ets}) ->
+                ?assertMatch(
+                    [{_, ident, _}],
+                    ets:tab2list(Ets)
+                )
+            end,
+            {register, {ident, self()}},
+            ok
+        },
+        {
+            "bad pid passed",
+            [],
+            fun(_) -> ok end,
+            {register, {ident, bad_pid}},
+            {error, bad_msg}
+        },
+        {
+            "worker with the same ident already exists",
+            [{erlang:make_ref(), ident, self()}],
+            fun(#state{ets=Ets}) ->
+                ?assertMatch(
+                    [{_, ident, _}, {_, ident, _}],
+                    ets:tab2list(Ets)
+                )
+            end,
+            {register, {ident, self()}},
+            ok
+        }
+    ]
+]}.
