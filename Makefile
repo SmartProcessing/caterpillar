@@ -10,7 +10,7 @@ TEST_BEAMS = $(patsubst test_src/%.erl, ebin/%.beam, $(wildcard test_src/*.erl))
 ifdef EXPORT_ALL
 	ERLC_FLAGS += +export_all
 else
-	ERLC_FLAGS += -Werror -pa $(EBIN)
+	ERLC_FLAGS += -pa $(EBIN)
 endif
 
 

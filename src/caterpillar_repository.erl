@@ -73,8 +73,9 @@ handle_cast(_Msg, State) ->
 
 
 
-handle_call(get_packages, _From, State) ->
-    {reply, [], State};
+handle_call(get_packages, _From, #state{dets=D}=State) ->
+    Packages = dets:select(D, [{{'$1', '_', '_', '_'}, [], ['$1']}]),
+    {reply, Packages, State};
 
 handle_call({new_packages, Packages}, _From, #state{dets=D, build_id_file=BIF}=State) ->
     BuildId = caterpillar_utils:read_build_id(BIF) + 1,

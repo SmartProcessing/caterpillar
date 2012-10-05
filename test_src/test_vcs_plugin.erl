@@ -55,13 +55,14 @@ get_revno(_State, "__test/crash", "me") -> exit(some_reason);
 get_revno(_State, _Package, _Branch) -> {ok, 1}.
 
 
-is_branch(_State, "__test/package1", "branch1") -> true;
+is_branch(_State, _Package, "branch1") -> true;
 is_branch(_State, "__test/package2", "branch2") -> true;
 is_branch(_State, "__test/package1", "exit") -> exit(some_reason);
 is_branch(_State, "__test/package2", "throw") -> throw(some_reason);
-is_branch(_State, _Package, _Branch) -> throw({_Package, _Branch}),false.
+is_branch(_State, _Package, _Branch) -> false.
 
 
+is_repository(_State, "test_repo/package1") -> true;
 is_repository(_State, "test_repo/sleep") -> true;
 is_repository(_State, "__test/package1") -> true;
 is_repository(_State, "__test/package2") -> true;

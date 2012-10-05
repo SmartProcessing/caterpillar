@@ -33,7 +33,7 @@ start_link_test_() ->
 
 stop_test_() ->
 {setup,
-    fun() -> {ok, Pid} = caterpillar_repository:start_link(?ARGS) end,
+    fun() -> {ok, _Pid} = caterpillar_repository:start_link(?ARGS) end,
     fun(_) -> catch erlang:exit(whereis(caterpillar_repository), kill), file:delete("repo.db") end,
     fun() ->
         Pid = whereis(caterpillar_repository),
@@ -553,7 +553,7 @@ clean_packages_test_() ->
         [caterpillar_utils:del_dir(Dir) || Dir <- [AR, ER]]
     end,
 [
-    {Packages, fun(_, #state{dets=D, export_root=ER, archive_root=AR}=State) ->
+    {Packages, fun(_, #state{dets=D, export_root=ER}=State) ->
         {Message, fun() ->
             PackageList = [{N, B} || #package{name=N, branch=B} <- Packages],
             ?assertEqual(
@@ -623,7 +623,7 @@ clean_packages_test_() ->
 %%
 
 
-handle_call_test_() ->
+handle_call_new_packages_test_() ->
 {foreachx,
     fun(#state{dets=D}=State) ->
         {ok, D} = dets:open_file(D, [{access, read_write}]),
@@ -658,6 +658,45 @@ handle_call_test_() ->
                 )
             end,
             {reply, ok, #state{build_id_file="test_build_id_file", dets="test_d"}}
+        }
+    ]
+]}.
+
+
+handle_call_get_packages_test_() ->
+{foreachx,
+    fun(Packages) -> 
+        {ok, D} = dets:open_file("test_dets", [{access, read_write}]),
+        dets:insert(D, Packages),
+        #state{dets=D}
+    end,
+    fun(_, #state{dets=D}) ->
+        dets:close(D),
+        file:delete(D)
+    end,
+[
+    {Setup, fun(_, State) ->
+        {Message, fun() ->
+            Return = caterpillar_repository:handle_call(get_packages, from, State),
+            ?assertMatch({_, _, _}, Return),
+            {_, Response, _} = Return,
+            ?assertEqual(lists:sort(Response), Result)
+        end}
+    end} || {Message, Setup, Result} <- [
+        {
+            "no packages available",
+            [],
+            []
+        },
+        {
+            "one package in dets",
+            [{{package, branch}, archive, current_revno, build_id}],
+            [{package, branch}]
+        },
+        {
+            "few packages in dets",
+            [{{Package, Branch}, archive, current_revno, build_id} || {Package, Branch} <- [{p, b}, {pp, bb}]],
+            [{p, b}, {pp, bb}]
         }
     ]
 ]}.
