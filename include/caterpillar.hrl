@@ -10,6 +10,13 @@
     archive         :: pid()
 }).
 
+-record(package, {
+    version         :: version(),
+    build_id        :: binary(),
+    package         :: pid()
+}
+
+
 -record(rev_def, {
     name            :: binary(), 
     revision        :: binary(), 
