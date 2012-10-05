@@ -755,3 +755,48 @@ handle_call_register_test_() ->
         }
     ]
 ]}.
+
+
+
+handle_info_DOWN_test_() ->
+{foreachx,
+    fun(Refs) ->
+        Ets = ets:new(t, [public]),
+        [ets:insert(Ets, {Ref, ident, pid}) || Ref <- Refs],
+        #state{ets=Ets}
+    end,
+    fun(_, #state{ets=Ets}) -> ets:delete(Ets) end,
+[
+    {Refs, fun(_, State) ->
+        {Message, fun() ->
+            ?assertEqual(
+                {noreply, State},
+                caterpillar_repository:handle_info({'DOWN', Ref, type, pid, reason}, State)
+            ),
+            ?assertEqual(
+                Tab,
+                lists:sort(ets:tab2list(State#state.ets))
+            )
+        end}
+    end} || {Message, Refs, Ref, Tab} <- [
+        {
+            "no workers in ets",
+            [],
+            ref,
+            []
+        },
+        {
+            "some workres in ets, one of them down",
+            [ref, ref1],
+            ref,
+            [{ref1, ident, pid}]
+        },
+        {
+            "some workres in ets, unkkown worker down",
+            [ref, ref1],
+            ref2,
+            [{ref,ident,pid},{ref1,ident,pid}]            
+        }
+        
+    ]
+]}.
