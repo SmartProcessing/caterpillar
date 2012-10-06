@@ -10,7 +10,11 @@
 -define(SCAN_INTERVAL, 600).
 
 
+-type build_id() :: non_neg_integer().
+
+
 -record(state, {
+    build_id :: build_id(),
     build_id_file :: filelib:filename(),
     ets :: ets:tab(),
     dets :: dets:tab(),
@@ -31,6 +35,15 @@
     archive :: string(),
     diff = <<>> :: binary(),
     changelog = <<>> :: binary()
+}).
+
+
+-record(build_state, {
+    dets :: dets:tab(),
+    pid :: pid(),
+    ident :: string(),
+    archive_root :: filelib:dirname(),
+    build_id :: build_id()
 }).
 
 -endif.

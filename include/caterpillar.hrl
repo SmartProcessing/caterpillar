@@ -5,16 +5,7 @@
 -record(archive, {
     name            :: binary(),
     branch          :: binary(),
-    tag             :: binary(),
-    build_id        :: binary(),
     archive         :: file:io_device()
-}).
-
--record(package, {
-    version         :: version(),
-    status          :: atom(),
-    description     :: binary(),
-    package         :: file:io_device()|error
 }).
 
 
@@ -28,6 +19,7 @@
     platform_spec   :: term()
 }).
 
+
 -record(build_info, {
     state           :: success|error|none,
     package_spec    :: list(),
@@ -37,6 +29,7 @@
     test_info       :: list()
 }).
 
+%TODO: internal state of builder, move to specific header file
 -record(pkg_config, {
     name            :: binary(),
     dependencies    :: [#rev_def{}],

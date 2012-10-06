@@ -3,6 +3,7 @@
 -on_load(tty_off/0).
 
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("caterpillar.hrl").
 -include_lib("caterpillar_repository_internal.hrl").
 
 -define(ARGS, [{vcs_plugin, test_vcs_plugin}, {repository_db, "repo.db"}]).
@@ -627,7 +628,7 @@ handle_call_new_packages_test_() ->
 {foreachx,
     fun(#state{dets=D}=State) ->
         {ok, D} = dets:open_file(D, [{access, read_write}]),
-        State
+        State#state{build_id=1}
     end,
     fun(_, #state{build_id_file=BIF, dets=D}) ->
         dets:close(D),
@@ -636,9 +637,15 @@ handle_call_new_packages_test_() ->
 [
     {Setup, fun(_, State) ->
         {Message, fun() ->
+            Return = caterpillar_repository:handle_call(Request, from, State),
+            ?assertMatch(
+                {reply, ok, _},
+                Return
+            ),
+            {_, _, NewState} = Return,
             ?assertEqual(
                 Result,
-                caterpillar_repository:handle_call(Request, from, State)
+                NewState#state{ets=undefined}
             ),
             Check(State)
         end}
@@ -646,7 +653,7 @@ handle_call_new_packages_test_() ->
         {
             "new_packages test",
             {new_packages, [#package{}]},
-            #state{build_id_file="test_build_id_file", dets="test_d"},
+            #state{build_id_file="test_build_id_file", dets="test_d", build_id=1, ets=ets:new(t, [])},
             fun(#state{build_id_file=BIF, dets=D}) -> 
                 ?assertEqual(
                     caterpillar_utils:read_build_id(BIF),
@@ -657,7 +664,7 @@ handle_call_new_packages_test_() ->
                     dets:select(D, [{'$1', [], ['$1']}])
                 )
             end,
-            {reply, ok, #state{build_id_file="test_build_id_file", dets="test_d"}}
+            #state{build_id_file="test_build_id_file", dets="test_d", build_id=2}
         }
     ]
 ]}.
@@ -807,17 +814,17 @@ handle_info_scan_repository_test_() ->
         RR = "__test",
         AR = "__test_archive",
         ER = "__test_export",
-        {ok, D} = dets:open_file("__test_dets.db", [{access, read_write}]),
+        {ok, Dets} = dets:open_file("__test_dets.db", [{access, read_write}]),
         [caterpillar_utils:ensure_dir(D) || D <- [RR, AR, ER]],
         [caterpillar_utils:ensure_dir(filename:join(RR, Package)) || Package <- Packages],
         #state{
-            repository_root=RR, vcs_plugin=test_vcs_plugin, dets=D,
+            repository_root=RR, vcs_plugin=test_vcs_plugin, dets=Dets,
             export_root=ER, archive_root=AR
         }
     end,
-    fun(_Packages, #state{dets=D, repository_root=RR, export_root=ER, archive_root=AR}) ->
-        dets:close(D),
-        file:delete(D),
+    fun(_Packages, #state{dets=Dets, repository_root=RR, export_root=ER, archive_root=AR}) ->
+        dets:close(Dets),
+        file:delete(Dets),
         [caterpillar_utils:del_dir(D) || D <- [RR, ER, AR]]
     end,
 [   
@@ -872,3 +879,192 @@ handle_info_scan_repository_test_() ->
     ]
 ]}.
 
+
+
+%---
+
+
+push_builds_test() ->
+    ?assertEqual(
+        ok,
+        caterpillar_repository:push_builds(#state{ets=ets:new(t, [])})
+    ).
+
+
+get_build_id_test_() ->
+{foreach,
+    fun() -> ok end,
+[
+    {Message, fun() ->
+        ?assertEqual(
+            Result,
+            caterpillar_repository:get_build_id('_', State)
+        )
+    end} || {Message, State, Result} <- [
+        {
+            "pid not alive",
+            #build_state{pid=spawn(fun() -> ok end)},
+            {error, {get_build_id, bad_response}}
+        },
+        {
+            "pid alive, bad return",
+            #build_state{
+                pid=spawn(fun() -> receive {_, From, _} -> gen_server:reply(From, 'wat?') end end)
+            },
+            {error, {get_build_id, bad_response}}
+        },
+        {
+            "pid alive, valid response",
+            #build_state{
+                pid=spawn(fun() -> receive {_, From, _} -> gen_server:reply(From, {ok, 1}) end end)
+            },
+            {ok, 1}
+        }
+    ]
+]}.
+
+
+select_archives_test_() ->
+{foreachx,
+    fun(Archives) ->
+        {ok, Dets} = dets:open_file("test_dets", [{access, read_write}]),
+        AR = "__test_archive",
+        [
+            begin
+                dets:insert(Dets, {{Package, Name}, Archive, current_revno, BuildId}),
+                ArchiveName = filename:join(AR, Archive),
+                filelib:ensure_dir(ArchiveName),
+                file:write_file(ArchiveName, <<>>)
+            end || {Package, Name, Archive, BuildId} <- Archives
+        ],
+        #build_state{dets=Dets, archive_root=AR}
+    end,
+    fun(_, #build_state{dets=Dets, archive_root=AR}) ->
+        dets:close(Dets), file:delete(Dets),
+        caterpillar_utils:del_dir(AR)
+    end,
+[
+    {Setup, fun(_, State) ->
+        {Message, fun() ->
+            Check(State)
+        end}
+    end} || {Message, Setup, Check} <- [
+        {
+            "no archives for build",
+            [],
+            fun(State) ->
+                ?assertEqual(
+                    {error, {select_archives, no_archives}},
+                    caterpillar_repository:select_archives(1, State)
+                )
+            end
+        },
+        {
+            "some archives selected",
+            [
+                {"p1", "b1", "a1", 1},
+                {"p2", "b2", "a2", 2}
+            ],
+            fun(State) ->
+                Result = caterpillar_repository:select_archives(1, State),
+                ?assertMatch(
+                    {ok, [#archive{name="p2", branch="b2"}]},
+                    Result
+                ),
+                {_, [{_, _, _, Pid}]} = Result,
+                ?assertEqual(
+                    {ok, "__test_archive/a2"},
+                    file:pid2name(Pid)
+                )
+            end
+        },
+        {
+            "worker got latest build_id",
+            [
+                {"p1", "b1", "a1", 2},
+                {"p2", "b2", "a2", 2}
+            ],
+            fun(State) ->
+                ?assertMatch(
+                    {error, {select_archives, no_archives}},
+                    caterpillar_repository:select_archives(2, State)
+                )
+            end
+        },
+        {
+            "both files r new to worker",
+            [
+                {"p1", "b1", "a1", 2},
+                {"p2", "b2", "a2", 2}
+            ],
+            fun(State) ->
+                Result = caterpillar_repository:select_archives(1, State),
+                ?assertMatch(
+                    {ok, [#archive{name="p1", branch="b1"}, #archive{name="p2", branch="b2"}]},
+                    Result
+                ),
+                {ok, Archives} = Result,
+                ?assertEqual(
+                    [{ok, "__test_archive/a1"}, {ok, "__test_archive/a2"}],
+                    lists:sort([file:pid2name(Pid) || {_, _, _, Pid} <- Archives])
+                )
+            end
+        }
+    ]
+]}.
+
+
+request_build_test_() ->
+{foreach,
+    fun() -> ok end,
+[
+    {Message, fun() -> 
+        ?assertEqual(
+            Result,
+            caterpillar_repository:request_build([], State)
+        )
+    end} || {Message, State, Result} <- [
+        {
+            "worker pid down",
+            #build_state{pid = spawn(fun() -> ok end)},
+            {error, request_build}
+        },
+        {
+            "worker pid after request receive",
+            #build_state{pid = spawn(fun() -> ok end)},
+            {error, request_build}
+        },
+        {
+            "worker pid returns bad response",
+            #build_state{pid = spawn(fun() -> receive {_, F, _} -> gen_server:reply(F, 'wat?') end end)},
+            {error, request_build}
+        },
+        {
+            "worker pid returns valid response",
+            #build_state{pid = spawn(fun() -> receive {_, F, _} -> gen_server:reply(F, {ok, done}) end end)},
+            {ok, done}
+        }
+    ]
+]}.
+
+
+deploy_test_() ->
+{foreach,
+    fun() -> ok end,
+[
+    {Message, fun() ->
+        global:register_name(caterpillar_router, self()),
+        ?assertEqual(
+            {ok, done},
+            caterpillar_repository:deploy(Deploy, State)
+        ),
+        timer:sleep(1),
+        ?assertEqual(
+            {messages, Messages},
+            process_info(self(), messages)
+        )
+    end} || {Message, Deploy, State, Messages} <- [
+        {"no deploy", no_deploy, #build_state{}, []},
+        {"deploy", some_deploy, #build_state{}, [{'$gen_cast', {deploy, some_deploy}}]}
+    ]
+]}.

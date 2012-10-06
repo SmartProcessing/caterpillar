@@ -2,9 +2,8 @@
 
 -behaviour(gen_server).
 
+-include_lib("caterpillar.hrl").
 -include_lib("caterpillar_repository_internal.hrl").
--define(GV, proplists:get_value).
-
 
 -export([start_link/1, stop/0]).
 -export([init/1, handle_info/2, handle_cast/2, handle_call/3, terminate/2, code_change/3]).
@@ -26,9 +25,11 @@ init(Args) ->
             error_logger:error_msg("caterpillar_repository dets initialization error: ~p~n", [Error]),
             throw({caterpillar_repository, {dets, Error}})
     end,
+    BuildIdFile = caterpillar_utils:ensure_dir(?GV(build_id_file, Args, ?BUILD_ID_FILE)),
     State = vcs_init(
         #state{
-            build_id_file = caterpillar_utils:ensure_dir(?GV(build_id_file, Args, ?BUILD_ID_FILE)),
+            build_id = caterpillar_utils:read_build_id(BuildIdFile),
+            build_id_file = BuildIdFile,
             ets = ets:new(?MODULE, [named_table, protected]),
             dets = Dets, %{{Package, Branch}, ArchiveName, LastRevision, BuildId}
             repository_root = caterpillar_utils:ensure_dir(?GV(repository_root, Args, ?REPOSITORY_ROOT)),
@@ -90,14 +91,17 @@ handle_call(get_packages, _From, #state{dets=D}=State) ->
     Packages = dets:select(D, [{{'$1', '_', '_', '_'}, [], ['$1']}]),
     {reply, Packages, State};
 
-handle_call({new_packages, Packages}, _From, #state{dets=D, build_id_file=BIF}=State) ->
-    BuildId = caterpillar_utils:read_build_id(BIF) + 1,
+handle_call({new_packages, Packages}, _From, #state{dets=D, ets=E}=State) ->
+    NewBuildId = State#state.build_id + 1,
+    BuildIdFile = State#state.build_id_file,
     [
-        dets:insert(D, {{Name, Branch}, Archive, Revno, BuildId}) ||
+        dets:insert(D, {{Name, Branch}, Archive, Revno, NewBuildId}) ||
         #package{name=Name, branch=Branch, archive=Archive, current_revno=Revno} <- Packages
     ],
-    caterpillar_utils:write_build_id(BIF, BuildId),
-    {reply, ok, State};
+    caterpillar_utils:write_build_id(BuildIdFile, NewBuildId),
+    NewState = State#state{build_id=NewBuildId},
+    push_builds(NewState),
+    {reply, ok, NewState};
 
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
@@ -164,6 +168,93 @@ clean_packages(#state{dets=D, export_root=ER, archive_root=AR}=State, [Package|O
     end,
     clean_packages(State, O).
 
+
+%---------------
+
+push_builds(#state{ets=E}=State) ->
+    lists:foreach(
+        fun(Data) -> spawn(fun() -> push_build(Data, State) end) end,
+        ets:select(E, [{{'_', '$1', '$2'}, [], ['$$']}])
+    ).
+     
+
+
+push_build([Ident, Pid], #state{dets=Dets, build_id=BuildId, archive_root=AR}) ->
+    State = #build_state{
+        dets = Dets,
+        pid = Pid,
+        ident = Ident,
+        archive_root = AR,
+        build_id = BuildId
+    },
+    FunList = [
+        {get_build_id, fun get_build_id/2},
+        {select_archives, fun select_archives/2},
+        {request_build, fun request_build/2},
+        {deploy, fun deploy/2}
+    ],
+    caterpillar_utils:pipe(FunList, none, State);
+push_build(BadData, _State) ->
+    error_logger:error_msg("push_build bad input args: ~p~n", [BadData]).
+
+
+get_build_id(_, #build_state{pid=Pid, ident=Ident}) ->
+    case catch gen_server:call(Pid, get_build_id, infinity) of
+        {ok, _}=Response -> 
+            Response;
+        Error ->
+            error_logger:error_msg("push_build error response from ~p(~p): ~p~n", [Ident, Pid, Error]),
+            {error, {get_build_id, bad_response}}
+    end.
+
+
+select_archives(WorkerBuildId, #build_state{dets=Dets, pid=Pid, ident=Ident, archive_root=AR}) ->
+    Archives = lists:foldl(
+        fun([{Name, Branch}, ArchiveName], Accum) ->
+            case catch file:open(filename:join(AR, ArchiveName), [read, binary]) of
+                {ok, File} ->
+                    [#archive{name=Name, branch=Branch, archive=File}|Accum];
+                Error ->
+                    error_logger:error_msg(
+                        "select_archives error: failed to open ~p with ~p~n",
+                        [ArchiveName, Error]
+                    ),
+                    Accum
+            end
+        end,
+        [],
+        dets:select(Dets, [{{'$1', '$2', '_', '$3'}, [{'<', WorkerBuildId, '$3'}], [['$1', '$2']]}])
+    ),
+    case Archives of 
+        [] ->
+            error_logger:info_msg(
+                "no archives selected for worker ~p(~p) with build_id ~p~n",
+                [Ident, Pid, WorkerBuildId]
+            ),
+            {error, {select_archives, no_archives}};
+        _ ->
+            {ok, Archives}
+    end.
+
+
+request_build(Archives, #build_state{pid=Pid, ident=Ident, build_id=BuildId}) ->
+    case catch gen_server:call(Pid, {build, BuildId, Archives}, infinity) of
+        {ok, _} = Deploy ->
+            [catch file:close(Archive) || #archive{archive=Archive} <- Archives],
+            Deploy;
+        Error ->
+            error_logger:error_msg(
+                "request_build(~p) error to ~p(~p): ~p~n", [BuildId, Ident, Pid, Error]
+            ),
+            {error, request_build}
+    end.
+
+
+deploy(no_deploy, _) ->
+    {ok, done};
+deploy(Deploy, #build_state{}) ->
+    gen_server:cast({global, caterpillar_router}, {deploy, Deploy}),
+    {ok, done}.
 
 
 %----
