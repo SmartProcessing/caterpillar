@@ -7,8 +7,16 @@
     branch          :: binary(),
     tag             :: binary(),
     build_id        :: binary(),
-    archive         :: pid()
+    archive         :: file:io_device()
 }).
+
+-record(package, {
+    version         :: version(),
+    status          :: atom(),
+    description     :: binary(),
+    package         :: file:io_device()|error
+}).
+
 
 -record(rev_def, {
     name            :: binary(), 

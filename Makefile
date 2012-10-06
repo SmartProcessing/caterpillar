@@ -7,6 +7,8 @@ REBAR = rebar
 BEAMS = $(patsubst src/%.erl, ebin/%.beam, $(wildcard src/*.erl))
 TEST_BEAMS = $(patsubst test_src/%.erl, ebin/%.beam, $(wildcard test_src/*.erl))
 
+ERLC_FLAGS += -W
+
 ifdef EXPORT_ALL
 	ERLC_FLAGS += +export_all
 else

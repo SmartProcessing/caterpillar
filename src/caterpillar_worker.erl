@@ -67,6 +67,7 @@ build_rev(ToBuild, State) ->
     BuildPlugins = State#state.build_plugins,
     BuildPath = State#state.build_path,
     Funs = [
+        {fun unpack_rev/2, BuildPath},
         {fun get_pkg_info/2, BuildPath},
         {fun platform_clean/2, PlatformPlugins},
         {fun platform_test/2, PlatformPlugins},
@@ -93,6 +94,10 @@ build_rev(ToBuild, State) ->
                 })
     end,
     {ok, Info}.
+
+
+unpack_rev(_,_) ->
+    {ok, none}.
 
 get_pkg_info(_BuildPath, _Revision) ->
     {ok, none}.
