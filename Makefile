@@ -24,6 +24,7 @@ ebin/%.beam: test_src/%.erl
 
 
 clean:
+	rm -rf dist
 	rm -f erl_crash.dump
 	rm -f $(EBIN)/*.beam
 

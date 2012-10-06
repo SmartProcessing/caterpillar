@@ -91,7 +91,7 @@ handle_call(get_packages, _From, #state{dets=D}=State) ->
     Packages = dets:select(D, [{{'$1', '_', '_', '_'}, [], ['$1']}]),
     {reply, Packages, State};
 
-handle_call({new_packages, Packages}, _From, #state{dets=D, ets=E}=State) ->
+handle_call({new_packages, Packages}, _From, #state{dets=D}=State) ->
     NewBuildId = State#state.build_id + 1,
     BuildIdFile = State#state.build_id_file,
     [
