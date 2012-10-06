@@ -20,7 +20,7 @@
     vcs_plugin :: atom(),
     vcs_state :: term(),
     scan_timer :: reference(),
-    scan_interval :: non_neg_integer()
+    scan_interval = ?SCAN_INTERVAL :: non_neg_integer()
 }).
 
 -record(package, {

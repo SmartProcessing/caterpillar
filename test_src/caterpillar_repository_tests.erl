@@ -797,6 +797,78 @@ handle_info_DOWN_test_() ->
             ref2,
             [{ref,ident,pid},{ref1,ident,pid}]            
         }
-        
     ]
 ]}.
+
+
+handle_info_scan_repository_test_() ->
+{foreachx,
+    fun(Packages) -> 
+        RR = "__test",
+        AR = "__test_archive",
+        ER = "__test_export",
+        {ok, D} = dets:open_file("__test_dets.db", [{access, read_write}]),
+        [caterpillar_utils:ensure_dir(D) || D <- [RR, AR, ER]],
+        [caterpillar_utils:ensure_dir(filename:join(RR, Package)) || Package <- Packages],
+        #state{
+            repository_root=RR, vcs_plugin=test_vcs_plugin, dets=D,
+            export_root=ER, archive_root=AR
+        }
+    end,
+    fun(_Packages, #state{dets=D, repository_root=RR, export_root=ER, archive_root=AR}) ->
+        dets:close(D),
+        file:delete(D),
+        [caterpillar_utils:del_dir(D) || D <- [RR, ER, AR]]
+    end,
+[   
+    {Packages, fun(_, State) ->
+        {Message, fun() ->
+            register(caterpillar_repository, self()),
+            ?assertMatch(
+                {noreply, #state{}},
+                caterpillar_repository:handle_info(scan_repository, State)
+            ),
+            Check()
+        end}
+    end} || {Message, Packages, Check} <- [
+        {
+            "no packages", [], fun() -> ok end
+        },
+        {
+            "some packages, without branch",
+            ["sleep"],
+            fun() ->
+                timer:sleep(2),
+                Pid = whereis(scan_pipe_caterpillar_repository),
+                ?assert(is_pid(Pid) andalso is_process_alive(Pid)),
+                timer:sleep(10),
+                ?assertEqual(
+                    process_info(self(), messages),
+                    {messages, []}
+                )
+            end
+        },
+        {
+            "some packages with some branches",
+            ["sleep", "package1/branch1"],
+            fun() ->
+                timer:sleep(1),
+                Pid = whereis(scan_pipe_caterpillar_repository),
+                ?assert(is_pid(Pid) andalso is_process_alive(Pid)),
+                timer:sleep(15),
+                ?assertMatch(
+                    {messages, [
+                        {'$gen_call', _, {new_packages, [
+                            #package{name="package1", branch="branch1", current_revno=1,
+                                archive="package1__ARCHIVE__branch1",
+                                diff= <<"branch1 diff">>, changelog= <<"branch1 changelog">>
+                            }
+                        ]}}
+                    ]},
+                    process_info(self(), messages)
+                )
+            end
+        }            
+    ]
+]}.
+

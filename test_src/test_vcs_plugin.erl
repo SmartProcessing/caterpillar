@@ -38,6 +38,7 @@ export(_State, _Package, _Branch, ExportPath) -> filelib:ensure_dir(ExportPath +
 
 
 get_branches(_State, "test_repo/sleep") -> timer:sleep(12000), {ok, []};
+get_branches(_State, "__test/sleep") -> timer:sleep(5), {ok, []};
 get_branches(_State, Package) -> caterpillar_utils:list_packages(Package).
 
 
@@ -64,6 +65,7 @@ is_branch(_State, _Package, _Branch) -> false.
 
 is_repository(_State, "test_repo/package1") -> true;
 is_repository(_State, "test_repo/sleep") -> true;
+is_repository(_State, "__test/sleep") -> true;
 is_repository(_State, "__test/package1") -> true;
 is_repository(_State, "__test/package2") -> true;
 is_repository(_State, "__test/exit") -> exit(some_reason);

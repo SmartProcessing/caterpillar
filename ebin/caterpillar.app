@@ -8,8 +8,12 @@
               {modules,[caterpillar,caterpillar_api,caterpillar_api_handler,
                         caterpillar_app,caterpillar_buildnet_handler,
                         caterpillar_bzr_plugin,caterpillar_dependencies,
-                        caterpillar_net_kernel,caterpillar_notifier,
-                        caterpillar_repository,caterpillar_repository_plugin,
+                        caterpillar_dependencies_tests,caterpillar_net_kernel,
+                        caterpillar_notifier,caterpillar_repository,
+                        caterpillar_repository_plugin,
+                        caterpillar_repository_tests,
                         caterpillar_rotating_log_handler,caterpillar_router,
-                        caterpillar_sup,caterpillar_utils,caterpillar_worker,
-                        caterpillar_worker_sup]}]}.
+                        caterpillar_router_tests,caterpillar_sup,
+                        caterpillar_tests,caterpillar_utils,
+                        caterpillar_utils_tests,caterpillar_worker,
+                        caterpillar_worker_sup,test_vcs_plugin]}]}.
