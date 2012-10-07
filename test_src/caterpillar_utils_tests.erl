@@ -3,7 +3,7 @@
 -on_load(tty_off/0).
 
 -include_lib("eunit/include/eunit.hrl").
--define(BUILD_ID, "test_build_id").
+-define(BUILD_ID, "test_work_id").
 
 
 tty_off() ->
@@ -49,7 +49,7 @@ pipe_test_() ->
 ]}.
 
 
-read_build_id_test_() ->
+read_work_id_test_() ->
 {foreach,
     fun() -> ok end,
     fun(_) -> catch file:delete(?BUILD_ID) end,
@@ -58,32 +58,32 @@ read_build_id_test_() ->
         Setup(),
         ?assertEqual(
             Result,
-            caterpillar_utils:read_build_id(?BUILD_ID)
+            caterpillar_utils:read_work_id(?BUILD_ID)
         )
     end} || {Message, Setup, Result} <- [
         {
-            "no build id file exists",
+            "no work id file exists",
             fun() -> ok end,
             1
         },
         {
-            "build id file empty",
+            "work id file empty",
             fun() -> file:write_file(?BUILD_ID, <<>>) end,
             1
         },
         {
-            "build id file got bad data",
+            "work id file got bad data",
             fun() -> file:write_file(?BUILD_ID, <<1,2,3,4>>) end,
             1
         },
         {
-            "build id file got correct structure, but not valid data",
-            fun() -> file:write_file(?BUILD_ID, <<"{build_id,not_valid}.">>) end,
+            "work id file got correct structure, but not valid data",
+            fun() -> file:write_file(?BUILD_ID, <<"{work_id,not_valid}.">>) end,
             1
         },
         {
-            "valid build_id file structure", 
-            fun() -> file:write_file(?BUILD_ID, <<"{build_id, 2}.">>) end,
+            "valid work_id file structure", 
+            fun() -> file:write_file(?BUILD_ID, <<"{work_id, 2}.">>) end,
             2
         }
     ]
@@ -91,7 +91,7 @@ read_build_id_test_() ->
 
 
 
-write_build_id_test_()->
+write_work_id_test_()->
 {foreach,
     fun() -> ok end,
     fun(_) -> catch file:delete(?BUILD_ID) end,
@@ -99,13 +99,13 @@ write_build_id_test_()->
     {Message, fun() -> 
         ?assertEqual(
             Result,
-            caterpillar_utils:write_build_id(?BUILD_ID, BuildId)
+            caterpillar_utils:write_work_id(?BUILD_ID, BuildId)
         ),
         Check()
     end} || {Message, Check, BuildId, Result} <- [
         {
-            "build_id file not exists",
-            fun() -> ?assertEqual(caterpillar_utils:read_build_id(?BUILD_ID), 1) end,
+            "work_id file not exists",
+            fun() -> ?assertEqual(caterpillar_utils:read_work_id(?BUILD_ID), 1) end,
             1,
             ok 
         },
@@ -119,7 +119,7 @@ write_build_id_test_()->
 ]}.
 
 
-check_build_id_file_test_() ->
+check_work_id_file_test_() ->
 {foreach,
     fun() -> catch file:delete(?BUILD_ID) end,
     fun(_) -> ok = file:delete(?BUILD_ID) end,
@@ -128,7 +128,7 @@ check_build_id_file_test_() ->
         Setup(),
         ?assertEqual(
             ok,
-            caterpillar_utils:check_build_id_file(?BUILD_ID)
+            caterpillar_utils:check_work_id_file(?BUILD_ID)
         ),
         Check()
     end} || {Message, Setup, Check} <- [

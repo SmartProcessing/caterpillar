@@ -25,17 +25,19 @@ init(Args) ->
             error_logger:error_msg("caterpillar_repository dets initialization error: ~p~n", [Error]),
             throw({caterpillar_repository, {dets, Error}})
     end,
-    BuildIdFile = caterpillar_utils:ensure_dir(?GV(build_id_file, Args, ?BUILD_ID_FILE)),
+    WorkIdFile = caterpillar_utils:ensure_dir(?GV(work_id_file, Args, ?WORK_ID_FILE)),
     State = vcs_init(
         #state{
-            build_id = caterpillar_utils:read_build_id(BuildIdFile),
-            build_id_file = BuildIdFile,
-            ets = ets:new(?MODULE, [named_table, protected]),
-            dets = Dets, %{{Package, Branch}, ArchiveName, LastRevision, BuildId}
+            work_id = caterpillar_utils:read_work_id(WorkIdFile),
+            work_id_file = WorkIdFile,
+            dets = Dets, %{{Package, Branch}, ArchiveName, LastRevision, WorkId}
             repository_root = caterpillar_utils:ensure_dir(?GV(repository_root, Args, ?REPOSITORY_ROOT)),
             export_root = caterpillar_utils:ensure_dir(?GV(export_root, Args, ?EXPORT_ROOT)),
             archive_root = caterpillar_utils:ensure_dir(?GV(archive_root, Args, ?ARCHIVE_ROOT)),
+            notify_root = caterpillar_utils:ensure_dir(?GV(notify_root, Args, ?NOTIFY_ROOT)),
             scan_interval = ?GV(scan_interval, Args, ?SCAN_INTERVAL) * 1000,
+            registered = false,
+            register_service_timer = register_service(0),
             scan_timer = scan_repository(0)
         },
         Args
@@ -63,44 +65,45 @@ handle_info(scan_repository, State) ->
     end),
     {noreply, scan_repository(State)};
 
-handle_info({'DOWN', Ref, _Type, _Pid, _Reason}, #state{ets=Ets}=State) ->
-    ets:delete(Ets, Ref),
-    {noreply, State};
+handle_info(register_service, #state{registered=Bool}=State) ->
+    case Bool of 
+        true -> {noreply, State};
+        false -> {noreply, register_service(State)}
+    end;
+
+handle_info({'DOWN', _, _, _, _}, State) ->
+    {noreply, register_service(State)};
 
 handle_info(_Msg, State) ->
     {noreply, State}.
 
 
+handle_cast(push_work, State) ->
+    push_work(State),
+    {noreply, State};
 handle_cast({clean_packages, Packages}, State) ->
     clean_packages(State, Packages),
+    spawn(fun() -> notify(clean_packages, State, Packages) end),
     {noreply, State};
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-
-
-handle_call({register, {Ident, Pid}}, _, #state{ets=Ets}=State) when is_pid(Pid) ->
-    case ets:lookup(Ets, Ident) of 
-        [] -> ok;
-        _Something -> error_logger:info_msg("register warning: already got subscriber with this ident~n")
-    end,
-    ets:insert(Ets, {erlang:monitor(process, Pid), Ident, Pid}),
-    {reply, ok, State};
 
 handle_call(get_packages, _From, #state{dets=D}=State) ->
     Packages = dets:select(D, [{{'$1', '_', '_', '_'}, [], ['$1']}]),
     {reply, Packages, State};
 
 handle_call({new_packages, Packages}, _From, #state{dets=D}=State) ->
-    NewBuildId = State#state.build_id + 1,
-    BuildIdFile = State#state.build_id_file,
+    NewWorkId = State#state.work_id + 1,
+    WorkIdFile = State#state.work_id_file,
     [
-        dets:insert(D, {{Name, Branch}, Archive, Revno, NewBuildId}) ||
+        dets:insert(D, {{Name, Branch}, Archive, Revno, NewWorkId}) ||
         #package{name=Name, branch=Branch, archive=Archive, current_revno=Revno} <- Packages
     ],
-    caterpillar_utils:write_build_id(BuildIdFile, NewBuildId),
-    NewState = State#state{build_id=NewBuildId},
-    push_builds(NewState),
+    caterpillar_utils:write_work_id(WorkIdFile, NewWorkId),
+    NewState = State#state{work_id=NewWorkId},
+    gen_server:cast(self(), push_work),
+    spawn(fun() -> notify(new_packages, NewState, Packages) end),
     {reply, ok, NewState};
 
 handle_call(stop, _From, State) ->
@@ -122,6 +125,22 @@ code_change(_Old, State, _Extra) ->
 
 
 %-------
+
+
+-spec register_service(#state{}) -> NewState :: #state{}.
+register_service(#state{registered=false, register_service_timer=RST}=State) ->
+    catch erlang:cancel_timer(RST),
+    case catch caterpillar_event:register_service(repository) of
+        {ok, Pid} ->
+            erlang:monitor(process, Pid),
+            State#state{register_service_timer=undefined};
+        Error ->
+            error_logger:error_msg("failed to register in event service with error: ~p~n", [Error]),
+            Ref = register_service(5000),
+            State#state{register_service_timer=Ref}
+    end;
+register_service(Delay) ->
+    erlang:send_after(Delay, self(), register_service).
 
 
 -spec vcs_init(State::#state{}, Args::proplists:property()) -> NewState::#state{}.
@@ -171,44 +190,69 @@ clean_packages(#state{dets=D, export_root=ER, archive_root=AR}=State, [Package|O
 
 %---------------
 
-push_builds(#state{ets=E}=State) ->
-    lists:foreach(
-        fun(Data) -> spawn(fun() -> push_build(Data, State) end) end,
-        ets:select(E, [{{'_', '$1', '$2'}, [], ['$$']}])
-    ).
+-spec notify(NotifyType :: atom(), #state{}, [#package{}]) -> no_return().
+notify(Type, #state{notify_root=NR, work_id=Wid}, Packages) ->
+    case catch caterpillar_event:sync_event({notify, {Type, Packages}}) of
+        {ok, done} ->
+            {ok, done};
+        Error -> 
+            FileName = filename:join(NR, integer_to_list(Wid)),
+            error_logger:error_msg(
+                "failed to notify with error: ~p~nsaving packages dump to ~p~n",
+                [Error, FileName]
+            ),
+            file:write_file(FileName, term_to_binary({Type, Wid, Packages})) 
+    end.
+
+
+
+
+%--------------
+
+push_work(#state{}=State) ->
+    case catch caterpillar_event:sync_event(get_workers) of
+        {ok, []} -> ok;
+        {ok, Workers} ->
+            lists:foreach(
+                fun(Worker) -> spawn(fun() -> push_work(Worker, State) end) end,
+                Workers
+            );
+        Error ->
+            error_logger:info_msg("push_work get_workers erroneous return: ~p~n", [Error])
+    end.
      
 
 
-push_build([Ident, Pid], #state{dets=Dets, build_id=BuildId, archive_root=AR}) ->
-    State = #build_state{
+push_work([Ident, Pid], #state{dets=Dets, work_id=WorkId, archive_root=AR}) ->
+    State = #work_state{
         dets = Dets,
         pid = Pid,
         ident = Ident,
         archive_root = AR,
-        build_id = BuildId
+        work_id = WorkId
     },
     FunList = [
-        {get_build_id, fun get_build_id/2},
+        {get_work_id, fun get_work_id/2},
         {select_archives, fun select_archives/2},
-        {request_build, fun request_build/2},
+        {work_query, fun work_query/2},
         {deploy, fun deploy/2}
     ],
     caterpillar_utils:pipe(FunList, none, State);
-push_build(BadData, _State) ->
-    error_logger:error_msg("push_build bad input args: ~p~n", [BadData]).
+push_work(BadData, _State) ->
+    error_logger:error_msg("push_work bad input args: ~p~n", [BadData]).
 
 
-get_build_id(_, #build_state{pid=Pid, ident=Ident}) ->
-    case catch gen_server:call(Pid, get_build_id, infinity) of
+get_work_id(_, #work_state{pid=Pid, ident=Ident}) ->
+    case catch gen_server:call(Pid, get_work_id, infinity) of
         {ok, _}=Response -> 
             Response;
         Error ->
-            error_logger:error_msg("push_build error response from ~p(~p): ~p~n", [Ident, Pid, Error]),
-            {error, {get_build_id, bad_response}}
+            error_logger:error_msg("push_work error response from ~p(~p): ~p~n", [Ident, Pid, Error]),
+            {error, {get_work_id, bad_response}}
     end.
 
 
-select_archives(WorkerBuildId, #build_state{dets=Dets, pid=Pid, ident=Ident, archive_root=AR}) ->
+select_archives(WorkerWorkId, #work_state{dets=Dets, pid=Pid, ident=Ident, archive_root=AR}) ->
     Archives = lists:foldl(
         fun([{Name, Branch}, ArchiveName], Accum) ->
             case catch file:open(filename:join(AR, ArchiveName), [read, binary]) of
@@ -223,13 +267,13 @@ select_archives(WorkerBuildId, #build_state{dets=Dets, pid=Pid, ident=Ident, arc
             end
         end,
         [],
-        dets:select(Dets, [{{'$1', '$2', '_', '$3'}, [{'<', WorkerBuildId, '$3'}], [['$1', '$2']]}])
+        dets:select(Dets, [{{'$1', '$2', '_', '$3'}, [{'<', WorkerWorkId, '$3'}], [['$1', '$2']]}])
     ),
     case Archives of 
         [] ->
             error_logger:info_msg(
-                "no archives selected for worker ~p(~p) with build_id ~p~n",
-                [Ident, Pid, WorkerBuildId]
+                "no archives selected for worker ~p(~p) with work_id ~p~n",
+                [Ident, Pid, WorkerWorkId]
             ),
             {error, {select_archives, no_archives}};
         _ ->
@@ -237,22 +281,22 @@ select_archives(WorkerBuildId, #build_state{dets=Dets, pid=Pid, ident=Ident, arc
     end.
 
 
-request_build(Archives, #build_state{pid=Pid, ident=Ident, build_id=BuildId}) ->
-    case catch gen_server:call(Pid, {build, BuildId, Archives}, infinity) of
+work_query(Archives, #work_state{pid=Pid, ident=Ident, work_id=WorkId}) ->
+    case catch gen_server:call(Pid, {work, WorkId, Archives}, infinity) of
         {ok, _} = Deploy ->
             [catch file:close(Archive) || #archive{archive=Archive} <- Archives],
             Deploy;
         Error ->
             error_logger:error_msg(
-                "request_build(~p) error to ~p(~p): ~p~n", [BuildId, Ident, Pid, Error]
+                "work_query(~p) error to ~p(~p): ~p~n", [WorkId, Ident, Pid, Error]
             ),
-            {error, request_build}
+            {error, work_query}
     end.
 
 
 deploy(no_deploy, _) ->
     {ok, done};
-deploy(Deploy, #build_state{}) ->
+deploy(Deploy, #work_state{}) ->
     gen_server:cast({global, caterpillar_router}, {deploy, Deploy}),
     {ok, done}.
 

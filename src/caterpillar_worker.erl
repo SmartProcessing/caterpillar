@@ -1,5 +1,6 @@
 -module(caterpillar_worker).
 
+-include_lib("caterpillar.hrl").
 -include_lib("caterpillar_worker_internal.hrl").
 
 -behaviour(gen_server).
@@ -29,11 +30,23 @@ stop(Ident) ->
 
 
 init(Args) ->
+    Ident = ?GV(ident, Args),
+    IdentList = atom_to_list(Ident),
     State = #state{
-        ident = proplists:get_value(ident, Args)
-    }, 
-    {ok, State}.
+        ident = Ident,
+        archive_root = caterpillar_utils:ensure_dir(
+            ?GV(archive_root, Args, filename:join(?ARCHIVE_ROOT, IdentList))
+        ),
+        repository_root = caterpillar_utils:ensure_dir(
+            ?GV(repository_root, Args, filename:join(?REPOSITORY_ROOT, IdentList))
+        )
 
+    },
+    case catch init_worker(State, Args) of
+        {ok, #state{}} = NewState -> NewState;
+        {error, Reason} -> {stop, Reason};
+        Error -> error_logger:error_msg("init_worker failed with: ~p~n", [Error]), {stop, crashed}
+    end.
 
 
 handle_info(_Msg, State) -> 
@@ -54,3 +67,16 @@ terminate(Reason, #state{ident=Ident}) ->
 
 code_change(_Old, State, _Extra) ->
     {ok, State}.
+
+
+
+%------
+
+
+init_worker(State, Args) ->
+    Plugin = proplists:get_value(worker_plugin, Args),
+    WorkerArgs = proplists:get_value(worker_plugin_init, Args),
+    case Plugin:init_worker(State, WorkerArgs) of
+        {ok, WorkerState} -> {ok, State#state{worker_plugin = Plugin, worker_state = WorkerState}};
+        Error -> Error
+    end.

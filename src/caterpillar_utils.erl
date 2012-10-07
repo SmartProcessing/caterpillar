@@ -4,7 +4,7 @@
 
 -export([get_version_by_revdef/1, build_pipe/2]).
 -export([pipe/3]).
--export([read_build_id/1, write_build_id/2]).
+-export([read_work_id/1, write_work_id/2]).
 -export([package_to_archive/2, archive_to_package/1]).
 -export([list_packages/1, del_dir/1]).
 -export([ensure_dir/1]).
@@ -12,8 +12,8 @@
 
 -type function_spec()   :: {function(), [term()]}.
 
--spec read_build_id(Filename::file:filename()) -> BuildId::pos_integer().
--spec write_build_id(Filename::file:filename(), BuildId::pos_integer()) -> ok | {error, Reason::term()}.
+-spec read_work_id(Filename::file:filename()) -> BuildId::pos_integer().
+-spec write_work_id(Filename::file:filename(), BuildId::pos_integer()) -> ok | {error, Reason::term()}.
 
 
 
@@ -47,28 +47,28 @@ pipe([{Name, Fun}|T], InitialResult, State) ->
 
 
 
-read_build_id(Filename) ->
-    check_build_id_file(Filename),
+read_work_id(Filename) ->
+    check_work_id_file(Filename),
     case file:consult(Filename) of
-        {ok, [{build_id, BuildId}]} when is_integer(BuildId) ->
+        {ok, [{work_id, BuildId}]} when is_integer(BuildId) ->
             BuildId;
         _ ->
-            write_build_id(Filename, 1),
+            write_work_id(Filename, 1),
             1
     end.
 
 
-write_build_id(Filename, BuildId) when is_integer(BuildId)->
+write_work_id(Filename, BuildId) when is_integer(BuildId)->
     file:write_file(
         Filename,
-        io_lib:format("~p.", [{build_id, BuildId}])
+        io_lib:format("~p.", [{work_id, BuildId}])
     );
-write_build_id(_, BuildId) -> 
-    error_logger:error_msg("write_build_id: bad build_id - ~p~n", [BuildId]),
+write_work_id(_, BuildId) -> 
+    error_logger:error_msg("write_work_id: bad work_id - ~p~n", [BuildId]),
     {error, badarg}.
 
 
-check_build_id_file(Filename) ->
+check_work_id_file(Filename) ->
     case filelib:is_regular(Filename) of
         true -> ok;
         false ->
