@@ -48,10 +48,7 @@ handle_info(_Msg, State) ->
 
 
 
-handle_cast({notify_event, Event}, State) ->
-    {noreply, State};
-
-handle_cast({event, Event}, State) ->
+handle_cast({event, _Event}, State) ->
     spawn(
         fun() -> ok end
     ),
@@ -70,9 +67,9 @@ handle_call({register, {Ident, Pid}}, _, #state{ets=Ets}=State) when is_pid(Pid)
     ets:insert(Ets, {erlang:monitor(process, Pid), Ident, Pid}),
     {reply, ok, State};
 
-handle_call({sync_event, {register, Ident}}, {Pid, _}=From, State) ->
+handle_call({sync_event, {register, _Ident}}, {_Pid, _}=_From, State) ->
     {reply, ok, State};
-handle_call({sync_event, Event}, From, State) ->
+handle_call({sync_event, _Event}, _From, State) ->
     {norely, State};
 
 
