@@ -3,6 +3,10 @@
 -behaviour(gen_server).
 
 -include_lib("caterpillar_event_internal.hrl").
+-define(
+    SELECT(Type, ServiceOrIdent), 
+    [{{'_', '$1', '$2', '$3'}, [{'andalso', {'==', '$1', Type}, {'==', '$3', ServiceOrIdent}}], ['$2']}]
+).
 
 -export([start_link/1, stop/0]).
 -export([sync_event/1, event/1]).
@@ -34,13 +38,15 @@ register_worker(Ident) ->
 
 
 init(_) ->
-    {ok, #state{ets=ets:new(?MODULE, [protected])}}.
-
+    State = #state{
+        ets = ets:new(?MODULE, [protected]) %{ref, type, pid, ident|service}
+    },
+    {ok, State}.
 
 
 
 handle_info({'DOWN', Ref, _Type, _Pid, _Reason}, #state{ets=Ets}=State) ->
-    ets:delete(Ets, Ref),
+    workers:delete(Ets, Ref),
     {noreply, State};
 
 handle_info(_Msg, State) ->
@@ -59,16 +65,31 @@ handle_cast(_Msg, State) ->
 
 
 
-handle_call({register, {Ident, Pid}}, _, #state{ets=Ets}=State) when is_pid(Pid) ->
-    case ets:lookup(Ets, Ident) of 
-        [] -> ok;
-        _Something -> error_logger:info_msg("register warning: already got subscriber with this ident~n")
+handle_call({sync_event, {register_worker, Ident}}, {Pid, _}, #state{ets=Ets}=State) ->
+    case ets:select(Ets, ?SELECT(worker, Ident)) of
+        [] ->
+            ok;
+        _Something ->
+            error_logger:info_msg(
+                "register_worker warning: already got worker with ident ~p~n",
+                [Ident]
+            )
     end,
-    ets:insert(Ets, {erlang:monitor(process, Pid), Ident, Pid}),
+    ets:insert(Ets, {erlang:monitor(process, Pid), worker, Ident, Pid}),
     {reply, ok, State};
 
-handle_call({sync_event, {register, _Ident}}, {_Pid, _}=_From, State) ->
+handle_call({sync_event, {register_service, Service}}, {Pid, _}, #state{ets=Ets}=State) ->
+    case ets:select(Ets, ?SELECT(service, Service)) of
+        [] -> ok;
+        _Something ->
+            error_logger:info_msg(
+                "register_service warning: already got service ~p~n",
+                [Service]
+            )
+    end,
+    ets:insert(Ets, {erlang:monitor(process, Pid), service, Service, Pid}),
     {reply, ok, State};
+
 handle_call({sync_event, _Event}, _From, State) ->
     {norely, State};
 
