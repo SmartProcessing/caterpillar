@@ -115,12 +115,12 @@ job_free_worker([{Pid, SomeRef}|Other], ToBuild, OldW) ->
     {ok, [{Pid :: pid(), none}]}.
 create_workers(WorkerNumber) ->
     error_logger:info_msg("starting ~B build workers and worker supervisor: ~p ~n", 
-        [WorkerNumber, caterpillar_worker_sup:start_link()]),
+        [WorkerNumber, caterpillar_build_worker_sup:start_link()]),
     create_workers(WorkerNumber, []).
 create_workers(0, Acc) ->
     {ok, Acc};
 create_workers(WorkerNumber, Acc) ->
-    case supervisor:start_child(caterpillar_worker_sup, []) of
+    case supervisor:start_child(caterpillar_build_worker_sup, []) of
         {ok, Pid} ->
             error_logger:info_msg("build worker started at ~p", [Pid]),
             create_workers(WorkerNumber - 1, [{Pid, none}|Acc]);

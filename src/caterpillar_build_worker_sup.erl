@@ -1,16 +1,11 @@
--module(caterpillar_worker_sup).
+-module(caterpillar_build_worker_sup).
 
 -behaviour(supervisor).
 
-%% API
 -export([start_link/0, start_link/1]).
 
-%% Supervisor callbacks
 -export([init/1]).
 
-%% ===================================================================
-%% API functions
-%% ===================================================================
 
 -ifndef(TEST).
 
@@ -48,10 +43,10 @@ start_link(Settings) ->
 init(Settings) ->
     {ok, {{simple_one_for_one, 3, 60}, 
             [{
-                caterpillar_worker, 
-                {caterpillar_worker, start_link, [Settings]},
+                caterpillar_build_worker, 
+                {caterpillar_build_worker, start_link, [Settings]},
                 permanent,
                 5000,
                 worker,
-                [caterpillar_worker]
+                [caterpillar_build_worker]
             }]}}.
