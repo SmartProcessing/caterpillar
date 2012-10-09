@@ -568,6 +568,123 @@ get_changelog_test_() ->
 ]}.
 
 
+build_result_test_() ->
+{foreach,
+    fun() ->
+        tty_on(),
+        ok
+    end,
+    fun(_) ->
+        tty_off(),
+        ok 
+    end,
+[
+    {Message, fun() ->
+        ?assertEqual(
+            Result, 
+            catch caterpillar_repository:build_result(Packages, state)
+        )
+    end} || {Message, Packages, Result} <- [
+        {
+            "one successfuly processed package",
+            [#package{
+                name="package", branch="branch", archive="archive",
+                diff= <<"diff">>, changelog= <<"changelog">>
+            }],
+            {ok, #scan_pipe_result{
+                notify=#notify{
+                    subject = <<>>,
+                    body = <<"\n\npackage/branch\nchangelog\nDiff contains 4 bytes\ndiff\n">>
+                },
+                packages = [#package{
+                    name="package", branch="branch", archive="archive",
+                    diff= <<"diff">>, changelog= <<"changelog">>
+                }],
+                archives = [
+                    #archive{name="package", branch="branch", archive="archive"}
+                ]
+            }}
+        },
+        {
+            "one failed to process package",
+            [#package{
+                name="p", branch="b", failed_at=somewhere, reason=some_error, status=error
+            }],
+            {ok,
+                #scan_pipe_result{
+                notify=#notify{
+                    subject = <<>>,
+                    body = <<"\n\np/b failed at somewhere\nsome_error\n">>
+                },
+                packages = [#package{
+                    name="p", branch="b", failed_at=somewhere, reason=some_error, status=error
+                }],
+                archives = []
+            }}
+        },
+        {
+            "one package failed, second package processed",
+            [
+                #package{
+                    name="package", branch="branch", archive="archive",
+                    diff= <<"diff">>, changelog= <<"changelog">>
+                },
+                #package{
+                    name="p", branch="b", failed_at=somewhere, reason=some_error, status=error
+                }
+            ],
+            {ok,
+                #scan_pipe_result{
+                notify=#notify{
+                    subject = <<>>,
+                    body = <<
+                        "\n\npackage/branch\nchangelog\nDiff contains 4 bytes\ndiff\n\n\n"
+                        "p/b failed at somewhere\nsome_error\n"
+                    >>
+                },
+                packages = [
+                    #package{
+                        name="package", branch="branch", archive="archive",
+                        diff= <<"diff">>, changelog= <<"changelog">>
+                    },
+                    #package{
+                        name="p", branch="b", failed_at=somewhere, reason=some_error, status=error
+                    }
+                ],
+                archives = [
+                    #archive{name="package", branch="branch", archive="archive"}
+                ]
+            }}
+        }
+    ]
+]}.
+
+
+limit_output_test_() ->
+{foreach,
+    fun() -> ok end,
+[
+    {Message, fun() ->
+        ?assertEqual(
+            Result,
+            caterpillar_repository:limit_output(Bin, Size)
+        )
+    end} || {Message, {Bin, Size}, Result} <- [
+        {
+            "bin not parted",
+            {<<"123">>, 4},
+            {3, <<"123">>}
+        },
+        {
+            "bin parted",
+            {<<"1234">>, 3},
+            {4, <<"123...">>}
+        }
+    ]
+]}.
+
+
+
 clean_packages_test_() ->
 {foreachx,
     fun(Packages) ->
@@ -717,7 +834,7 @@ notify_test_() ->
 %%
 
 
-handle_call_new_packages_test_() ->
+handle_call_changes_test_z() ->
 {foreachx,
     fun(#state{dets=D}=State) ->
         {ok, D} = dets:open_file(D, [{access, read_write}]),
@@ -744,8 +861,8 @@ handle_call_new_packages_test_() ->
         end}
     end} || {Message, Request, Setup, Check, Result} <- [
         {
-            "new_packages test",
-            {new_packages, [#package{}]},
+            "changes test",
+            {changes, [#package{}]},
             #state{work_id_file="test_work_id_file", dets="test_d", work_id=1, ets=ets:new(t, [])},
             fun(#state{work_id_file=BIF, dets=D}) -> 
                 ?assertEqual(
@@ -802,7 +919,7 @@ handle_call_get_packages_test_() ->
 ]}.
 
 
-handle_info_scan_repository_test_() ->
+handle_info_scan_repository_test_z() ->
 {foreachx,
     fun(Packages) -> 
         RR = "__test",

@@ -45,12 +45,10 @@
 }).
 
 
--record(work_state, {
-    dets :: dets:tab(),
-    pid :: pid(),
-    ident :: string(),
-    archive_root :: filelib:dirname(),
-    work_id :: work_id()
+-record(scan_pipe_result, {
+    notify :: NotifyRecord::record(),
+    archives :: [ArchiveRecord::record()],
+    packages :: [PackageRecord::record()]
 }).
 
 -endif.

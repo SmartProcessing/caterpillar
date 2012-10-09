@@ -57,8 +57,8 @@ handle_info(scan_repository, State) ->
         end,
         error_logger:info_msg("scan pipe started at ~p~n", [Self]),
         case catch scan_pipe(State) of
-            {ok, Packages} when Packages /= [] ->
-                gen_server:call(?MODULE, {new_packages, Packages}, infinity);
+            {ok, #scan_pipe_result{}=Result} ->
+                gen_server:call(?MODULE, {changes, Result}, infinity);
             Error ->
                 error_logger:error_msg("scan pipe failed with: ~p~n", [Error])
         end
@@ -90,7 +90,7 @@ handle_call(get_packages, _From, #state{dets=D}=State) ->
     Packages = dets:select(D, [{{'$1', '_', '_', '_'}, [], ['$1']}]),
     {reply, Packages, State};
 
-handle_call({new_packages, Packages}, _From, #state{dets=D}=State) ->
+handle_call({changes, {Packages, Notify, Archives}}, _From, #state{dets=D}=State) ->
     NewWorkId = State#state.work_id + 1,
     WorkIdFile = State#state.work_id_file,
     [
@@ -214,7 +214,8 @@ scan_pipe(State) ->
         {export_packages, fun export_packages/2},
         {archive_packages, fun archive_packages/2},
         {get_diff, fun get_diff/2},
-        {get_changelog, fun get_changelog/2}
+        {get_changelog, fun get_changelog/2},
+        {build_result, fun build_result/2}
     ],
     caterpillar_utils:pipe(FunList, none, State).
 
@@ -473,4 +474,61 @@ get_changelog([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugi
             <<"cant get changelog">>
     end,
     get_changelog(O, [Package#package{changelog=Changelog}|Accum], State).
+
+
+
+build_result(Packages, _State) ->
+    Notify = #notify{
+        subject = <<>>,
+        body = <<>>
+    },
+    case catch build_result(Packages, Notify, []) of
+        {ok, {NewNotify, Archives}} ->
+            {ok, #scan_pipe_result{notify=NewNotify, archives=Archives, packages=Packages}};
+        Err ->
+            error_logger:error_msg("build_result error: ~p~n", [Err]),
+            {error, build_result}
+    end.
+
+
+build_result([], Notify, Archives) ->
+    {ok, {Notify, lists:reverse(Archives)}};
+
+build_result([Package|O], Notify, ArchiveAccum) ->
+    Name = Package#package.name,
+    Branch = Package#package.branch,
+    {PackageBody, NewArchiveAccum} = case Package#package.status of
+        ok ->
+            Archive = #archive{name=Name, branch=Branch, archive=Package#package.archive},
+            {DiffLength, Diff} = limit_output(Package#package.diff, 10240),
+            {_, ChangeLog} = limit_output(Package#package.changelog, 10240),
+            Body = list_to_binary(
+                io_lib:format(
+                    "~s/~s~n~s~nDiff contains ~p bytes~n~s~n",
+                    [Name, Branch, ChangeLog, DiffLength, Diff]
+                )
+            ),
+            {Body,  [Archive|ArchiveAccum]};
+        error ->
+            FailedAt = Package#package.failed_at,
+            Reason = Package#package.reason,
+            Body = list_to_binary(
+                io_lib:format(
+                    "~s/~s failed at ~p~n~p~n",
+                    [Name, Branch, FailedAt, Reason]
+                )
+            ),
+            {Body, ArchiveAccum}
+    end,
+    OldBody = Notify#notify.body,
+    NewBody = <<OldBody/binary, $\n, $\n, PackageBody/binary>>,
+    build_result(O, Notify#notify{body=NewBody}, NewArchiveAccum).
+
+
+-spec limit_output(binary(), non_neg_integer()) -> {non_neg_integer(), binary()}.
+limit_output(Bin, Size) when is_binary(Bin), is_integer(Size), Size > 0 ->
+    case size(Bin) of
+        S when S =< Size -> {S, Bin};
+        S -> {S, << (binary_part(Bin, {0, Size}))/binary, "..." >>}
+    end.
 

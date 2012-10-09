@@ -2,18 +2,10 @@
 -define(VERSION, caterpillar_utils:get_version_by_revdef).
 
 
--record(archive_new, {
-    name            :: binary(),
-    branch          :: binary(),
-    tag             :: binary(),
-    revision        :: binary(),
-    fd              :: file:io_device()|none
-}).
-
 -record(archive, {
     name            :: binary(),
     branch          :: binary(),
-    archive         :: file:io_device()|none
+    archive         :: file:io_device()|filelib:filename()
 }).
 
 
@@ -43,6 +35,11 @@
     builders        :: [binary()],
     architectures   :: [binary()],
     maintainers     :: [binary()]
+}).
+
+-record(notify, {
+    subject = <<>> :: binary,
+    body = <<>> :: binary
 }).
 
 
