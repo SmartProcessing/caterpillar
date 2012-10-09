@@ -337,7 +337,9 @@ find_modified_packages([Package|O], Accum, State) ->
                 "find_modified_packages error: ~p~n on ~p/~p~n",
                 [Error, PackageName, PackageBranch]
             ),
-            Accum
+            [Package#package{
+                old_revno=DetsRevno, status=error, failed_at=find_modified_packages, reason=Error
+            }|Accum]
     end,
     find_modified_packages(O, NewAccum, State).
 
@@ -351,6 +353,9 @@ export_packages([], [], _State) ->
 
 export_packages([], Accum, _State) ->
     {ok, lists:reverse(Accum)};
+
+export_packages([#package{status=error}=Package|O], Accum, State) ->
+    export_packages(O, [Package|Accum], State);
 
 export_packages([Package|O], Accum, #state{export_root=ER, repository_root=RR}=State) ->
     VCSPlugin = State#state.vcs_plugin,
@@ -367,7 +372,7 @@ export_packages([Package|O], Accum, #state{export_root=ER, repository_root=RR}=S
             error_logger:error_msg(
                 "export_packages error ~p~n at ~p/~p~n", [Error, PackageName, PackageBranch]
             ),
-            Accum
+            [Package#package{status=error, failed_at=export_packages, reason=Error}|Accum]
     end,
     export_packages(O, NewAccum, State).
 
@@ -381,6 +386,9 @@ archive_packages([], [], _State) ->
 
 archive_packages([], Accum, _State) ->
     {ok, lists:reverse(Accum)};
+
+archive_packages([#package{status=error}=Package|O], Accum, State) ->
+    archive_packages(O, [Package|Accum], State);
 
 archive_packages([Package|O], Accum, #state{export_root=ER, archive_root=AR}=State) ->
     PackageName = Package#package.name,
@@ -412,7 +420,7 @@ archive_packages([Package|O], Accum, #state{export_root=ER, archive_root=AR}=Sta
                 "archive_packages error: ~p~n at ~p/~p~n",
                 [Error, PackageName, PackageBranch]
             ),
-            Accum
+            [Package#package{status=error, failed_at=archive_packages, reason=Error}|Accum]
     end,
     archive_packages(O, NewAccum, State).
 
@@ -423,6 +431,10 @@ get_diff(Packages, State) ->
 
 get_diff([], Accum, _State) ->
     {ok, lists:reverse(Accum)};
+
+get_diff([#package{status=error}=Package|O], Accum, State) ->
+    get_diff(O, [Package|Accum], State);
+
 get_diff([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSState}=State) ->
     Name = Package#package.name,
     Branch = Package#package.branch,
@@ -444,6 +456,11 @@ get_changelog(Packages, State) ->
 
 get_changelog([], Accum, _State) ->
     {ok, lists:reverse(Accum)};
+
+get_changelog([#package{status=error}=Package|O], Accum, State) ->
+    get_changelog(O, [Package|Accum], State);
+
+
 get_changelog([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSState}=State) ->
     Name = Package#package.name,
     Branch = Package#package.branch,

@@ -34,6 +34,9 @@
 -record(package, {
     name :: string(),
     branch :: string(),
+    status = ok :: ok | error,
+    failed_at = none :: term(),
+    reason :: term(),
     old_revno = none :: term(),
     current_revno :: term(),
     archive :: string(),

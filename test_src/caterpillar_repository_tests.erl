@@ -345,7 +345,14 @@ find_modified_packages_test_() ->
             "plugin returns bad response",
             [],
             [#package{name="crash", branch="me"}],
-            {error, {find_modified_packages, "no packages modified"}}
+            {ok, [
+                #package{
+                    name="crash", branch="me", 
+                    status=error,
+                    failed_at=find_modified_packages,
+                    reason={'EXIT', some_reason}
+                }
+            ]}
         }
     ]
 ]}.
@@ -354,7 +361,7 @@ find_modified_packages_test_() ->
 export_packages_test_() ->
 {foreachx,
     fun(Directories) ->
-        [filelib:ensure_dir(Dir) || Dir <- Directories],
+        [caterpillar_utils:ensure_dir(Dir) || Dir <- Directories],
         #state{repository_root="__test", export_root="__test_export", vcs_plugin=test_vcs_plugin}
     end,
     fun(_, #state{repository_root=RR, export_root=ER}) ->
@@ -385,33 +392,46 @@ export_packages_test_() ->
     end} || {Message, Setup, Packages, Check, Result} <- [
         {
             "nothing exported",
-            ["__test/"],
+            ["__test"],
             [],
             fun() -> ok end,
             {error, {export_packages, "nothing exported"}}
         },
         {
             "export of new packages",
-            ["__test/package1/branch1/"],
+            ["__test/package1/branch1"],
             [#package{name="package1", branch="branch1", current_revno=rev}],
             fun() -> ok end,
             {ok, [#package{name="package1", branch="branch1", current_revno=rev}]}
         },
         {
             "some branch not exported",
-            ["__test/package1/branch1/", "__test/package2/no_export/"],
+            ["__test/package1/branch1", "__test/package2/no_export"],
             [
                 #package{name="package1", branch="branch1", current_revno=rev},
                 #package{name="package2", branch="no_export", current_revno=rev}
             ],
             fun() -> ok end,
-            {ok, [#package{name="package1", branch="branch1", current_revno=rev}]}
+            {ok, [
+                #package{name="package1", branch="branch1", current_revno=rev},
+                #package{
+                    name="package2", branch="no_export", status=error,
+                    failed_at=export_packages, reason=error, current_revno=rev
+                }
+            ]}
+        },
+        {
+            "checking package with error status ignored",
+            ["__test"],
+            [#package{name="ignore me", branch="some branch", status=error}],
+            fun() -> ok end,
+            {ok, [#package{name="ignore me", branch="some branch", status=error}]}
         },
         {
             "checking previous version cleaned",
             [
-                "__test/package1/branch1/some_data/",
-                "__test_export/package1/branch1/some_data/"
+                "__test/package1/branch1/some_data",
+                "__test_export/package1/branch1/some_data"
             ],
             [#package{name="package1", branch="branch1", current_revno=rev}],
             fun() -> 
@@ -456,6 +476,13 @@ archive_packages_test_() ->
             {error, {archive_packages, "nothing archived"}}
         },
         {
+            "checking packages with bad status ignored",
+            [],
+            [#package{status=error}],
+            fun() -> ok end,
+            {ok, [#package{status=error}]}
+        },
+        {
             "package successfuly archived",
             [
                 "__test_export/package/branch/dir1/",
@@ -495,6 +522,11 @@ get_diff_test_() ->
             [#package{name="package1", branch="branch1"}],
             {ok, [#package{name="package1", branch="branch1", diff= <<"branch1 diff">>}]}
         },
+        {
+            "checking packages with error status ignored",
+            [#package{name="package1", branch="branch1", status=error}],
+            {ok, [#package{name="package1", branch="branch1", status=error}]}
+        },
         { 
             "error while getting diff",
             [#package{name="package2", branch="branch2"}],
@@ -521,6 +553,11 @@ get_changelog_test_() ->
             "plugin returns valid response",
             [#package{name="package1", branch="branch1"}],
             {ok, [#package{name="package1", branch="branch1", changelog= <<"branch1 changelog">>}]}
+        },
+        {
+            "checking packages with error status ignored",
+            [#package{name="package1", branch="branch1", status=error}],
+            {ok, [#package{name="package1", branch="branch1", status=error}]}
         },
         { 
             "error while getting changelog",
