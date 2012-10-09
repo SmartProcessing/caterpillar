@@ -56,6 +56,7 @@ get_revno(_State, "__test/crash", "me") -> exit(some_reason);
 get_revno(_State, _Package, _Branch) -> {ok, 1}.
 
 
+get_tag(_State, _Package, "crash", _Revno) -> exit(error);
 get_tag(_State, _Package, _Branch, _Revno) -> {ok, "tag"}.
 
 

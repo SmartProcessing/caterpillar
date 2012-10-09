@@ -568,6 +568,37 @@ get_changelog_test_() ->
 ]}.
 
 
+get_tag_test_() ->
+{foreach,
+    fun() ->
+        tty_on(),
+        ok
+    end,
+    fun(_) ->
+        tty_off(),
+        ok
+    end,
+[
+    {Message, fun() ->
+        ?assertEqual(
+            Result,
+            caterpillar_repository:get_tag(Packages, #state{vcs_plugin=test_vcs_plugin})
+        )
+    end} || {Message, Packages, Result} <- [
+        {
+            "vcs returns tag",
+            [#package{} || _ <- lists:seq(1, 2)],
+            {ok, [#package{tag="tag"} || _ <- lists:seq(1, 2)]}
+        },
+        {
+            "vcs crashes on get_tag",
+            [#package{}, #package{branch="crash"}],
+            {ok, [#package{tag="tag"}, #package{branch="crash"}]}
+        }
+    ]
+]}.
+
+
 build_result_test_() ->
 {foreach,
     fun() ->
@@ -774,7 +805,8 @@ clean_packages_test_() ->
 
 
 
-notify_test_() ->
+%FIXME:
+notify_test_z() ->
 {foreach,
     fun() ->
         NR = "__test_notify",

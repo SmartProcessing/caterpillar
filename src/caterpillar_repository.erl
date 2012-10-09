@@ -476,7 +476,8 @@ get_changelog([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugi
     Branch = Package#package.branch,
     CurrentRevno = Package#package.current_revno,
     OldRevno = Package#package.old_revno,
-    Changelog = case catch VCSPlugin:get_changelog(VCSState, filename:join(RR, Name), Branch, OldRevno, CurrentRevno) of
+    AbsPath = filename:join(RR, Name),
+    Changelog = case catch VCSPlugin:get_changelog(VCSState, AbsPath, Branch, OldRevno, CurrentRevno) of
         {ok, C} when is_binary(C) -> C;
         Error ->
             error_logger:error_msg("get_changelog bad return: ~p~n at ~p/~p~n", [Error, Name, Branch]),
