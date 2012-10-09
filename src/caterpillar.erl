@@ -4,7 +4,7 @@
 
 -export([start_link/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-         terminate/2, code_change/3]).
+         terminate/2, code_change/3, prepare/1]).
 
 -record(state, {
         vcs_plugins=[],
@@ -12,7 +12,8 @@
         main_queue,
         wait_queue,
         next_to_build,
-        workers=[]
+        workers=[],
+        build_state
     }).
 
 
@@ -32,13 +33,15 @@ init(Settings) ->
     error_logger:info_msg("workers initialized"),
     caterpillar_api:start(),
     error_logger:info_msg("api started"),
+    BuildState = ets:new(build_state, []),
     {ok, #state{
             vcs_plugins=Plugins,
             deps=Deps,
             main_queue=BuildQueue,
             wait_queue=WaitQueue,
             workers=WorkerList,
-            next_to_build=none
+            next_to_build=none,
+            build_state=BuildState
         }
     }.
 
@@ -69,9 +72,16 @@ handle_call({newrepo, Plugin, Name}, _From, State) ->
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
+handle_cast({work, _Id, Archives}, State) ->
+    process_archives(Archives, State#state.build_state),
+    {noreply, State};
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
+handle_info({'DOWN', Reference, _, _, Reason}, State) when Reason /= normal ->
+    [{Reference, _Archive}|_] = ets:lookup(State#state.build_state, Reference),
+    %%TODO repeat some actions with archive, smth failed
+    {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -80,6 +90,26 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+
+%% Preprocessing
+process_archives([], _States) ->
+    {ok, done};
+process_archives([A|O], BuildState) ->
+    {ok, _Pid, ToRepeat} = erlang:spawn_monitor(?MODULE, prepare, [A]),
+    ets:insert(BuildState, {ToRepeat, A}),
+    process_archives(O, BuildState).
+
+
+prepare(A) ->
+    TempArch = io_lib:format("~s-~s~s.tar", [
+            binary_to_list(A#archive.name), 
+            binary_to_list(A#archive.branch),
+            ""]
+        ),
+    caterpillar_files:create_temp_fd(TempArch).
+    %% call caterpillar events
+
 
 %% Build
 %% ------------------------------------------------------------------

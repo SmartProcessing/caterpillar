@@ -6,10 +6,11 @@
               {mod,{caterpillar_app,[]}},
               {env,[]},
               {modules,[caterpillar,caterpillar_api,caterpillar_api_handler,
-                        caterpillar_app,caterpillar_bzr_plugin,
+                        caterpillar_app,caterpillar_build_worker,
+                        caterpillar_build_worker_sup,caterpillar_bzr_plugin,
                         caterpillar_dependencies,caterpillar_event,
                         caterpillar_net_kernel,caterpillar_notifier,
                         caterpillar_repository,caterpillar_repository_plugin,
                         caterpillar_rotating_log_handler,caterpillar_sup,
                         caterpillar_utils,caterpillar_worker,
-                        caterpillar_worker_plugin,caterpillar_worker_sup]}]}.
+                        caterpillar_worker_plugin]}]}.

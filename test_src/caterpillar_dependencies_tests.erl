@@ -64,8 +64,7 @@ list_unresolved_dependencies_test_() ->
                         tag = <<"">>,
                         build_id = 17,
                         dep_object = [{<<"smprc-test">>, <<"trunk">>, <<"">>},
-                        {<<"caterpillar">>, <<"trunk">>, <<"">>}],
-                        platform_spec = [<<"default">>]
+                        {<<"caterpillar">>, <<"trunk">>, <<"">>}]
                     }),
                 {ok, []}),
             ?assertEqual(
@@ -76,8 +75,7 @@ list_unresolved_dependencies_test_() ->
                         branch = <<"trunk">>,
                         tag = <<"">>,
                         build_id = 17,
-                        dep_object = [{<<"pequen">>, <<"trunk">>, <<"">>}],
-                        platform_spec = [<<"default">>]
+                        dep_object = [{<<"pequen">>, <<"trunk">>, <<"">>}]
                     }),
                 {ok, [{<<"pequen">>, <<"trunk">>, <<"">>}]})
         end
