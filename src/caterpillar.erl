@@ -112,14 +112,14 @@ process_archives([A|O], State) ->
 
 
 prepare(BuildPath, Archive, EventService) ->
-    TempName = io_lib:format("~s-~s~s", [
+    TempName = io_lib:format("~s-~s", [
             binary_to_list(Archive#archive.name), 
-            binary_to_list(Archive#archive.branch),
-            binary_to_list(Archive#archive.tag)]
-        ),
+            binary_to_list(Archive#archive.branch)
+        ]
+    ),
     TempArch = BuildPath ++ "/temp/" ++ TempName ++ ".tar",
     Fd = file:open(TempArch, [read, write]),
-    ArchiveWithFd = Archive#archive{fd=Fd},
+    ArchiveWithFd = Archive#archive{archive=Fd},
     {ok, ArchiveWithFd} = gen_server:call(
         EventService, 
         {get_archive, ArchiveWithFd}, 

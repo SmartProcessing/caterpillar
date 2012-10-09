@@ -834,7 +834,7 @@ notify_test_() ->
 %%
 
 
-handle_call_changes_test_z() ->
+handle_call_changes_test_() ->
 {foreachx,
     fun(#state{dets=D}=State) ->
         {ok, D} = dets:open_file(D, [{access, read_write}]),
@@ -847,7 +847,7 @@ handle_call_changes_test_z() ->
 [
     {Setup, fun(_, State) ->
         {Message, fun() ->
-            Return = caterpillar_repository:handle_call(Request, from, State),
+            Return = (catch caterpillar_repository:handle_call(Request, from, State)),
             ?assertMatch(
                 {reply, ok, _},
                 Return
@@ -862,7 +862,7 @@ handle_call_changes_test_z() ->
     end} || {Message, Request, Setup, Check, Result} <- [
         {
             "changes test",
-            {changes, [#package{}]},
+            {changes, #scan_pipe_result{packages=[#package{}], archives=[#archive{}], notify=#notify{}}},
             #state{work_id_file="test_work_id_file", dets="test_d", work_id=1, ets=ets:new(t, [])},
             fun(#state{work_id_file=BIF, dets=D}) -> 
                 ?assertEqual(
@@ -919,7 +919,7 @@ handle_call_get_packages_test_() ->
 ]}.
 
 
-handle_info_scan_repository_test_z() ->
+handle_info_scan_repository_test_() ->
 {foreachx,
     fun(Packages) -> 
         RR = "__test",
@@ -976,12 +976,25 @@ handle_info_scan_repository_test_z() ->
                 timer:sleep(15),
                 ?assertMatch(
                     {messages, [
-                        {'$gen_call', _, {new_packages, [
-                            #package{name="package1", branch="branch1", current_revno=1,
-                                archive="package1__ARCHIVE__branch1",
-                                diff= <<"branch1 diff">>, changelog= <<"branch1 changelog">>
-                            }
-                        ]}}
+                        {'$gen_call', _, {changes, #scan_pipe_result{
+                            notify=#notify{
+                                subject = <<>>,
+                                body = <<
+                                    "\n\npackage1/branch1\nbranch1 changelog\nDiff contains 12 bytes"
+                                    "\nbranch1 diff\n"
+                            >>},
+                            packages = [
+                                #package{name="package1", branch="branch1", current_revno=1,
+                                    archive="package1__ARCHIVE__branch1",
+                                    diff= <<"branch1 diff">>, changelog= <<"branch1 changelog">>
+                                }
+                            ],
+                            archives = [
+                                #archive{
+                                    name="package1", branch="branch1", archive="package1__ARCHIVE__branch1"
+                                }
+                            ]
+                        }}}
                     ]},
                     process_info(self(), messages)
                 )

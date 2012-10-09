@@ -90,16 +90,24 @@ handle_call(get_packages, _From, #state{dets=D}=State) ->
     Packages = dets:select(D, [{{'$1', '_', '_', '_'}, [], ['$1']}]),
     {reply, Packages, State};
 
-handle_call({changes, {Packages, Notify, Archives}}, _From, #state{dets=D}=State) ->
+handle_call({changes, ScanPipeResult}, _From, #state{dets=D}=State) ->
     NewWorkId = State#state.work_id + 1,
     WorkIdFile = State#state.work_id_file,
+    Packages = ScanPipeResult#scan_pipe_result.packages,
     [
         dets:insert(D, {{Name, Branch}, Archive, Revno, NewWorkId}) ||
         #package{name=Name, branch=Branch, archive=Archive, current_revno=Revno} <- Packages
     ],
     caterpillar_utils:write_work_id(WorkIdFile, NewWorkId),
     NewState = State#state{work_id=NewWorkId},
-    spawn(fun() -> notify(new_packages, NewState, Packages) end),
+    spawn(fun() ->
+        Archives = ScanPipeResult#scan_pipe_result.archives,
+        case Archives of
+            [] -> ok;
+            _ -> caterpillar_event:event({changes, Archives})
+        end,
+        notify(changes, NewState, ScanPipeResult#scan_pipe_result.notify)
+    end),
     {reply, ok, NewState};
 
 handle_call(stop, _From, State) ->
@@ -186,18 +194,17 @@ clean_packages(#state{dets=D, export_root=ER, archive_root=AR}=State, [Package|O
 
 %---------------
 
--spec notify(NotifyType :: atom(), #state{}, [#package{}]) -> no_return().
-notify(Type, #state{notify_root=NR, work_id=Wid}, Packages) ->
-    case catch caterpillar_event:sync_event({notify, {Type, Packages}}) of
-        {ok, done} ->
-            {ok, done};
+-spec notify(NotifyType :: atom(), #state{}, #notify{}) -> no_return().
+notify(Type, #state{notify_root=NR, work_id=Wid}, Notify) ->
+    case catch caterpillar_event:sync_event({notify, {Type, Notify}}) of
+        {ok, done} -> {ok, done};
         Error -> 
             FileName = filename:join(NR, integer_to_list(Wid)),
             error_logger:error_msg(
                 "failed to notify with error: ~p~nsaving packages dump to ~p~n",
                 [Error, FileName]
             ),
-            file:write_file(FileName, term_to_binary({Type, Wid, Packages})) 
+            file:write_file(FileName, term_to_binary({Type, Wid, Notify})) 
     end.
 
 
