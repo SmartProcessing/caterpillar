@@ -140,7 +140,7 @@ create_bucket(BucketsDets, Package, BuildPath) ->
     Path = BuildPath ++ "/" ++ Bucket ++ "/",
     filelib:ensure_dir(Path),
     {Name, _B, _T} = Package,
-    TempPath = BuildPath ++ "/" ++ binary_to_list(Name),
+    TempPath = BuildPath ++ "/temp/" ++ binary_to_list(Name),
     case filelib:is_dir(TempPath) of
         true ->
             ok = file:rename(TempPath, Path),
