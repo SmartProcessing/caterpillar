@@ -78,9 +78,6 @@ handle_info(_Msg, State) ->
     {noreply, State}.
 
 
-handle_cast(push_work, State) ->
-    push_work(State),
-    {noreply, State};
 handle_cast({clean_packages, Packages}, State) ->
     clean_packages(State, Packages),
     spawn(fun() -> notify(clean_packages, State, Packages) end),
@@ -102,7 +99,6 @@ handle_call({new_packages, Packages}, _From, #state{dets=D}=State) ->
     ],
     caterpillar_utils:write_work_id(WorkIdFile, NewWorkId),
     NewState = State#state{work_id=NewWorkId},
-    gen_server:cast(self(), push_work),
     spawn(fun() -> notify(new_packages, NewState, Packages) end),
     {reply, ok, NewState};
 
@@ -206,102 +202,8 @@ notify(Type, #state{notify_root=NR, work_id=Wid}, Packages) ->
 
 
 
+%-----------
 
-%--------------
-
-push_work(#state{}=State) ->
-    case catch caterpillar_event:sync_event(get_workers) of
-        {ok, []} -> ok;
-        {ok, Workers} ->
-            lists:foreach(
-                fun(Worker) -> spawn(fun() -> push_work(Worker, State) end) end,
-                Workers
-            );
-        Error ->
-            error_logger:info_msg("push_work get_workers erroneous return: ~p~n", [Error])
-    end.
-     
-
-
-push_work([Ident, Pid], #state{dets=Dets, work_id=WorkId, archive_root=AR}) ->
-    State = #work_state{
-        dets = Dets,
-        pid = Pid,
-        ident = Ident,
-        archive_root = AR,
-        work_id = WorkId
-    },
-    FunList = [
-        {get_work_id, fun get_work_id/2},
-        {select_archives, fun select_archives/2},
-        {work_query, fun work_query/2},
-        {deploy, fun deploy/2}
-    ],
-    caterpillar_utils:pipe(FunList, none, State);
-push_work(BadData, _State) ->
-    error_logger:error_msg("push_work bad input args: ~p~n", [BadData]).
-
-
-get_work_id(_, #work_state{pid=Pid, ident=Ident}) ->
-    case catch gen_server:call(Pid, get_work_id, infinity) of
-        {ok, _}=Response -> 
-            Response;
-        Error ->
-            error_logger:error_msg("push_work error response from ~p(~p): ~p~n", [Ident, Pid, Error]),
-            {error, {get_work_id, bad_response}}
-    end.
-
-
-select_archives(WorkerWorkId, #work_state{dets=Dets, pid=Pid, ident=Ident, archive_root=AR}) ->
-    Archives = lists:foldl(
-        fun([{Name, Branch}, ArchiveName], Accum) ->
-            case catch file:open(filename:join(AR, ArchiveName), [read, binary]) of
-                {ok, File} ->
-                    [#archive{name=Name, branch=Branch, archive=File}|Accum];
-                Error ->
-                    error_logger:error_msg(
-                        "select_archives error: failed to open ~p with ~p~n",
-                        [ArchiveName, Error]
-                    ),
-                    Accum
-            end
-        end,
-        [],
-        dets:select(Dets, [{{'$1', '$2', '_', '$3'}, [{'<', WorkerWorkId, '$3'}], [['$1', '$2']]}])
-    ),
-    case Archives of 
-        [] ->
-            error_logger:info_msg(
-                "no archives selected for worker ~p(~p) with work_id ~p~n",
-                [Ident, Pid, WorkerWorkId]
-            ),
-            {error, {select_archives, no_archives}};
-        _ ->
-            {ok, Archives}
-    end.
-
-
-work_query(Archives, #work_state{pid=Pid, ident=Ident, work_id=WorkId}) ->
-    case catch gen_server:call(Pid, {work, WorkId, Archives}, infinity) of
-        {ok, _} = Deploy ->
-            [catch file:close(Archive) || #archive{archive=Archive} <- Archives],
-            Deploy;
-        Error ->
-            error_logger:error_msg(
-                "work_query(~p) error to ~p(~p): ~p~n", [WorkId, Ident, Pid, Error]
-            ),
-            {error, work_query}
-    end.
-
-
-deploy(no_deploy, _) ->
-    {ok, done};
-deploy(Deploy, #work_state{}) ->
-    gen_server:cast({global, caterpillar_router}, {deploy, Deploy}),
-    {ok, done}.
-
-
-%----
 
 scan_pipe(State) ->
     FunList = [
@@ -315,7 +217,6 @@ scan_pipe(State) ->
         {get_changelog, fun get_changelog/2}
     ],
     caterpillar_utils:pipe(FunList, none, State).
-
 
 
 get_packages(_, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSState}) ->
