@@ -7,7 +7,8 @@
 -export([get_diff/5, get_changelog/5, get_revno/3]).
 -export([is_repository/2, is_branch/3]).
 -export([get_branches/2]).
--export([export/4]).
+-export([export/5]).
+-export([get_tag/4]).
 
 
 -export([init/1, terminate/2, handle_info/2, handle_cast/2, handle_call/3, code_change/3]).
@@ -85,6 +86,10 @@ get_branches(PackagePath, Package) ->
     end.
 
 
+get_tag(_State, _Package, _Branch, _Revno) ->
+    {ok, tag}.
+
+
 is_repository(PackagePath, Package) ->
     call_server({is_repository, PackagePath, Package}).
 
@@ -93,7 +98,8 @@ is_branch(PackagePath, Package, Branch) ->
     call_server({is_branch, PackagePath, Package, Branch}).
 
 
-export(PackagePath, Package, Branch, ExportPath) ->
+export(PackagePath, Package, Branch, _Revno, ExportPath) ->
+    %FIXME:
     call_server({export_branch, PackagePath, Package, Branch, ExportPath}).
 
 
