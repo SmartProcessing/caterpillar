@@ -90,9 +90,7 @@ handle_call({sync_event, {register_service, Service}}, {Pid, _}, #state{ets=Ets}
     ets:insert(Ets, {erlang:monitor(process, Pid), service, Service, Pid}),
     {reply, ok, State};
 
-handle_call({sync_event, _Event}, _From, State) ->
-    {norely, State};
-
+%handle_call({sync_event, {
 
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};

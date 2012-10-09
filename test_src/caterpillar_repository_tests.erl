@@ -430,11 +430,13 @@ export_packages_test_() ->
 archive_packages_test_() ->
 {foreachx,
     fun(Directories) ->
+        tty_on(),
         Dirs = Directories++["__test_archive/", "__test_export/"],
         [filelib:ensure_dir(Dir) || Dir <- Dirs],
         #state{archive_root="__test_archive", export_root="__test_export", vcs_plugin=test_vcs_plugin}
     end,
     fun(_, #state{archive_root=AR, export_root=ER}) ->
+        tty_off(),
         [caterpillar_utils:del_dir(D) || D <- [AR, ER]]
     end,
 [
@@ -464,7 +466,7 @@ archive_packages_test_() ->
             [#package{name="package", branch="branch", current_revno=rev}],
             fun() ->
                 {ok, Names} = erl_tar:table("__test_archive/package__ARCHIVE__branch", [compressed]),
-                ?assertEqual(lists:sort(Names), ["package/branch/dir1", "package/branch/dir2"])
+                ?assertEqual(lists:sort(Names), ["dir1", "dir2"])
             end,
             {ok, [#package{
                 name="package", branch="branch",

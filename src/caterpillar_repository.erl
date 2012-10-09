@@ -492,10 +492,15 @@ archive_packages([Package|O], Accum, #state{export_root=ER, archive_root=AR}=Sta
             {ok, T} -> T;
             ErrT -> throw(ErrT)
         end,
-        case erl_tar:add(Tar, ExportPath, filename:join(PackageName, PackageBranch), []) of
-            ok -> ok;
-            ErrAd -> throw(ErrAd)
+        ForeachAddFun = fun(File) -> 
+            AbsFile = filename:join(ExportPath, File),
+            case erl_tar:add(Tar, AbsFile, File, []) of
+                ok -> ok;
+                ErrAd -> throw(ErrAd)
+            end
         end,
+        {ok, Listing} = file:list_dir(ExportPath),
+        lists:foreach(ForeachAddFun, Listing),
         erl_tar:close(Tar),
         ok
     end),
