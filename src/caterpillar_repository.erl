@@ -78,9 +78,9 @@ handle_info(_Msg, State) ->
     {noreply, State}.
 
 
-handle_cast({clean_packages, Packages}, State) ->
-    clean_packages(State, Packages),
-    spawn(fun() -> notify(clean_packages, State, Packages) end),
+handle_cast({clean_packages, Notify, PackageName}, State) ->
+    clean_packages(State, PackageName),
+    spawn(fun() -> notify(State, Notify) end),
     {noreply, State};
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -106,7 +106,7 @@ handle_call({changes, ScanPipeResult}, _From, #state{dets=D}=State) ->
             [] -> ok;
             _ -> caterpillar_event:event({changes, Archives})
         end,
-        notify(changes, NewState, ScanPipeResult#scan_pipe_result.notify)
+        notify(NewState, ScanPipeResult#scan_pipe_result.notify)
     end),
     {reply, ok, NewState};
 
@@ -178,9 +178,7 @@ scan_repository(Delay) when is_integer(Delay), Delay >= 0 ->
 
 clean_packages(_State, []) ->
     ok;
-clean_packages(#state{dets=D, export_root=ER, archive_root=AR}=State, [Package|O]) ->
-    Name = Package#package.name,
-    Branch = Package#package.branch,
+clean_packages(#state{dets=D, export_root=ER, archive_root=AR}=State, [{Name, Branch}|O]) ->
     AbsEr = filename:join(ER, Name),
     file:delete(filename:join(AR, caterpillar_utils:package_to_archive(Name, Branch))),
     dets:delete(D, {Name, Branch}),
@@ -194,9 +192,9 @@ clean_packages(#state{dets=D, export_root=ER, archive_root=AR}=State, [Package|O
 
 %---------------
 
--spec notify(NotifyType :: atom(), #state{}, #notify{}) -> no_return().
-notify(Type, #state{notify_root=NR, work_id=Wid}, Notify) ->
-    case catch caterpillar_event:sync_event({notify, {Type, Notify}}) of
+-spec notify(#state{}, #notify{}) -> no_return().
+notify(#state{notify_root=NR, work_id=Wid}, #notify{}=Notify) ->
+    case catch caterpillar_event:sync_event({notify, Notify}) of
         {ok, done} -> {ok, done};
         Error -> 
             FileName = filename:join(NR, integer_to_list(Wid)),
@@ -204,7 +202,7 @@ notify(Type, #state{notify_root=NR, work_id=Wid}, Notify) ->
                 "failed to notify with error: ~p~nsaving packages dump to ~p~n",
                 [Error, FileName]
             ),
-            file:write_file(FileName, term_to_binary({Type, Wid, Notify})) 
+            file:write_file(FileName, term_to_binary(Notify)) 
     end.
 
 
@@ -300,10 +298,14 @@ cast_clean_packages(Branches, #state{dets=Dets}) ->
     case DetsBranches -- [{Name, Branch} || #package{name=Name, branch=Branch} <- Branches] of
         [] -> ok;
         ToClean ->
-            gen_server:cast(
-                ?MODULE,
-                {clean_packages, [#package{name=Name, branch=Branch} || {Name, Branch} <- ToClean]}
-            )
+            Body = list_to_binary(
+                string:join(
+                    [io_lib:format("~s/~s", [Package, Name]) || {Package, Name} <- ToClean],
+                    $\n
+                )
+            ),
+            Notify = #notify{subject = <<"some packages deleted">>, body = Body},
+            gen_server:cast(?MODULE, {clean_packages, Notify, ToClean})
     end,
     {ok, Branches}.
 

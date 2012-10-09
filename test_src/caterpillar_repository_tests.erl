@@ -257,15 +257,15 @@ cast_clean_packages_test_() ->
         {Message, fun() ->
             register(caterpillar_repository, self()),
             ?assertEqual(
-                {ok, Branches},
-                caterpillar_repository:cast_clean_packages(Branches, State)
+                {ok, Packages},
+                caterpillar_repository:cast_clean_packages(Packages, State)
             ),
             ?assertEqual(
                 RecvResult,
                 receive Msg -> Msg after 10 -> timeout end
             )
         end}
-    end} || {Message, Setup, Branches, RecvResult} <- [
+    end} || {Message, Setup, Packages, RecvResult} <- [
         {
             "nothing in dets, clean message not sent",
             [],
@@ -288,7 +288,15 @@ cast_clean_packages_test_() ->
             [#package{name=Name, branch=Branch} || {Name, Branch} <- [
                 {"package1", "branch1"}, {"package2", "branch2"}
             ]],
-            {'$gen_cast', {clean_packages, [#package{name="package3", branch="branch3"}]}}
+            {'$gen_cast',
+                {clean_packages,
+                    #notify{
+                        subject= <<"some packages deleted">>,
+                        body= <<"package3/branch3">>
+                    },
+                    [{"package3", "branch3"}]
+                }
+            }
         }
     ]
 ]}.
@@ -455,7 +463,6 @@ archive_packages_test_() ->
         #state{archive_root="__test_archive", export_root="__test_export", vcs_plugin=test_vcs_plugin}
     end,
     fun(_, #state{archive_root=AR, export_root=ER}) ->
-        tty_off(),
         [caterpillar_utils:del_dir(D) || D <- [AR, ER]]
     end,
 [
@@ -571,11 +578,9 @@ get_changelog_test_() ->
 get_tag_test_() ->
 {foreach,
     fun() ->
-        tty_on(),
         ok
     end,
     fun(_) ->
-        tty_off(),
         ok
     end,
 [
@@ -602,11 +607,9 @@ get_tag_test_() ->
 build_result_test_() ->
 {foreach,
     fun() ->
-        tty_on(),
         ok
     end,
     fun(_) ->
-        tty_off(),
         ok 
     end,
 [
@@ -773,31 +776,31 @@ clean_packages_test_() ->
         {
             "one package cleaned",
             [#package{name=N, branch=B} || {N, B} <- [{"p1", "b1"}, {"p2", "b2"}]],
-            [#package{name="p1", branch="b1"}],
+            [{"p1", "b1"}],
             [#package{name="p2", branch="b2"}]
         },
         {
             "one package got few branches, one of them cleaned",
             [#package{name=N, branch=B} || {N, B} <- [{"p1", "b1"}, {"p1", "b2"}, {"p2", "b2"}]],
-            [#package{name="p1", branch="b1"}],
+            [{"p1", "b1"}],
             [#package{name="p1", branch="b2"}, #package{name="p2", branch="b2"}]
         },
         {
             "one package got few branches, both of them cleaned",
             [#package{name=N, branch=B} || {N, B} <- [{"p1", "b1"}, {"p1", "b2"}, {"p2", "b2"}]],
-            [#package{name="p1", branch="b1"}, #package{name="p1", branch="b2"}],
+            [{"p1", "b1"}, {"p1", "b2"}],
             [#package{name="p2", branch="b2"}]
         },
         {
             "all packages cleaned",
             [#package{name=N, branch=B} || {N, B} <- [{"p1", "b1"}, {"p1", "b2"}, {"p2", "b2"}]],
-            [#package{name=N, branch=B} || {N, B} <- [{"p1", "b1"}, {"p1", "b2"}, {"p2", "b2"}]],
+            [{"p1", "b1"}, {"p1", "b2"}, {"p2", "b2"}],
             []
         },
         {
             "no such packages, clean_packages should not crash",
             [],
-            [#package{name=N, branch=B} || {N, B} <- [{"p1", "b1"}, {"p1", "b2"}, {"p2", "b2"}]],
+            [{"p1", "b1"}, {"p1", "b2"}, {"p2", "b2"}],
             []
         }            
     ]
