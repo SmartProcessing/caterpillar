@@ -246,7 +246,7 @@ cast_clean_packages_test_() ->
 {foreachx,
     fun(Setup) ->
         {ok, D} = dets:open_file("test.dets", [{access, read_write}]),
-        [dets:insert(D, {X, archive, revision, work_id}) || X <- Setup],
+        [dets:insert(D, {X, archive, revision, tag, work_id}) || X <- Setup],
         #state{dets=D}
     end,
     fun(_, _) ->
@@ -299,7 +299,7 @@ find_modified_packages_test_() ->
 {foreachx,
     fun(Setup) ->
         {ok, D} = dets:open_file("test.dets", [{access, read_write}]),
-        [dets:insert(D, {X, archive, R, work_id}) || {X, R} <- Setup],
+        [dets:insert(D, {X, archive, R, tag, work_id}) || {X, R} <- Setup],
         #state{dets=D, vcs_plugin=test_vcs_plugin, repository_root="__test"}
     end,
     fun(_, _) ->
@@ -496,7 +496,7 @@ archive_packages_test_() ->
             end,
             {ok, [#package{
                 name="package", branch="branch",
-                archive="package__ARCHIVE__branch",
+                archive_name="package__ARCHIVE__branch",
                 current_revno=rev
             }]}
         }
@@ -588,7 +588,7 @@ build_result_test_() ->
         {
             "one successfuly processed package",
             [#package{
-                name="package", branch="branch", archive="archive",
+                name="package", branch="branch", archive_name="archive",
                 diff= <<"diff">>, changelog= <<"changelog">>
             }],
             {ok, #scan_pipe_result{
@@ -597,11 +597,11 @@ build_result_test_() ->
                     body = <<"\n\npackage/branch\nchangelog\nDiff contains 4 bytes\ndiff\n">>
                 },
                 packages = [#package{
-                    name="package", branch="branch", archive="archive",
+                    name="package", branch="branch", archive_name="archive",
                     diff= <<"diff">>, changelog= <<"changelog">>
                 }],
                 archives = [
-                    #archive{name="package", branch="branch", archive="archive"}
+                    #archive{name="package", branch="branch", archive_name="archive"}
                 ]
             }}
         },
@@ -626,7 +626,7 @@ build_result_test_() ->
             "one package failed, second package processed",
             [
                 #package{
-                    name="package", branch="branch", archive="archive",
+                    name="package", branch="branch", archive_name="archive",
                     diff= <<"diff">>, changelog= <<"changelog">>
                 },
                 #package{
@@ -644,7 +644,7 @@ build_result_test_() ->
                 },
                 packages = [
                     #package{
-                        name="package", branch="branch", archive="archive",
+                        name="package", branch="branch", archive_name="archive",
                         diff= <<"diff">>, changelog= <<"changelog">>
                     },
                     #package{
@@ -652,7 +652,7 @@ build_result_test_() ->
                     }
                 ],
                 archives = [
-                    #archive{name="package", branch="branch", archive="archive"}
+                    #archive{name="package", branch="branch", archive_name="archive"}
                 ]
             }}
         }
@@ -698,7 +698,7 @@ clean_packages_test_() ->
                 Archive = filename:join(AR, caterpillar_utils:package_to_archive(Name, Branch)),
                 filelib:ensure_dir(Archive),
                 file:write_file(Archive, <<"h">>),
-                dets:insert(D, {{Name, Branch}, archive, last_revision, work_id}) 
+                dets:insert(D, {{Name, Branch}, archive, last_revision, tag, work_id}) 
             end || #package{name=Name, branch=Branch} <- Packages
         ],
         #state{dets=D, export_root=ER, archive_root=AR, vcs_plugin=test_vcs_plugin}
@@ -713,7 +713,7 @@ clean_packages_test_() ->
         {Message, fun() ->
             PackageList = [{N, B} || #package{name=N, branch=B} <- Packages],
             ?assertEqual(
-                lists:sort([{Package, archive, last_revision, work_id} || Package <- PackageList]),
+                lists:sort([{Package, archive, last_revision, tag, work_id} || Package <- PackageList]),
                 lists:sort(dets:select(D, [{'$1', [], ['$1']}]))
             ),
             ?assertEqual(
@@ -723,7 +723,7 @@ clean_packages_test_() ->
             caterpillar_repository:clean_packages(State, CleanPackages),
             ?assertEqual(
                 lists:sort(
-                    [{{N, B}, archive, last_revision, work_id} || #package{name=N, branch=B} <- AfterClean]
+                    [{{N, B}, archive, last_revision, tag, work_id} || #package{name=N, branch=B} <- AfterClean]
                 ),
                 lists:sort(dets:select(D, [{'$1', [], ['$1']}]))
             ),
@@ -870,7 +870,7 @@ handle_call_changes_test_() ->
                     2
                 ),
                 ?assertEqual(
-                    [{{undefined, undefined}, undefined, undefined, 2}],
+                    [{{undefined, undefined}, undefined, undefined, undefined, 2}],
                     dets:select(D, [{'$1', [], ['$1']}])
                 )
             end,
@@ -907,12 +907,12 @@ handle_call_get_packages_test_() ->
         },
         {
             "one package in dets",
-            [{{package, branch}, archive, current_revno, work_id}],
+            [{{package, branch}, archive, current_revno, tag, work_id}],
             [{package, branch}]
         },
         {
             "few packages in dets",
-            [{{Package, Branch}, archive, current_revno, work_id} || {Package, Branch} <- [{p, b}, {pp, bb}]],
+            [{{Package, Branch}, archive, current_revno, tag, work_id} || {Package, Branch} <- [{p, b}, {pp, bb}]],
             [{p, b}, {pp, bb}]
         }
     ]
@@ -985,13 +985,14 @@ handle_info_scan_repository_test_() ->
                             >>},
                             packages = [
                                 #package{name="package1", branch="branch1", current_revno=1,
-                                    archive="package1__ARCHIVE__branch1",
+                                    archive_name="package1__ARCHIVE__branch1",
                                     diff= <<"branch1 diff">>, changelog= <<"branch1 changelog">>
                                 }
                             ],
                             archives = [
                                 #archive{
-                                    name="package1", branch="branch1", archive="package1__ARCHIVE__branch1"
+                                    name="package1", branch="branch1",
+                                    archive_name="package1__ARCHIVE__branch1"
                                 }
                             ]
                         }}}

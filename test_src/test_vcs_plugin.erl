@@ -3,8 +3,8 @@
 -behaviour(caterpillar_repository_plugin).
 
 -export([init_plugin/1, terminate_plugin/1]).
--export([export/4, get_branches/2]).
--export([get_changelog/5, get_diff/5, get_revno/3]).
+-export([export/5, get_branches/2]).
+-export([get_changelog/5, get_diff/5, get_revno/3, get_tag/4]).
 -export([is_branch/3, is_repository/2]).
 
 
@@ -15,7 +15,7 @@
 
 -spec init_plugin(Args::term()) -> {ok, vcs_state()}.
 -spec terminate_plugin(vcs_state()) -> no_return().
--spec export(vcs_state(), package(), branch(), filelib:dirname()) -> ok | {error, Reason::term()}.
+-spec export(vcs_state(), package(), branch(), revno(), filelib:dirname()) -> ok | {error, Reason::term()}.
 -spec get_branches(vcs_state(), package()) -> {ok, [branch()]} | {error, Reason::term()}.
 -spec get_revno(vcs_state(), package(), branch()) -> {ok, revno()} | {error, Reason::term()}.
 -spec get_diff(vcs_state(), package(), branch(), Old::revno(), Current::revno()) ->
@@ -33,8 +33,8 @@ init_plugin(_Args) -> {ok, state}.
 terminate_plugin(_State) -> ok.
 
 
-export(_State, _Package, "no_export", _ExportPath) -> error;
-export(_State, _Package, _Branch, ExportPath) -> filelib:ensure_dir(ExportPath ++ "/").
+export(_State, _Package, "no_export", _Revision, _ExportPath) -> error;
+export(_State, _Package, _Branch, _Revision, ExportPath) -> filelib:ensure_dir(ExportPath ++ "/").
 
 
 get_branches(_State, "test_repo/sleep") -> timer:sleep(12000), {ok, []};
@@ -54,6 +54,9 @@ get_diff(_State, _Package, _Branch, _PrevRevision, _CurrentRevision) -> ok.
 
 get_revno(_State, "__test/crash", "me") -> exit(some_reason);
 get_revno(_State, _Package, _Branch) -> {ok, 1}.
+
+
+get_tag(_State, _Package, _Branch, _Revno) -> {ok, "tag"}.
 
 
 is_branch(_State, _Package, "branch1") -> true;

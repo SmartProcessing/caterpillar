@@ -2,10 +2,11 @@
 
 -behaviour(gen_server).
 
+-include_lib("caterpillar.hrl").
 -include_lib("caterpillar_event_internal.hrl").
 -define(
     SELECT(Type, ServiceOrIdent), 
-    [{{'_', '$1', '$2', '$3'}, [{'andalso', {'==', '$1', Type}, {'==', '$3', ServiceOrIdent}}], ['$2']}]
+    [{{'_', '$1', '$2', '$3'}, [{'andalso', {'==', '$1', Type}, {'==', '$3', ServiceOrIdent}}], ['$3']}]
 ).
 
 -export([start_link/1, stop/0]).
@@ -81,16 +82,26 @@ handle_call({sync_event, {register_worker, Ident}}, {Pid, _}, #state{ets=Ets}=St
 handle_call({sync_event, {register_service, Service}}, {Pid, _}, #state{ets=Ets}=State) ->
     case ets:select(Ets, ?SELECT(service, Service)) of
         [] -> ok;
-        _Something ->
+        [Pid|_] ->
             error_logger:info_msg(
-                "register_service warning: already got service ~p~n",
-                [Service]
+                "register_service warning: already got service ~p at ~p~n",
+                [Service, Pid]
             )
     end,
     ets:insert(Ets, {erlang:monitor(process, Pid), service, Service, Pid}),
     {reply, ok, State};
 
-%handle_call({sync_event, {
+handle_call({sync_event, {get_archive, #archive{}}=Request}, From, #state{ets=Ets}=State) ->
+    spawn(fun() ->
+        Reply = case catch ets:select(Ets, ?SELECT(service, repository)) of
+            [] ->
+                {error, no_service};
+            [Pid|_O] ->
+                catch gen_server:call(Pid, Request, infinity)
+        end,
+        gen_server:reply(From, Reply)
+    end),
+    {noreply, State};
 
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};

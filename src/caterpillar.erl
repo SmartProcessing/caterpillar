@@ -112,14 +112,14 @@ process_archives([A|O], State) ->
 
 
 prepare(BuildPath, Archive, EventService) ->
-    TempName = io_lib:format("~s-~s", [
-            binary_to_list(Archive#archive.name), 
-            binary_to_list(Archive#archive.branch)
-        ]
+    TempName = io_lib:format(
+        "~s-~s~s",
+        [Archive#archive.name, Archive#archive.branch, Archive#archive.tag]
     ),
     TempArch = BuildPath ++ "/temp/" ++ TempName ++ ".tar",
     Fd = file:open(TempArch, [read, write]),
-    ArchiveWithFd = Archive#archive{archive=Fd},
+    ArchiveWithFd = Archive#archive{fd=Fd},
+    %FIXME: use caterpillar_event:sync_event
     {ok, ArchiveWithFd} = gen_server:call(
         EventService, 
         {get_archive, ArchiveWithFd}, 

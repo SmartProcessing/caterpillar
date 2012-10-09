@@ -30,7 +30,7 @@ init(Args) ->
         #state{
             work_id = caterpillar_utils:read_work_id(WorkIdFile),
             work_id_file = WorkIdFile,
-            dets = Dets, %{{Package, Branch}, ArchiveName, LastRevision, WorkId}
+            dets = Dets, %{{Package, Branch}, ArchiveName, LastRevision, Tag, WorkId}
             repository_root = caterpillar_utils:ensure_dir(?GV(repository_root, Args, ?REPOSITORY_ROOT)),
             export_root = caterpillar_utils:ensure_dir(?GV(export_root, Args, ?EXPORT_ROOT)),
             archive_root = caterpillar_utils:ensure_dir(?GV(archive_root, Args, ?ARCHIVE_ROOT)),
@@ -87,7 +87,7 @@ handle_cast(_Msg, State) ->
 
 
 handle_call(get_packages, _From, #state{dets=D}=State) ->
-    Packages = dets:select(D, [{{'$1', '_', '_', '_'}, [], ['$1']}]),
+    Packages = dets:select(D, [{{'$1', '_', '_', '_', '_'}, [], ['$1']}]),
     {reply, Packages, State};
 
 handle_call({changes, ScanPipeResult}, _From, #state{dets=D}=State) ->
@@ -95,8 +95,8 @@ handle_call({changes, ScanPipeResult}, _From, #state{dets=D}=State) ->
     WorkIdFile = State#state.work_id_file,
     Packages = ScanPipeResult#scan_pipe_result.packages,
     [
-        dets:insert(D, {{Name, Branch}, Archive, Revno, NewWorkId}) ||
-        #package{name=Name, branch=Branch, archive=Archive, current_revno=Revno} <- Packages
+        dets:insert(D, {{Name, Branch}, Archive, Revno, Tag, NewWorkId}) ||
+        #package{name=Name, branch=Branch, archive_name=Archive, current_revno=Revno, tag=Tag} <- Packages
     ],
     caterpillar_utils:write_work_id(WorkIdFile, NewWorkId),
     NewState = State#state{work_id=NewWorkId},
@@ -222,6 +222,7 @@ scan_pipe(State) ->
         {archive_packages, fun archive_packages/2},
         {get_diff, fun get_diff/2},
         {get_changelog, fun get_changelog/2},
+        {get_tag, fun get_tag/2},
         {build_result, fun build_result/2}
     ],
     caterpillar_utils:pipe(FunList, none, State).
@@ -295,7 +296,7 @@ get_branches([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugin
 
 
 cast_clean_packages(Branches, #state{dets=Dets}) -> 
-    DetsBranches = dets:select(Dets, [{{'$1', '_', '_', '_'}, [], ['$1']}]),
+    DetsBranches = dets:select(Dets, [{{'$1', '_', '_', '_', '_'}, [], ['$1']}]),
     case DetsBranches -- [{Name, Branch} || #package{name=Name, branch=Branch} <- Branches] of
         [] -> ok;
         ToClean ->
@@ -327,7 +328,7 @@ find_modified_packages([Package|O], Accum, State) ->
     DetsResult = dets:select(
         State#state.dets,
         [{{
-            {'$1', '$2'}, '_', '$3', '_'},
+            {'$1', '$2'}, '_', '$3', '_', '_'},
             [{'==', '$1', PackageName},
             {'==', '$2', PackageBranch}], ['$3']
         }]
@@ -368,17 +369,18 @@ export_packages([#package{status=error}=Package|O], Accum, State) ->
 export_packages([Package|O], Accum, #state{export_root=ER, repository_root=RR}=State) ->
     VCSPlugin = State#state.vcs_plugin,
     VCSState = State#state.vcs_state,
-    PackageName = Package#package.name,
-    PackageBranch = Package#package.branch,
-    AbsExport = filename:join([ER, PackageName, PackageBranch]),
-    AbsPackage = filename:join(RR, PackageName),
+    Name = Package#package.name,
+    Branch = Package#package.branch,
+    Revno = Package#package.current_revno,
+    AbsExport = filename:join([ER, Name, Branch]),
+    AbsPackage = filename:join(RR, Name),
     caterpillar_utils:del_dir(AbsExport),
     caterpillar_utils:ensure_dir(AbsExport),
-    NewAccum = case catch VCSPlugin:export(VCSState, AbsPackage, PackageBranch, AbsExport) of
+    NewAccum = case catch VCSPlugin:export(VCSState, AbsPackage, Branch, Revno, AbsExport) of
         ok -> [Package|Accum];
         Error ->
             error_logger:error_msg(
-                "export_packages error ~p~n at ~p/~p~n", [Error, PackageName, PackageBranch]
+                "export_packages error ~p~n at ~p/~p~n", [Error, Name, Branch]
             ),
             [Package#package{status=error, failed_at=export_packages, reason=Error}|Accum]
     end,
@@ -422,7 +424,7 @@ archive_packages([Package|O], Accum, #state{export_root=ER, archive_root=AR}=Sta
         ok
     end),
     NewAccum = case Result of
-        ok -> [Package#package{archive=ArchiveName}|Accum];
+        ok -> [Package#package{archive_name=ArchiveName}|Accum];
         Error ->
             error_logger:error_msg(
                 "archive_packages error: ~p~n at ~p/~p~n",
@@ -483,6 +485,28 @@ get_changelog([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugi
     get_changelog(O, [Package#package{changelog=Changelog}|Accum], State).
 
 
+get_tag(Packages, State) ->
+    get_tag(Packages, [], State).
+
+
+get_tag([], Accum, _State) ->
+    {ok, lists:reverse(Accum)};
+get_tag([#package{status=error}=Package|O], Accum, State) ->
+    get_tag(O, [Package|Accum], State);
+get_tag([Package|O], Accum, #state{vcs_plugin=VcsP, vcs_state=VcsS}=State) ->
+    RR = State#state.repository_root,
+    Name = Package#package.name,
+    Branch = Package#package.branch,
+    Revno = Package#package.current_revno,
+    case catch VcsP:get_tag(VcsS, filename:join(RR, Name), Branch, Revno) of
+        {ok, T} -> 
+            get_tag(O, [Package#package{tag=T}|Accum], State);
+        Error ->
+            error_logger:error_msg("failed to get tag at ~p/~p with ~p~n", [Name, Package, Error]),
+            get_tag(O, [Package|Accum], State)
+    end.
+
+
 
 build_result(Packages, _State) ->
     Notify = #notify{
@@ -506,7 +530,11 @@ build_result([Package|O], Notify, ArchiveAccum) ->
     Branch = Package#package.branch,
     {PackageBody, NewArchiveAccum} = case Package#package.status of
         ok ->
-            Archive = #archive{name=Name, branch=Branch, archive=Package#package.archive},
+            Archive = #archive{
+                name=Name, branch=Branch,
+                archive_name=Package#package.archive_name,
+                tag=Package#package.tag
+            },
             {DiffLength, Diff} = limit_output(Package#package.diff, 10240),
             {_, ChangeLog} = limit_output(Package#package.changelog, 10240),
             Body = list_to_binary(

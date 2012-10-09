@@ -3,9 +3,11 @@
 
 
 -record(archive, {
-    name            :: binary(),
-    branch          :: binary(),
-    archive         :: file:io_device()|filelib:filename()
+    name            :: string(),
+    branch          :: string(),
+    tag             :: term(),
+    archive_name    :: filelib:filename(),
+    fd              :: file:io_device()
 }).
 
 -record(rev_def, {
