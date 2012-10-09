@@ -175,7 +175,7 @@ get_packages_test_() ->
         {
             "repository root empty",
             ["__test/"],
-            {error, {get_packages, "nothing in repository"}}
+            {ok, []}
         },
         {
             "repository plugin exits",
@@ -211,7 +211,7 @@ get_branches_test_() ->
             "no branches in repos",
             ["__test/package1/", "__test/package2/"],
             [#package{name=X} || X <- ["package1", "package2"]],
-            {error, {get_branches, "no branches in repositories"}}
+            {ok, []} 
         },
         {
             "one branch in one repo",

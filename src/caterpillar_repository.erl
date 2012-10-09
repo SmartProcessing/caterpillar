@@ -25,7 +25,8 @@ init(Args) ->
             error_logger:error_msg("caterpillar_repository dets initialization error: ~p~n", [Error]),
             throw({caterpillar_repository, {dets, Error}})
     end,
-    WorkIdFile = caterpillar_utils:ensure_dir(?GV(work_id_file, Args, ?WORK_ID_FILE)),
+    WorkIdFile = ?GV(work_id_file, Args, ?WORK_ID_FILE),
+    filelib:ensure_dir(WorkIdFile),
     State = vcs_init(
         #state{
             work_id = caterpillar_utils:read_work_id(WorkIdFile),
@@ -192,12 +193,16 @@ clean_packages(#state{dets=D, export_root=ER, archive_root=AR}=State, [{Name, Br
 
 %---------------
 
+%FIXME: push old notifications
+
 -spec notify(#state{}, #notify{}) -> no_return().
 notify(#state{notify_root=NR, work_id=Wid}, #notify{}=Notify) ->
     case catch caterpillar_event:sync_event({notify, Notify}) of
         {ok, done} -> {ok, done};
         Error -> 
-            FileName = filename:join(NR, integer_to_list(Wid)),
+            {A, B, C} = os:timestamp(),
+            Name = A * 1000000 * 1000000 + B * 1000000 + C,
+            FileName = filename:join(NR, integer_to_list(Name)),
             error_logger:error_msg(
                 "failed to notify with error: ~p~nsaving packages dump to ~p~n",
                 [Error, FileName]
@@ -228,7 +233,6 @@ scan_pipe(State) ->
 
 get_packages(_, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSState}) ->
     case caterpillar_utils:list_packages(RR) of
-        {ok, []} -> {error, {get_packages, "nothing in repository"}};
         {ok, Packages} ->
             FoldFun = fun(Package, Accum) ->
                 case VCSPlugin:is_repository(VCSState, filename:join(RR, Package)) of
@@ -239,7 +243,6 @@ get_packages(_, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSSt
                 end 
             end,
             case catch lists:foldl(FoldFun, [], Packages) of
-                [] -> {error, {get_packages, "no repositories available"}};
                 Repos when is_list(Repos) -> {ok, lists:reverse(Repos)};
                 Error -> {error, {get_packages, {plugin_bad_return, Error}}}
             end;
@@ -250,9 +253,6 @@ get_packages(_, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSSt
 get_branches(Packages, State) ->
     get_branches(Packages, [],  State).
 
-
-get_branches([], [], _State) ->
-    {error, {get_branches, "no branches in repositories"}};
 
 get_branches([], Branches, _State) ->
     {ok, lists:sort(Branches)};

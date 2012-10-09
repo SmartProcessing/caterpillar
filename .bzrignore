@@ -8,3 +8,5 @@ test_export
 test_repo
 test_src
 test
+test_notify
+test_work_id
