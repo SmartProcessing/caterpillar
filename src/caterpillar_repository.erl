@@ -196,7 +196,7 @@ clean_packages(#state{dets=D, export_root=ER, archive_root=AR}=State, [{Name, Br
 %FIXME: push old notifications
 
 -spec notify(#state{}, #notify{}) -> no_return().
-notify(#state{notify_root=NR, work_id=Wid}, #notify{}=Notify) ->
+notify(#state{notify_root=NR}, #notify{}=Notify) ->
     case catch caterpillar_event:sync_event({notify, Notify}) of
         {ok, done} -> {ok, done};
         Error -> 
