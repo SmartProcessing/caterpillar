@@ -4,7 +4,7 @@
 
 -export([start_link/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-         terminate/2, code_change/3, prepare/1]).
+         terminate/2, code_change/3, prepare/3]).
 
 -record(state, {
         vcs_plugins=[],
@@ -13,7 +13,9 @@
         wait_queue,
         next_to_build,
         workers=[],
-        build_state
+        unpack_state,
+        event_service,
+        build_path
     }).
 
 
@@ -23,6 +25,7 @@ start_link(Settings) ->
 init(Settings) ->
     error_logger:info_msg("starting caterpillar", []),
     VCSPlugins = ?GV(vcs_plugins, Settings, [{caterpillar_buildnet_handler, []}]),
+    EventService = ?GV(event_service, Settings, caterpillar_event),
     {ok, Plugins} = init_plugins(VCSPlugins),
     error_logger:info_msg("plugins initialized"),
     {ok, Deps} = dets:open_file(deps,
@@ -33,7 +36,7 @@ init(Settings) ->
     error_logger:info_msg("workers initialized"),
     caterpillar_api:start(),
     error_logger:info_msg("api started"),
-    BuildState = ets:new(build_state, []),
+    UnpackState = ets:new(unpack_state, []),
     {ok, #state{
             vcs_plugins=Plugins,
             deps=Deps,
@@ -41,7 +44,8 @@ init(Settings) ->
             wait_queue=WaitQueue,
             workers=WorkerList,
             next_to_build=none,
-            build_state=BuildState
+            unpack_state=UnpackState,
+            event_service=EventService
         }
     }.
 
@@ -73,13 +77,13 @@ handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
 handle_cast({work, _Id, Archives}, State) ->
-    process_archives(Archives, State#state.build_state),
+    process_archives(Archives, State),
     {noreply, State};
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
 handle_info({'DOWN', Reference, _, _, Reason}, State) when Reason /= normal ->
-    [{Reference, _Archive}|_] = ets:lookup(State#state.build_state, Reference),
+    [{Reference, _Archive}|_] = ets:lookup(State#state.unpack_state, Reference),
     %%TODO repeat some actions with archive, smth failed
     {noreply, State};
 handle_info(_Info, State) ->
@@ -93,23 +97,40 @@ code_change(_OldVsn, State, _Extra) ->
 
 
 %% Preprocessing
-process_archives([], _States) ->
+process_archives([], _State) ->
     {ok, done};
-process_archives([A|O], BuildState) ->
-    {ok, _Pid, ToRepeat} = erlang:spawn_monitor(?MODULE, prepare, [A]),
-    ets:insert(BuildState, {ToRepeat, A}),
-    process_archives(O, BuildState).
+process_archives([A|O], State) ->
+    UnpackState = State#state.unpack_state,
+    BuildPath = State#state.build_path,
+    EventService = State#state.event_service,
+    {ok, _Pid, ToRepeat} = erlang:spawn_monitor(
+        ?MODULE, 
+        prepare, 
+        [BuildPath, A, EventService]),
+    ets:insert(UnpackState, {ToRepeat, A}),
+    process_archives(O, State).
 
 
-prepare(A) ->
-    TempArch = io_lib:format("~s-~s~s.tar", [
-            binary_to_list(A#archive.name), 
-            binary_to_list(A#archive.branch),
-            ""]
+prepare(BuildPath, Archive, EventService) ->
+    TempName = io_lib:format("~s-~s~s", [
+            binary_to_list(Archive#archive.name), 
+            binary_to_list(Archive#archive.branch),
+            binary_to_list(Archive#archive.tag)]
         ),
-    caterpillar_files:create_temp_fd(TempArch).
-    %% call caterpillar events
-
+    TempArch = BuildPath ++ "/temp/" ++ TempName ++ ".tar",
+    Fd = file:open(TempArch, [read, write]),
+    ArchiveWithFd = Archive#archive{fd=Fd},
+    {ok, ArchiveWithFd} = gen_server:call(
+        EventService, 
+        {get_archive, ArchiveWithFd}, 
+        infinity),
+    Cwd = BuildPath ++ "/temp/" ++ TempName,
+    erl_tar:extract(Fd, [{cwd, BuildPath ++ "/temp/" ++ TempName}]),
+    PkgConfig = caterpillar_utils:get_pkg_config(Cwd),
+    Deps = caterpillar_utils:get_dep_list(PkgConfig),
+    RevDef = caterpillar_utils:pack_rev_def(Archive, Deps),
+    gen_server:call(caterpillar, {newref, RevDef}).
+    
 
 %% Build
 %% ------------------------------------------------------------------

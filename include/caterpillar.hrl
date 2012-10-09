@@ -8,7 +8,6 @@
     archive         :: file:io_device()|filelib:filename()
 }).
 
-
 -record(rev_def, {
     name            :: binary(), 
     revision        :: binary(), 
