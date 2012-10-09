@@ -7,7 +7,6 @@
          terminate/2, code_change/3, prepare/3]).
 
 -record(state, {
-        vcs_plugins=[],
         deps,
         main_queue,
         wait_queue,
@@ -24,9 +23,7 @@ start_link(Settings) ->
 
 init(Settings) ->
     error_logger:info_msg("starting caterpillar", []),
-    VCSPlugins = ?GV(vcs_plugins, Settings, [{caterpillar_buildnet_handler, []}]),
     EventService = ?GV(event_service, Settings, caterpillar_event),
-    {ok, Plugins} = init_plugins(VCSPlugins),
     error_logger:info_msg("plugins initialized"),
     {ok, Deps} = dets:open_file(deps,
         [{file, ?GV(deps, Settings, "/var/lib/smprc/caterpillar/deps")}]),
@@ -38,7 +35,6 @@ init(Settings) ->
     error_logger:info_msg("api started"),
     UnpackState = ets:new(unpack_state, []),
     {ok, #state{
-            vcs_plugins=Plugins,
             deps=Deps,
             main_queue=BuildQueue,
             wait_queue=WaitQueue,
@@ -68,11 +64,6 @@ handle_call({err_built, _Worker, _RevDef, _BuildInfo}, _From, State) ->
     {ok, ScheduledState} = schedule_build(State),
     {ok, NewState} = try_build(ScheduledState),
     {reply, ok, NewState};
-handle_call({newrepo, Plugin, Name}, _From, State) ->
-    [PluginPid|_] = 
-        [Pid || {PName, Pid} <- State#state.vcs_plugins, PName == Plugin],
-    Res = gen_server:call(PluginPid, {newrepo, Name}),
-    {reply, Res, State};
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -259,19 +250,6 @@ get_build_candidate(both, State) ->
 
 %% External communication
 %% ------------------------------------------------------------------
-
--spec init_plugins(VCSPlugins :: [plugin_def()]) -> 
-    [{Plugin :: atom(), Pid :: pid()}].
-init_plugins(VCSPlugins) ->
-    error_logger:info_msg("initializing VCS plugins: ~p", [VCSPlugins]),
-    {ok, lists:map(
-        fun({Plugin, PluginSettings}) -> 
-                error_logger:info_msg("starting ~p", [Plugin]),
-                {ok, Pid} = Plugin:start(PluginSettings),
-                erlang:monitor(process, Pid),
-                {Plugin, Pid}
-        end, VCSPlugins)}.
-
 -spec check_build_deps(Candidate :: #rev_def{}, State :: #state{}) -> true|false.
 check_build_deps(Candidate, State) ->
     case caterpillar_dependencies:list_unresolved_dependencies(
@@ -283,7 +261,7 @@ check_build_deps(Candidate, State) ->
                 NowBuilding),
             Res;
         {ok, Dependencies} when is_list(Dependencies) ->
-            unresolved;
+            {unresolved, Dependencies};
         {error, Res} ->
             {error, Res};
         Other ->
