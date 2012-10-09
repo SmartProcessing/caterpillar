@@ -44,7 +44,8 @@ init(Settings) ->
             wait_queue=WaitQueue,
             workers=WorkerList,
             next_to_build=none,
-            unpack_state=UnpackState
+            unpack_state=UnpackState,
+            event_service=EventService
         }
     }.
 
