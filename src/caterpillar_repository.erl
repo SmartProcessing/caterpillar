@@ -254,7 +254,7 @@ async_notify(#state{notify_root=NR}) ->
 -spec notify(#state{}, #notify{}) -> no_return().
 notify(#state{notify_root=NR}, #notify{}=Notify) ->
     case catch caterpillar_event:sync_event({notify, Notify}) of
-        {ok, done} -> ok;
+        ok -> ok;
         Error -> 
             {A, B, C} = os:timestamp(),
             Name = A * 1000000 * 1000000 + B * 1000000 + C,
