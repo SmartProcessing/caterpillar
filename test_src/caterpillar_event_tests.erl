@@ -168,10 +168,6 @@ select_service_test_() ->
 ]}.
 
 
-
-
-
-
 select_worker_test_() ->
 {foreachx,
     fun(Services) ->
@@ -211,6 +207,38 @@ select_worker_test_() ->
             ],
             some_worker,
             {ok, pid2}
+        }
+    ]
+]}.
+
+
+select_worker_pids_test_() ->
+{foreach,
+    fun() -> 
+        Ets = ets:new(t, [public])
+    end,
+[
+    fun(Ets) ->
+        {Message, fun() ->
+            lists:foreach(
+                fun(W) -> ets:insert(Ets, {erlang:make_ref(), worker, W, pid}) end,
+                Workers
+            ),
+            ?assertEqual(
+                Result,
+                caterpillar_event:select_workers_pids(Ets)
+            )
+        end}
+    end || {Message, Workers, Result} <- [
+        {
+            "no workers",
+            [],
+            []
+        },
+        {
+            "some workers",
+            [w1, w2],
+            [pid, pid]
         }
     ]
 ]}.

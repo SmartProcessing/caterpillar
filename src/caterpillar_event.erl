@@ -60,12 +60,20 @@ handle_info(_Msg, State) ->
 
 
 
-handle_cast({event, {changes, _, _}=Message}, #state{ets=Ets}=State) ->
-    error_logger:info_msg("new changes event~n"),
+handle_cast({event, {changes, _, _}=Event}, #state{ets=Ets}=State) ->
     spawn(fun() ->
         lists:foreach(
-            fun(Pid) -> gen_server:cast(Pid, Message) end,
-            ets:select(Ets, [{{'_', '$1', '_', '$2'}, [{'==', worker, '$1'}], ['$2']}])
+            fun(Pid) -> gen_server:cast(Pid, Event) end,
+            select_workers_pids(Ets)
+        )
+    end),
+    {noreply, State};
+
+handle_cast({event, {clean_packages, _}=Event}, #state{ets=Ets}=State) ->
+    spawn(fun() ->
+        lists:foreach(
+            fun(Pid) -> gen_server:cast(Pid, Event) end,
+            select_workers_pids(Ets)
         )
     end),
     {noreply, State};
@@ -176,3 +184,5 @@ select_worker(Ets, Name) ->
     end.
     
 
+select_workers_pids(Ets) ->
+    ets:select(Ets, [{{'_', '$1', '_', '$2'}, [{'==', worker, '$1'}], ['$2']}]).
