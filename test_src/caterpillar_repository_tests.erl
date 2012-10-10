@@ -808,6 +808,85 @@ clean_packages_test_() ->
 
 
 
+async_notify_test_() ->
+{foreachx,
+    fun(Data) -> 
+        NR = "__test_notify_root",
+        caterpillar_utils:ensure_dir(NR),
+        lists:foreach(
+            fun({Name, D}) ->
+                Filename = filename:join(NR, Name),
+                file:write_file(Filename, term_to_binary(D))
+            end,
+            Data
+        ),
+        #state{notify_root=NR}
+    end,
+    fun(_, #state{notify_root=NR}) ->
+        caterpillar_utils:del_dir(NR)
+    end,
+[
+    {Data, fun(_, State) ->
+        {Message, fun() ->
+            Setup(),
+            ?assertEqual(
+                Result,
+                catch caterpillar_repository:async_notify(State)
+            ),
+            Check(State)
+        end}
+    end} || {Message, Data, Setup, Check, Result} <- [
+        {
+            "nothing in directory",
+            [],
+            fun() -> ok end,
+            fun(_) -> ok end,
+            ok
+        },
+        {
+            "some files exists, but no event services available",
+            [{"test", <<"d">>}],
+            fun() -> ok end,
+            fun(#state{notify_root=NR}) ->
+                ?assertEqual(
+                    {ok, ["test"]},
+                    file:list_dir(NR)
+                ),
+                {ok, Data} = file:read_file(filename:join(NR, "test")),
+                ?assertEqual(
+                    <<"d">>,
+                    binary_to_term(Data)
+                )
+            end,
+            ok
+        },
+        {
+            "some files exists, event service available",
+            [{"test", <<"d">>}],
+            fun() -> 
+                spawn(fun() ->
+                    global:register_name(caterpillar_event, self()),
+                    receive {_, From, _} ->
+                        gen_server:reply(From, {ok, done})
+                    after 500 ->
+                        timeout
+                    end
+                end),
+                timer:sleep(2)
+            end,
+            fun(#state{notify_root=NR}) ->
+                ?assertEqual(
+                    {ok, []},
+                    file:list_dir(NR)
+                )
+            end,
+            ok
+        }
+    ]
+]}.
+
+
+
 notify_test_() ->
 {foreach,
     fun() ->

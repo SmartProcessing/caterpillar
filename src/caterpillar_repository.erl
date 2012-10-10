@@ -43,6 +43,7 @@ init(Args) ->
         },
         Args
     ),
+    async_notify(),
     {ok, State}.
 
 
@@ -66,6 +67,11 @@ handle_info(scan_repository, State) ->
     end),
     {noreply, scan_repository(State)};
 
+handle_info(async_notify, State) ->
+    spawn(fun() -> async_notify(State) end),
+    async_notify(),
+    {noreply, State};
+
 handle_info(register_service, #state{registered=Bool}=State) ->
     case Bool of 
         true -> {noreply, State};
@@ -81,7 +87,6 @@ handle_info(_Msg, State) ->
 
 handle_cast({clean_packages, Notify, PackageName}, State) ->
     clean_packages(State, PackageName),
-    %FIXME: clean packages event
     spawn(fun() ->
         Event = [#archive{name=Name, branch=Branch} || {Name, Branch} <- PackageName],
         caterpillar_event:event({clean_packages, Event}),
@@ -196,9 +201,48 @@ clean_packages(#state{dets=D, export_root=ER, archive_root=AR}=State, [{Name, Br
     clean_packages(State, O).
 
 
+async_notify() ->
+    erlang:send_after(5000, self(), async_notify).
+
+
 %---------------
 
-%FIXME: push old notifications
+
+
+-spec async_notify(State::#state{}) -> no_return().
+async_notify(#state{notify_root=NR}) ->
+    case catch register(async_notify, self()) of
+        true -> ok;
+        _ ->
+            error_logger:info_msg("async_notify already in process~n"),
+            exit(normal)
+    end,
+    case file:list_dir(NR) of
+        {ok, []} -> ok;
+        {ok, Files} -> 
+            ForeachFun = fun(File) ->
+                AbsFile = filename:join(NR, File),
+                case file:read_file(AbsFile) of
+                    {ok, Data} ->
+                        Msg = binary_to_term(Data),
+                        case catch caterpillar_event:sync_event({notify, Msg}) of
+                            {ok, done} -> ok = file:delete(AbsFile);
+                            Error -> 
+                                error_logger:info_msg(
+                                    "async_notify failed to send sync_event with: ~p~n",
+                                    [Error]
+                                )
+                        end;
+                    Error ->
+                        error_logger:info_msg("failed to async_notify with error: ~p~n", [Error])
+                end
+            end,
+            lists:foreach(ForeachFun, Files);
+        Error -> error_logger:info_msg("async_notify error while listing messages: ~p~n", [Error])
+    end,
+    ok.
+
+
 
 -spec notify(#state{}, #notify{}) -> no_return().
 notify(#state{notify_root=NR}, #notify{}=Notify) ->
@@ -215,8 +259,6 @@ notify(#state{notify_root=NR}, #notify{}=Notify) ->
             file:write_file(FileName, term_to_binary(Notify)) 
     end,
     ok.
-
-
 
 %-----------
 
