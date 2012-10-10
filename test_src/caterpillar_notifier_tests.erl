@@ -10,6 +10,4 @@
 
 
 get_name_test() ->
-    [
-        ?assertEqual(16, length(caterpillar_notifier:get_name())) || _ <- lists:seq(1, 1000)
-    ].
+    ?assertEqual(16, length(caterpillar_notifier:get_name())).

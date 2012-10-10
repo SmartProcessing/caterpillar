@@ -6,13 +6,14 @@
     "To: ~s~n"
     "From: ~s~n"
     "Subject: ~s~n"
-    "~n~n"
     "~s~n"
 ).
 -define(MAIL_ROOT, "/var/lib/caterpillar/notifier/mail_root").
 
 
 -record(state, {
+    ets :: ets:tab(),
+    registered = false :: boolean(),
     mail_root :: filelib:dirname(),
     email_to :: string(),
     email_from :: string()

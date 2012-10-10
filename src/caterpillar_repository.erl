@@ -225,7 +225,7 @@ async_notify(#state{notify_root=NR}) ->
                     {ok, Data} ->
                         Msg = binary_to_term(Data),
                         case catch caterpillar_event:sync_event({notify, Msg}) of
-                            {ok, done} -> ok = file:delete(AbsFile);
+                            ok -> ok = file:delete(AbsFile);
                             Error -> 
                                 error_logger:info_msg(
                                     "async_notify failed to send sync_event with: ~p~n",

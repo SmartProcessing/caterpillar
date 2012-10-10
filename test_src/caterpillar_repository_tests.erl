@@ -867,7 +867,7 @@ async_notify_test_() ->
                 spawn(fun() ->
                     global:register_name(caterpillar_event, self()),
                     receive {_, From, _} ->
-                        gen_server:reply(From, {ok, done})
+                        gen_server:reply(From, ok)
                     after 500 ->
                         timeout
                     end

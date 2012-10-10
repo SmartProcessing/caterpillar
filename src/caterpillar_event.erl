@@ -15,6 +15,14 @@
 -export([init/1, handle_info/2, handle_cast/2, handle_call/3, code_change/3, terminate/2]).
 
 
+
+-spec register_service(Type::term()) -> {ok, pid()} | {error, Reason :: term()}.
+-spec register_worker(Ident::term()) -> {ok, pid()} | {error, Reason :: term()}.
+-spec get_info() -> [{worker|service, term()}].
+-spec event(Event::term()) -> ok.
+-spec sync_event(Event::term()) -> any().
+
+
 start_link(_Args) -> gen_server:start_link({global, ?MODULE}, ?MODULE, [], []).
 
 
@@ -93,7 +101,7 @@ handle_call({register_worker, Ident}, {Pid, _}, #state{ets=Ets}=State) ->
         _ -> ok
     end,
     ets:insert(Ets, {erlang:monitor(process, Pid), worker, Ident, Pid}),
-    {reply, ok, State};
+    {reply, {ok, self()}, State};
 
 handle_call({register_service, Service}, {Pid, _}, #state{ets=Ets}=State) ->
     case select_service(Ets, Service) of
@@ -105,7 +113,7 @@ handle_call({register_service, Service}, {Pid, _}, #state{ets=Ets}=State) ->
         _ -> ok
     end,
     ets:insert(Ets, {erlang:monitor(process, Pid), service, Service, Pid}),
-    {reply, ok, State};
+    {reply, {ok, self()}, State};
 
 handle_call({sync_event, {get_archive, #archive{}}=Request}, From, #state{ets=Ets}=State) ->
     spawn(fun() ->
