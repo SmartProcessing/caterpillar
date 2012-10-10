@@ -60,7 +60,8 @@ handle_info(_Msg, State) ->
 
 
 
-handle_cast({changes, _, _}=Message, #state{ets=Ets}=State) ->
+handle_cast({event, {changes, _, _}=Message}, #state{ets=Ets}=State) ->
+    error_logger:info_msg("new changes event~n"),
     spawn(fun() ->
         lists:foreach(
             fun(Pid) -> gen_server:cast(Pid, Message) end,

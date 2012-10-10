@@ -219,7 +219,9 @@ select_worker_test_() ->
 
 events_test_() ->
 {foreach,
-    fun() -> caterpillar_event:start_link([]) end,
+    fun() ->
+        caterpillar_event:start_link([])
+    end,
     fun(_) ->
         ok = caterpillar_event:stop(),
         timer:sleep(1)
@@ -341,7 +343,7 @@ events_test_() ->
                         ),
                         gen_server:reply(From, {ok, done})
                     after 50 ->
-                        timeout
+                        ?assert(false)
                     end
                 end)
             end,
@@ -351,8 +353,30 @@ events_test_() ->
                     caterpillar_event:sync_event({notify, #notify{}})
                 )
             end
+        },
+        {
+            "event 'changes', few workers registered",
+            fun() ->
+                [caterpillar_event:register_worker(W) || W <- [w1, w2]]
+            end,
+            fun() ->
+                ?assertEqual(
+                    [{worker, w1}, {worker, w2}],
+                    lists:sort(caterpillar_event:get_info())
+                ),
+                caterpillar_event:event({changes, work_id, [#archive{}]}),
+                Receive = fun() ->
+                    receive {_, Msg} ->
+                        Msg
+                    after 10 ->
+                        timeout
+                    end
+                end,
+                ?assertEqual(
+                    [{changes, work_id, [#archive{}]} || _ <- [w1, w2]],
+                    [Receive() || _ <- [w1, w2]]
+                )
+            end
         }
-        
-
     ]
 ]}.
