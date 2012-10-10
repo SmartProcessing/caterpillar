@@ -1,8 +1,9 @@
 include ../../devel-tools/trunk/Makefile.mk
 
-LIB_PATH = "/var/lib/caterpillar/"
-LOG_PATH = "/var/log/caterpillar/"
-ETC_PATH = "/etc/caterpillar/"
+LIB_PATH = /var/lib/caterpillar
+LOG_PATH = /var/log/caterpillar
+ETC_PATH = /etc/caterpillar
+PRIV_PATH = $(LIB_PATH)/priv
 REBAR = rebar
 BEAMS = $(patsubst src/%.erl, ebin/%.beam, $(wildcard src/*.erl))
 TEST_BEAMS = $(patsubst test_src/%.erl, ebin/%.beam, $(wildcard test_src/*.erl))
@@ -65,7 +66,10 @@ package: clean compile
 	mkdir -p $(DEB_DIR)/$(LIB_PATH)
 	mkdir -p $(DEB_DIR)/$(LOG_PATH)
 	mkdir -p $(DEB_DIR)/$(ETC_PATH)
+	mkdir -p $(DEB_DIR)/$(PRIV_PATH)
 	cp caterpillar.config $(DEB_DIR)/$(ETC_PATH)/
 	cp -R ebin $(DEB_DIR)/$(LIB_PATH)
+	cp priv/* $(DEB_DIR)/$(PRIV_PATH)
+	chmod +x $(DEB_DIR)/$(PRIV_PATH)/*
 	dpkg-deb --build $(DEB_DIR) $(DIST_DIR)
 	
