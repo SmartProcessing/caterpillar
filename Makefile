@@ -74,7 +74,7 @@ package: clean compile
 	cp caterpillar.config $(DEB_DIR)/$(ETC_PATH)/
 	cp caterpillar_shell $(DEB_DIR)/$(SBIN_DIR)/caterpillar
 	cp caterpillar.escript $(DEB_DIR)/$(SBIN_DIR)	
-	chmod +x $(DEB_DIR)/$(SBIN)DIR)/*
+	chmod +x $(DEB_DIR)/$(SBIN_DIR)/*
 	cp -R ebin $(DEB_DIR)/$(LIB_PATH)
 	cp priv/* $(DEB_DIR)/$(PRIV_PATH)
 	chmod +x $(DEB_DIR)/$(PRIV_PATH)/*
