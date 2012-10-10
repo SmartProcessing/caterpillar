@@ -10,6 +10,13 @@
     fd              :: file:io_device()
 }).
 
+-record(notify, {
+    subject = <<>> :: binary,
+    body = <<>> :: binary
+}).
+
+
+%FIXME: move to internal hrl
 -record(rev_def, {
     name            :: binary(), 
     branch          :: binary(),
@@ -18,6 +25,7 @@
 }).
 
 
+%FIXME: move to internal hrl
 -record(build_info, {
     state           :: success|error|none,
     package_spec    :: list(),
@@ -27,6 +35,7 @@
     test_info       :: list()
 }).
 
+%FIXME: move to internal hrl
 -record(pkg_config, {
     name                :: string(),
     version="0.0.0"     :: string(),
@@ -39,12 +48,8 @@
     maintainers=[]      :: [string()]
 }).
 
--record(notify, {
-    subject = <<>> :: binary,
-    body = <<>> :: binary
-}).
 
-
+%FIXME: move to internal hrl
 -type version() :: 
     {
         Name        :: binary(),
