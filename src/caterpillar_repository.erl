@@ -19,7 +19,9 @@ stop() ->
 
 
 init(Args) ->
-    Dets = case dets:open_file(?GV(repository_db, Args, ?DETS), [{access, read_write}]) of
+    DetsFile = ?GV(repository_db, Args, ?DETS),
+    filelib:ensure_dir(DetsFile),
+    Dets = case dets:open_file(DetsFile, [{access, read_write}]) of
         {ok, D} -> D;
         Error -> 
             error_logger:error_msg("caterpillar_repository dets initialization error: ~p~n", [Error]),

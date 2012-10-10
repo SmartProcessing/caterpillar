@@ -117,28 +117,52 @@ scan_repository_test_() ->
 
 init_test_() ->
 {foreach,
-    fun() -> ok end,
-    fun(_) -> file:delete("repo.db") end,
+    fun() ->
+        [
+            {repository_db, "repo.db"},
+            {work_id_file, "__test_work_id"},
+            {repository_root, "__test_repo"},
+            {archive_root, "__test_archive"},
+            {export_root, "__test_export"},
+            {notify_root, "__test_notify"},
+            {scan_interval, 10},
+            {vcs_plugin, test_vcs_plugin},
+            {vcs_plugin_init, []}
+        ]
+    end,
+    fun(Settings) ->
+        [
+            caterpillar_utils:del_dir(proplists:get_value(D, Settings))
+            || D <- [repository_root, archive_root, export_root, notify_root]
+        ],
+        [file:delete(F) || F <- ["repo.db", "__test_work_id"]]
+    end,
 [
-    {"successful init", fun() ->
-        Res = caterpillar_repository:init([{vcs_plugin, test_vcs_plugin}, {repository_db, "repo.db"}]),
-        ?assertMatch({ok, _}, Res),
-        {ok, State} = Res,
-        ?assertEqual(State#state.scan_interval, ?SCAN_INTERVAL * 1000),
-        ?assert(is_reference(State#state.scan_timer)),
-        ?assertEqual(State#state.archive_root, ?ARCHIVE_ROOT),
-        ?assertEqual(State#state.repository_root, ?REPOSITORY_ROOT),
-        ?assertEqual(State#state.vcs_plugin, test_vcs_plugin),
-        ?assertEqual(State#state.vcs_state, state),
-        ?assertEqual(ets:info(State#state.ets), ets:info(caterpillar_repository)),
-        ?assertEqual(State#state.dets, "repo.db")
-    end},
-    {"init failed, cant reach dets database", fun() ->
-        ?assertEqual(
-            {caterpillar_repository, {dets, {error, {file_error, "no_such_directory/repo_db", enoent}}}},
-            catch caterpillar_repository:init([{repository_db, "no_such_directory/repo_db"}])
-        )
-    end}
+    fun(Settings) ->
+        {"successful init", fun() ->
+            Res = caterpillar_repository:init(Settings),
+            ?assertMatch({ok, _}, Res),
+            {ok, State} = Res,
+            ?assertEqual(State#state.scan_interval, 10000),
+            ?assert(is_reference(State#state.scan_timer)),
+            ?assertEqual(State#state.archive_root, "__test_archive"),
+            ?assertEqual(State#state.notify_root, "__test_notify"),
+            ?assertEqual(State#state.export_root, "__test_export"),
+            ?assertEqual(State#state.repository_root, "__test_repo"),
+            ?assertEqual(State#state.vcs_plugin, test_vcs_plugin),
+            ?assertEqual(State#state.vcs_state, state),
+            ?assertEqual(ets:info(State#state.ets), ets:info(caterpillar_repository)),
+            ?assertEqual(State#state.dets, "repo.db")
+        end}
+    end,
+    fun(Settings) ->
+        {"init ok, ensure dets database created", fun() ->
+            ?assertMatch(
+                {ok, #state{}},
+                caterpillar_repository:init(Settings)
+            )
+        end}
+    end
 ]}. 
 
 
