@@ -91,7 +91,7 @@ scan_repository_test_() ->
             fun(_Ref) ->
                 timer:sleep(1),
                 ?assertEqual(
-                    receive Any -> Any after 10 -> timeout end,
+                    receive Any -> Any after 100 -> timeout end,
                     scan_repository
                 )
             end,
@@ -101,7 +101,7 @@ scan_repository_test_() ->
             "scan_repository received state as parameter with not cancelled timer, timer fires",
             fun(_Ref) ->
                 ?assertEqual(
-                    receive Any -> Any after 10 -> timeout end,
+                    receive Any -> Any after 100 -> timeout end,
                     scan_repository
                 )
             end,
