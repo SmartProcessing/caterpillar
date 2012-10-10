@@ -872,7 +872,7 @@ async_notify_test_() ->
                         timeout
                     end
                 end),
-                timer:sleep(2)
+                timer:sleep(5)
             end,
             fun(#state{notify_root=NR}) ->
                 ?assertEqual(
