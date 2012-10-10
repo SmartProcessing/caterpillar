@@ -2,6 +2,9 @@
 -include("caterpillar.hrl").
 -export([get_pkg_config/1]).
 -export([get_pkg_config_record/2]).
+-export([get_dep_list/1]).
+-export([pack_rev_def/2]).
+-define(LTB, list_to_binary).
 
 get_pkg_config_record(Archive, {control, Data}) ->
     #pkg_config{
@@ -25,6 +28,22 @@ get_pkg_config_record(Archive, {config, Data}) ->
         platform=?GV("platform", Data, "default"),
         deps=?GV("deps", Data, []),
         build_deps=?GV("build_deps", Data, [])
+    }.
+
+get_dep_list(Pkg) ->
+    get_valid_versions(Pkg#pkg_config.deps) ++ 
+        get_valid_versions(Pkg#pkg_config.build_deps).
+
+get_valid_versions(L) ->
+    [{?LTB(N), ?LTB(B), ?LTB(T)} || {N, B, T} <- L].
+
+
+pack_rev_def(Archive, Deps) ->
+    #rev_def{
+        name=Archive#archive.name,
+        branch=Archive#archive.branch,
+        tag=Archive#archive.tag,
+        dep_object=Deps
     }.
 
 
