@@ -632,7 +632,7 @@ build_result_test_() ->
                 },
                 packages = [#package{
                     name="package", branch="branch", archive_name="archive",
-                    diff= <<"diff">>, changelog= <<"changelog">>
+                    diff= <<>>, changelog= <<>>
                 }],
                 archives = [
                     #archive{name="package", branch="branch", archive_name="archive"}
@@ -679,7 +679,7 @@ build_result_test_() ->
                 packages = [
                     #package{
                         name="package", branch="branch", archive_name="archive",
-                        diff= <<"diff">>, changelog= <<"changelog">>
+                        diff= <<>>, changelog= <<>>
                     },
                     #package{
                         name="p", branch="b", failed_at=somewhere, reason=some_error, status=error
@@ -1021,7 +1021,7 @@ handle_info_scan_repository_test_() ->
                             packages = [
                                 #package{name="package1", branch="branch1", current_revno=1,
                                     archive_name="package1__ARCHIVE__branch1",
-                                    diff= <<"branch1 diff">>, changelog= <<"branch1 changelog">>
+                                    diff= <<>>, changelog= <<>>
                                 }
                             ],
                             archives = [

@@ -81,6 +81,7 @@ handle_info(_Msg, State) ->
 
 handle_cast({clean_packages, Notify, PackageName}, State) ->
     clean_packages(State, PackageName),
+    %FIXME: clean packages event
     spawn(fun() -> notify(State, Notify) end),
     {noreply, State};
 handle_cast(_Msg, State) ->
@@ -518,7 +519,8 @@ build_result(Packages, _State) ->
     },
     case catch build_result(Packages, Notify, []) of
         {ok, {NewNotify, Archives}} ->
-            {ok, #scan_pipe_result{notify=NewNotify, archives=Archives, packages=Packages}};
+            NewPackages = [Package#package{diff= <<>>, changelog= <<>>} || Package <- Packages],
+            {ok, #scan_pipe_result{notify=NewNotify, archives=Archives, packages=NewPackages}};
         Err ->
             error_logger:error_msg("build_result error: ~p~n", [Err]),
             {error, build_result}
