@@ -155,25 +155,22 @@ class Handler(object):
         return {'ok': self.decode(result)}
 
 
-    def cmd_checkout_branch(self, repo, branch):
-        return {'error': 'not_implemented'}
-
 
     def cmd_is_repository(self, repo):
         try:
             repository.Repository.open(repo)
-            return {'ok': ''}
+            return True
         except Exception, err:
-            return {'error': "not repository"}
+            return False
 
 
     def cmd_is_branch(self, repo, branch):
         abspath = get_abspath(repo, branch)
         try:
             self.open_branch(abspath)
-            return {'ok': 'ok'}
+            return True
         except:
-            return {'error': 'not branch'}
+            return False
 
 
     def cmd_get_branches(self, repo):
@@ -189,7 +186,7 @@ class Handler(object):
         return {'ok': branches}
 
 
-    def cmd_export_branch(self, repo, branch, export_path):
+    def cmd_export(self, repo, branch, export_path):
         abspath = get_abspath(repo, branch)
         branch = self.open_branch(abspath)
         rev_tree = branch.basis_tree()

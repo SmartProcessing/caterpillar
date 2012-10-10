@@ -71,7 +71,10 @@ is_branch(_State, Package, Branch) ->
 
 export(_State, Package, Branch, _Revno, ExportPath) ->
     %FIXME: Revno
-    call_server({export_branch, Package, Branch, ExportPath}).
+    case call_server({export_branch, Package, Branch, ExportPath}) of
+        {ok, _} -> ok;
+        Err -> Err
+    end.
 
 
 
