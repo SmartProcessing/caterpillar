@@ -383,6 +383,35 @@ events_test_() ->
             end
         },
         {
+            "sync event, get_archive, no repository available",
+            fun() -> ok end,
+            fun() ->
+                ?assertEqual(
+                    {error, no_service},
+                    caterpillar_event:sync_event({get_archive, #archive{}})
+                )
+            end
+        },
+        {
+            "sync event, get_archive, repository available",
+            fun() -> 
+                spawn(fun() ->
+                    caterpillar_event:register_service(repository),
+                    receive {_, From, _} ->
+                        gen_server:reply(From, ok)
+                    after 10 ->
+                        timeout
+                    end
+                end)
+            end,
+            fun() ->
+                ?assertEqual(
+                    ok,
+                    caterpillar_event:sync_event({get_archive, #archive{}})
+                )
+            end
+        },
+        {
             "event 'changes', few workers registered",
             fun() ->
                 [caterpillar_event:register_worker(W) || W <- [w1, w2]]
