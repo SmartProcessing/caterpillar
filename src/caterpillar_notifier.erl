@@ -39,8 +39,9 @@ handle_info({Port, {exit_status, Status}}, #state{ets=Ets, mail_root=MR}=State) 
     case {Status, ets:lookup(Ets, Port)} of
         {0, [{Port, File}]} -> file:delete(filename:join(MR, File));
         {1, [{Port, File}]}-> error_logger:info_msg("notifier failed to send ~s~n", [File]);
-        _ -> async_send_mail(0)
+        _ -> ok
     end,
+    async_send_mail(0),
     ets:delete(Ets, Port),
     {noreply, State};
 
