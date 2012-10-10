@@ -56,7 +56,7 @@ handle_call_sync_event_register_service_test_() ->
     fun(State) ->
         {Message, fun() ->
             Setup(State),
-            caterpillar_event:handle_call({sync_event, {register_service, Service}}, {self(), ref}, State),
+            caterpillar_event:handle_call({register_service, Service}, {self(), ref}, State),
             ?assertEqual(
                 Result,
                 lists:sort([{Type, Value} || {_, Type, Value, _} <- ets:tab2list(State#state.ets)])
@@ -93,7 +93,7 @@ handle_call_sync_event_register_worker_test_() ->
     fun(State) ->
         {Message, fun() ->
             Setup(State),
-            caterpillar_event:handle_call({sync_event, {register_worker, Service}}, {self(), ref}, State),
+            caterpillar_event:handle_call({register_worker, Service}, {self(), ref}, State),
             ?assertEqual(
                 Result,
                 lists:sort([{Type, Value} || {_, Type, Value, _} <- ets:tab2list(State#state.ets)])
@@ -214,3 +214,88 @@ select_worker_test_() ->
     ]
 ]}.
 
+
+
+events_test_() ->
+{foreach,
+    fun() -> caterpillar_event:start_link([]) end,
+    fun(_) ->
+        ok = caterpillar_event:stop(),
+        timer:sleep(1)
+    end,
+[
+    {Message, fun() ->
+        Event(),
+        Check()
+    end} || {Message, Event, Check} <- [
+        {
+            "register worker event",
+            fun() ->
+                caterpillar_event:register_worker(test)
+            end,
+            fun() ->
+                ?assertEqual(
+                    [{worker, test}],
+                    caterpillar_event:get_info()
+                )
+            end
+        },
+        {
+            "register service event",
+            fun() ->
+                caterpillar_event:register_service(test)
+            end,
+            fun() ->
+                ?assertEqual(
+                    [{service, test}],
+                    caterpillar_event:get_info()
+                )
+            end
+        },
+        {
+            "register few workers and few services",
+            fun() ->
+                caterpillar_event:register_worker(worker1),
+                caterpillar_event:register_worker(worker1),
+                caterpillar_event:register_worker(worker2),
+                caterpillar_event:register_service(test1),
+                caterpillar_event:register_service(test1),
+                caterpillar_event:register_service(test2)
+            end,
+            fun() ->
+                ?assertEqual(
+                    [
+                        {service,test1},
+                        {service,test1},
+                        {service,test2},
+                        {worker,worker1},
+                        {worker,worker1},
+                        {worker,worker2}
+                    ],
+                    lists:sort(caterpillar_event:get_info())
+                )
+            end
+        },
+        {
+            "registered worker down",
+            fun() ->
+                spawn(fun() ->
+                    caterpillar_event:register_worker(worker1),
+                    timer:sleep(5)
+                end)
+            end,
+            fun() ->
+                timer:sleep(1),
+                ?assertEqual(
+                    [{worker, worker1}],
+                    caterpillar_event:get_info()
+                ),
+                timer:sleep(7),
+                ?assertEqual(
+                    [],
+                    caterpillar_event:get_info()
+                )
+            end
+        }
+    ]
+]}.

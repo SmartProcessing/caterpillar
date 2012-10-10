@@ -9,7 +9,7 @@
     [{{'_', '$1', '$2', '$3'}, [{'andalso', {'==', '$1', Type}, {'==', '$2', ServiceOrIdent}}], ['$3']}]
 ).
 
--export([start_link/1, stop/0]).
+-export([start_link/1, stop/0, get_info/0]).
 -export([sync_event/1, event/1]).
 -export([register_service/1, register_worker/1]).
 -export([init/1, handle_info/2, handle_cast/2, handle_call/3, code_change/3, terminate/2]).
@@ -20,6 +20,10 @@ start_link(_Args) -> gen_server:start_link({global, ?MODULE}, ?MODULE, [], []).
 
 stop() ->
     gen_server:call({global, ?MODULE}, stop, infinity).
+
+
+get_info() ->
+    gen_server:call({global, ?MODULE}, get_info, infinity).
 
 
 event(Event) ->
@@ -70,7 +74,7 @@ handle_cast(_Msg, State) ->
 
 
 
-handle_call({sync_event, {register_worker, Ident}}, {Pid, _}, #state{ets=Ets}=State) ->
+handle_call({register_worker, Ident}, {Pid, _}, #state{ets=Ets}=State) ->
     case catch select_worker(Ets, Ident) of
         {ok, _Pid} ->
             error_logger:info_msg(
@@ -82,7 +86,7 @@ handle_call({sync_event, {register_worker, Ident}}, {Pid, _}, #state{ets=Ets}=St
     ets:insert(Ets, {erlang:monitor(process, Pid), worker, Ident, Pid}),
     {reply, ok, State};
 
-handle_call({sync_event, {register_service, Service}}, {Pid, _}, #state{ets=Ets}=State) ->
+handle_call({register_service, Service}, {Pid, _}, #state{ets=Ets}=State) ->
     case select_service(Ets, Service) of
         {ok, SomePid} -> 
             error_logger:info_msg(
@@ -113,6 +117,13 @@ handle_call({sync_event, {notify, #notify{}}=Request}, From, #state{ets=Ets}=Sta
         gen_server:reply(From, Reply)
     end),
     {noreply, State};
+
+handle_call(get_info, _From, #state{ets=Ets}=State) ->
+    Info = [
+        list_to_tuple(X) || X <- 
+        ets:select(Ets, [{{'_', '$1', '$2', '_'}, [], [['$1', '$2']]}])
+    ],
+    {reply, Info, State};
 
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
