@@ -121,3 +121,47 @@ handle_call_sync_event_register_worker_test_() ->
         
     ]
 ]}.
+
+
+select_service_test_() ->
+{foreachx,
+    fun(Services) ->
+        Ets = ets:new(?MODULE, [protected]),
+        ets:insert(Ets, Services),
+        Ets
+    end,
+    fun(_, Ets) ->
+        ets:delete(Ets)
+    end,
+[
+    {Services, fun(_, Ets) ->
+        {Message, fun() ->
+            ?assertEqual(
+                Result,
+                caterpillar_event:select_service(Ets, ServiceName)
+            )
+        end}
+    end} || {Message, Services, ServiceName, Result} <- [
+        {
+            "no services",
+            [], 
+            some_service,
+            {error, no_service}
+        },
+        {
+            "some service available",
+            [{ref1, service, some_service, pid}],
+            some_service,
+            {ok, pid}
+        },
+        {
+            "some services and workers available",
+            [
+                {ref1, service, some_service, pid1}, {ref2, service, some_service, pid2},
+                {ref3, worker, some_worker, pid2}
+            ],
+            some_service,
+            {ok, pid2}
+        }
+    ]
+]}.

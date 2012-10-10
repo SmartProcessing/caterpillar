@@ -6,7 +6,7 @@
 -include_lib("caterpillar_event_internal.hrl").
 -define(
     SELECT(Type, ServiceOrIdent), 
-    [{{'_', '$1', '$2', '$3'}, [{'andalso', {'==', '$1', Type}, {'==', '$3', ServiceOrIdent}}], ['$3']}]
+    [{{'_', '$1', '$2', '$3'}, [{'andalso', {'==', '$1', Type}, {'==', '$2', ServiceOrIdent}}], ['$3']}]
 ).
 
 -export([start_link/1, stop/0]).
@@ -47,7 +47,7 @@ init(_) ->
 
 
 handle_info({'DOWN', Ref, _Type, _Pid, _Reason}, #state{ets=Ets}=State) ->
-    workers:delete(Ets, Ref),
+    ets:delete(Ets, Ref),
     {noreply, State};
 
 handle_info(_Msg, State) ->
@@ -82,10 +82,10 @@ handle_call({sync_event, {register_worker, Ident}}, {Pid, _}, #state{ets=Ets}=St
 handle_call({sync_event, {register_service, Service}}, {Pid, _}, #state{ets=Ets}=State) ->
     case ets:select(Ets, ?SELECT(service, Service)) of
         [] -> ok;
-        [Pid|_] ->
+        [SomePid|_] ->
             error_logger:info_msg(
                 "register_service warning: already got service ~p at ~p~n",
-                [Service, Pid]
+                [Service, SomePid]
             )
     end,
     ets:insert(Ets, {erlang:monitor(process, Pid), service, Service, Pid}),
@@ -93,11 +93,19 @@ handle_call({sync_event, {register_service, Service}}, {Pid, _}, #state{ets=Ets}
 
 handle_call({sync_event, {get_archive, #archive{}}=Request}, From, #state{ets=Ets}=State) ->
     spawn(fun() ->
-        Reply = case catch ets:select(Ets, ?SELECT(service, repository)) of
-            [] ->
-                {error, no_service};
-            [Pid|_O] ->
-                catch gen_server:call(Pid, Request, infinity)
+        Reply = case catch select_service(Ets, repository) of
+            {ok, Pid} -> catch gen_server:call(Pid, Request, infinity);
+            Error -> Error
+        end,
+        gen_server:reply(From, Reply)
+    end),
+    {noreply, State};
+
+handle_call({sync_event, {notify, #notify{}}=Request}, From, #state{ets=Ets}=State) ->
+    spawn(fun() ->
+        Reply = case catch select_service(Ets, notifier) of
+            {ok, Pid} -> catch gen_server:call(Pid, Request, infinity);
+            Error -> Error
         end,
         gen_server:reply(From, Reply)
     end),
@@ -116,3 +124,25 @@ code_change(_Old, State, _Extra) ->
 
 terminate(Reason, _State) ->
     error_logger:info_msg("caterpillar_router down with reason: ~p~n", [Reason]).
+
+
+
+
+
+%---------
+
+
+
+
+
+select_service(Ets, Name) ->
+    case catch ets:select(Ets, ?SELECT(service, Name)) of
+        [] ->
+            error_logger:info_msg("no service ~p available~n", [Name]),
+            {error, no_service};
+        [Pid|_] -> 
+            {ok, Pid};
+        Error -> 
+            error_logger:info_msg("select_service error: ~p~n", [Error]),
+            {error, select_service}
+    end.
