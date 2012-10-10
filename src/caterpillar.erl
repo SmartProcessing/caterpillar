@@ -6,6 +6,8 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3, prepare/3]).
 
+-define(CPU, caterpillar_pkg_utils).
+
 -record(state, {
         deps,
         main_queue,
@@ -110,16 +112,13 @@ prepare(BuildPath, Archive, EventService) ->
     TempArch = BuildPath ++ "/temp/" ++ TempName ++ ".tar",
     Fd = file:open(TempArch, [read, write]),
     ArchiveWithFd = Archive#archive{fd=Fd},
-    %FIXME: use caterpillar_event:sync_event
-    {ok, ArchiveWithFd} = gen_server:call(
-        EventService, 
-        {get_archive, ArchiveWithFd}, 
-        infinity),
+    Msg = {get_arhive, ArchiveWithFd},
+    {ok, ArchiveWithFd} = caterpillar_event:sync_event(Msg),
     Cwd = BuildPath ++ "/temp/" ++ TempName,
-    erl_tar:extract(Fd, [{cwd, BuildPath ++ "/temp/" ++ TempName}]),
-    PkgConfig = caterpillar_utils:get_pkg_config(Cwd),
-    Deps = caterpillar_utils:get_dep_list(PkgConfig),
-    RevDef = caterpillar_utils:pack_rev_def(Archive, Deps),
+    erl_tar:extract(Fd, [{cwd, Cwd}]),
+    PkgRecord = ?CPU:get_pkg_record(Cwd),
+    Deps = ?CPU:get_dep_list(PkgRecord),
+    RevDef = ?CPU:pack_rev_def(Archive, Deps),
     gen_server:call(caterpillar, {newref, RevDef}).
     
 
