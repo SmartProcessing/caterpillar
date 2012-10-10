@@ -104,6 +104,7 @@ handle_call(get_packages, _From, #state{dets=D}=State) ->
 handle_call({changes, ScanPipeResult}, _From, #state{dets=D}=State) ->
     NewWorkId = State#state.work_id + 1,
     WorkIdFile = State#state.work_id_file,
+    Notify = ScanPipeResult#scan_pipe_result.notify,
     Packages = ScanPipeResult#scan_pipe_result.packages,
     [
         dets:insert(D, {{Name, Branch}, Archive, Revno, Tag, NewWorkId}) ||
@@ -117,7 +118,14 @@ handle_call({changes, ScanPipeResult}, _From, #state{dets=D}=State) ->
             [] -> ok;
             _ -> caterpillar_event:event({changes, NewWorkId, Archives})
         end,
-        notify(NewState, ScanPipeResult#scan_pipe_result.notify)
+        notify(
+            NewState,
+            Notify#notify{
+                subject= list_to_binary(
+                    io_lib:format("changes for build ~p", [NewWorkId])
+                )
+            }
+        )
     end),
     {reply, ok, NewState};
 
