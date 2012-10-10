@@ -11,29 +11,24 @@ check_value(Other) ->
 
 
 
-return_value(Services, Cmd) ->
-    F = fun({caterpillar_net_kernel, _, _}) -> true;(_) -> false end,
-    case lists:filter(F, Services) of
-        [] ->
-            io:format(
-                "bad config, no section for caterpillar_net_kernel~n"
-            ),
-            halt(1);
-        [{_, _, Opts}|_] ->
-            io:format("~s~n", [proplists:get_value(Cmd, Opts)])
+return_value(Section, Cmd) ->
+    case proplists:get_value(Cmd, Section, '$undefined$') of
+        '$undefined$' -> io:format("~p not found in ~p~n", [Cmd, Section]);
+        Value -> io:format("~p~n", [Value])
     end.
 
 
-
 main([Config, Cmd]) ->
-    ConfigFile = lists:last(filename:split(Config)),
-    [SectionStr|_] = string:tokens(ConfigFile, "."),
-    Section = list_to_atom(SectionStr),
-    AtomCmd = check_value(Cmd),
-    {ok, [File]} = file:consult(Config),
-    BM = proplists:get_value(Section, File),
-    SS = proplists:get_value(services, BM),
-    return_value(SS, AtomCmd);
+    case file:consult(Config) of
+        {ok, [[{caterpillar, Data}]]} ->
+            return_value(
+                proplists:get_value(net_kernel, Data),
+                check_value(Cmd)
+            );
+        Err -> 
+            io:format("bad consult result ~p~n", [Err]),
+            halt(1)
+    end;
 main(_) ->
     io:format("usage: caterpillar.escript config_path self|cookie").
 
