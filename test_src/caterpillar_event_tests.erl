@@ -316,12 +316,12 @@ events_test_() ->
                 end)
             end,
             fun() ->
-                timer:sleep(1),
+                timer:sleep(2),
                 ?assertEqual(
                     [{worker, worker1}],
                     caterpillar_event:get_info()
                 ),
-                timer:sleep(7),
+                timer:sleep(8),
                 ?assertEqual(
                     [],
                     caterpillar_event:get_info()
@@ -337,12 +337,12 @@ events_test_() ->
                 end)
             end,
             fun() ->
-                timer:sleep(1),
+                timer:sleep(2),
                 ?assertEqual(
                     [{service, service1}],
                     caterpillar_event:get_info()
                 ),
-                timer:sleep(7),
+                timer:sleep(8),
                 ?assertEqual(
                     [],
                     caterpillar_event:get_info()
