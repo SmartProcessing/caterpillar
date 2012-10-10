@@ -14,7 +14,7 @@ check_value(Other) ->
 return_value(Section, Cmd) ->
     case proplists:get_value(Cmd, Section, '$undefined$') of
         '$undefined$' -> io:format("~p not found in ~p~n", [Cmd, Section]);
-        Value -> io:format("~p~n", [Value])
+        Value -> io:format("~s", [Value])
     end.
 
 
