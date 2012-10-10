@@ -3,6 +3,7 @@
 -on_load(tty_off/0).
 
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("caterpillar.hrl").
 -include_lib("caterpillar_event_internal.hrl").
 
 
@@ -296,6 +297,62 @@ events_test_() ->
                     caterpillar_event:get_info()
                 )
             end
+        },
+        {
+            "registered service down",
+            fun() ->
+                spawn(fun() ->
+                    caterpillar_event:register_service(service1),
+                    timer:sleep(5)
+                end)
+            end,
+            fun() ->
+                timer:sleep(1),
+                ?assertEqual(
+                    [{service, service1}],
+                    caterpillar_event:get_info()
+                ),
+                timer:sleep(7),
+                ?assertEqual(
+                    [],
+                    caterpillar_event:get_info()
+                )
+            end
+        },
+        {
+            "sync event, notify, not notifier available",
+            fun() -> ok end,
+            fun() ->
+                ?assertEqual(
+                    {error, no_service},
+                    caterpillar_event:sync_event({notify, #notify{}})
+                )
+            end
+        },
+        {
+            "sync event, notify, notifier available",
+            fun() -> 
+                spawn(fun() ->
+                    caterpillar_event:register_service(notifier),
+                    receive {_, From, Msg} ->
+                        ?assertEqual(
+                            {notify, #notify{}},
+                            Msg
+                        ),
+                        gen_server:reply(From, {ok, done})
+                    after 50 ->
+                        timeout
+                    end
+                end)
+            end,
+            fun() ->
+                ?assertEqual(
+                    {ok, done},
+                    caterpillar_event:sync_event({notify, #notify{}})
+                )
+            end
         }
+        
+
     ]
 ]}.
