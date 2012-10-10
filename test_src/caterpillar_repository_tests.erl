@@ -125,7 +125,7 @@ init_test_() ->
         ?assertMatch({ok, _}, Res),
         {ok, State} = Res,
         ?assertEqual(State#state.scan_interval, ?SCAN_INTERVAL * 1000),
-        ?assertEqual(erlang:read_timer(State#state.scan_timer), 0),
+        ?assert(is_reference(State#state.scan_timer)),
         ?assertEqual(State#state.archive_root, ?ARCHIVE_ROOT),
         ?assertEqual(State#state.repository_root, ?REPOSITORY_ROOT),
         ?assertEqual(State#state.vcs_plugin, test_vcs_plugin),
