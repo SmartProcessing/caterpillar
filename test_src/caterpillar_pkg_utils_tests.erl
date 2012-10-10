@@ -22,7 +22,7 @@ parse_control_test() ->
         {"Maintainer", "vavdiushkin@smprc.ru"},
         {"Depends", ["erlang-base"]}
     ],
-    {control, Res} = ?CPU:parse_control("./"),
+    {control, Res} = ?CPU:parse_control("./test_src"),
     lists:map(
         fun({P, V}) ->
             ?assertEqual(?GV(P, Res), V)
