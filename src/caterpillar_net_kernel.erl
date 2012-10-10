@@ -20,7 +20,12 @@ init(Args) ->
     NodeName = proplists:get_value(self, Args),
     case net_kernel:start([NodeName, longnames]) of
         {ok, _} -> ok;
-        Error -> init:stop()
+        Error ->
+            error_logger:info_msg(
+                "net_kernal failed to start with: ~p~n",
+                [Error]
+            ),
+            init:stop()
     end,
     Cookie = proplists:get_value(cookie, Args, 'caterpillar'),
     true = erlang:set_cookie(node(), Cookie),
