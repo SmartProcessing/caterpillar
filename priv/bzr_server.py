@@ -97,13 +97,13 @@ class Handler(object):
         return result
 
 
-    def cmd_get_revno(self, repo_path, repo, branch):
-        B = self.open_branch(get_abspath(repo_path, repo, branch))
+    def cmd_get_revno(self, repo, branch):
+        B = self.open_branch(get_abspath(repo, branch))
         return {'ok': B.revno()}
 
 
-    def cmd_get_changelog(self, repo_path, repo, branch, old_revno, new_revno):
-        B = self.open_branch(get_abspath(repo_path, repo, branch))
+    def cmd_get_changelog(self, repo, branch, old_revno, new_revno):
+        B = self.open_branch(get_abspath(repo, branch))
         current_revno = B.revno()
         if current_revno < old_revno:
             new_revno = old_revno = current_revno
@@ -127,8 +127,8 @@ class Handler(object):
         return {'ok': self.decode(out.getvalue().rstrip())}
 
 
-    def cmd_get_diff(self, repo_path, repo, branch, old_revno, new_revno):
-        abspath = get_abspath(repo_path, repo, branch)
+    def cmd_get_diff(self, repo, branch, old_revno, new_revno):
+        abspath = get_abspath(repo, branch)
         B = self.open_branch(abspath)
         current_revno = B.revno()
         if current_revno < old_revno:
@@ -155,21 +155,20 @@ class Handler(object):
         return {'ok': self.decode(result)}
 
 
-    def cmd_checkout_branch(self, repo_path, repo, branch):
+    def cmd_checkout_branch(self, repo, branch):
         return {'error': 'not_implemented'}
 
 
-    def cmd_is_repository(self, repo_path, repo):
-        abspath = get_abspath(repo_path, repo)
+    def cmd_is_repository(self, repo):
         try:
-            repository.Repository.open(abspath)
+            repository.Repository.open(repo)
             return {'ok': ''}
         except Exception, err:
             return {'error': "not repository"}
 
 
-    def cmd_is_branch(self, repo_path, repo, branch):
-        abspath = get_abspath(repo_path, repo, branch)
+    def cmd_is_branch(self, repo, branch):
+        abspath = get_abspath(repo, branch)
         try:
             self.open_branch(abspath)
             return {'ok': 'ok'}
@@ -177,8 +176,8 @@ class Handler(object):
             return {'error': 'not branch'}
 
 
-    def cmd_get_branches(self, repo_path, repo):
-        abspath = get_abspath(repo_path, repo)
+    def cmd_get_branches(self, repo):
+        abspath = get_abspath(repo)
         dirs = os.listdir(abspath)
         branches = []
         for dir in dirs:
@@ -190,8 +189,8 @@ class Handler(object):
         return {'ok': branches}
 
 
-    def cmd_export_branch(self, repo_path, repo, branch, export_path):
-        abspath = get_abspath(repo_path, repo, branch)
+    def cmd_export_branch(self, repo, branch, export_path):
+        abspath = get_abspath(repo, branch)
         branch = self.open_branch(abspath)
         rev_tree = branch.basis_tree()
         export.export(rev_tree, export_path)

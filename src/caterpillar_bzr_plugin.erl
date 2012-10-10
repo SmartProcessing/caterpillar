@@ -34,51 +34,22 @@ call_server(Msg) ->
 
 
 
-get_diff(PackagePath, Package, Branch, OldRevno, NewRevno) ->
-    case call_server({get_diff, PackagePath, Package, Branch, OldRevno, NewRevno}) of
-        {ok, BinDiff} ->
-            DiffLength = size(BinDiff),
-            Header = io_lib:format("Diff contains ~p bytes\n\n", [DiffLength]),
-            NDiff = if 
-                DiffLength > 10*1024 ->
-                    io_lib:format("~10240s...\n", [BinDiff]);
-                true ->
-                    binary_to_list(BinDiff)
-            end,
-            {ok, lists:flatten(Header ++ NDiff)};
-        {error, Error} ->
-            {error, binary_to_list(Error)};
-        _Oth ->
-            {error, io_lib:format("bad response from get_diff ~p~n", [_Oth])}
-    end.
+get_diff(_State, Package, Branch, OldRevno, NewRevno) ->
+    call_server({get_diff, Package, Branch, OldRevno, NewRevno}).
 
 
 
-get_changelog(PackagePath, Package, Branch, OldRevno, NewRevno) ->
-    case call_server({get_changelog, PackagePath, Package, Branch,OldRevno,NewRevno}) of
-        {ok, BinChanges} ->
-            LenChanges = size(BinChanges),
-            NChanges = if 
-                LenChanges >= 10*1024 ->
-                    io_lib:format("~10240s...\n", [BinChanges]);
-                true ->
-                    binary_to_list(BinChanges)
-            end,
-            {ok, lists:flatten(NChanges)};
-        {error, Error} ->
-            {error, binary_to_list(Error)};
-        _Oth ->
-            {error, io_lib:format("bad response from get_changelog ~p~n", [_Oth])}
-    end.
+get_changelog(_State, Package, Branch, OldRevno, NewRevno) ->
+    call_server({get_changelog, Package, Branch,OldRevno,NewRevno}).
 
 
 
-get_revno(PackagePath, Package, Branch) ->
-    call_server({get_revno, PackagePath, Package, Branch}).
+get_revno(_State, Package, Branch) ->
+    call_server({get_revno, Package, Branch}).
 
 
-get_branches(PackagePath, Package) ->
-    case call_server({get_branches, PackagePath, Package}) of
+get_branches(_State, Package) ->
+    case call_server({get_branches, Package}) of
         {ok, Branches} ->
             {ok, lists:map(fun binary_to_list/1, Branches)};
         Err ->
@@ -90,17 +61,17 @@ get_tag(_State, _Package, _Branch, _Revno) ->
     {ok, tag}.
 
 
-is_repository(PackagePath, Package) ->
-    call_server({is_repository, PackagePath, Package}).
+is_repository(_State, Package) ->
+    call_server({is_repository, Package}).
 
 
-is_branch(PackagePath, Package, Branch) ->
-    call_server({is_branch, PackagePath, Package, Branch}).
+is_branch(_State, Package, Branch) ->
+    call_server({is_branch, Package, Branch}).
 
 
-export(PackagePath, Package, Branch, _Revno, ExportPath) ->
-    %FIXME:
-    call_server({export_branch, PackagePath, Package, Branch, ExportPath}).
+export(_State, Package, Branch, _Revno, ExportPath) ->
+    %FIXME: Revno
+    call_server({export_branch, Package, Branch, ExportPath}).
 
 
 
@@ -171,20 +142,18 @@ code_change(_Old, State, _Extra) ->
 
 
 
-call_port({get_revno, PackagePath, Package, Branch}, Port) ->
+call_port({get_revno, Package, Branch}, Port) ->
     Msg = [
         {cmd, get_revno}, 
-        {repo_path, list_to_binary(PackagePath)},
         {repo, list_to_binary(Package)},
         {branch, list_to_binary(Branch)}
     ],
     erlang:port_command(Port, encode(Msg)),
     deferred;
 
-call_port({get_changelog, PackagePath, Package, Branch, OldRevno, NewRevno}, Port) ->
+call_port({get_changelog, Package, Branch, OldRevno, NewRevno}, Port) ->
     Msg = [
         {cmd, get_changelog}, 
-        {repo_path, list_to_binary(PackagePath)},
         {repo, list_to_binary(Package)},
         {branch, list_to_binary(Branch)},
         {old_revno, OldRevno},
@@ -193,10 +162,9 @@ call_port({get_changelog, PackagePath, Package, Branch, OldRevno, NewRevno}, Por
     erlang:port_command(Port, encode(Msg)),
     deferred;
 
-call_port({get_diff, PackagePath, Package, Branch, OldRevno, NewRevno}, Port) ->
+call_port({get_diff, Package, Branch, OldRevno, NewRevno}, Port) ->
     Msg = [
         {cmd, get_diff}, 
-        {repo_path, list_to_binary(PackagePath)},
         {repo, list_to_binary(Package)},
         {branch, list_to_binary(Branch)},
         {old_revno, OldRevno},
@@ -205,48 +173,43 @@ call_port({get_diff, PackagePath, Package, Branch, OldRevno, NewRevno}, Port) ->
     erlang:port_command(Port, encode(Msg)),
     deferred;
 
-call_port({checkout_branch, PackagePath, Package, Branch}, Port) ->
+call_port({checkout_branch, Package, Branch}, Port) ->
     Msg = [
         {cmd, checkout_branch}, 
-        {repo_path, list_to_binary(PackagePath)},
         {repo, list_to_binary(Package)},
         {branch, list_to_binary(Branch)}
     ],
     erlang:port_command(Port, encode(Msg)),
     deferred;
 
-call_port({is_repository, PackagePath, Package}, Port) ->
+call_port({is_repository, Package}, Port) ->
     Msg = [
         {cmd, is_repository}, 
-        {repo_path, list_to_binary(PackagePath)},
         {repo, list_to_binary(Package)}
     ],
     erlang:port_command(Port, encode(Msg)),
     deferred;
 
-call_port({is_branch, PackagePath, Package, Branch}, Port) ->
+call_port({is_branch, Package, Branch}, Port) ->
     Msg = [
         {cmd, is_branch}, 
-        {repo_path, list_to_binary(PackagePath)},
         {repo, list_to_binary(Package)},
         {branch, list_to_binary(Branch)}
     ],
     erlang:port_command(Port, encode(Msg)),
     deferred;
 
-call_port({get_branches, PackagePath, Package}, Port) ->
+call_port({get_branches, Package}, Port) ->
     Msg = [
         {cmd, get_branches}, 
-        {repo_path, list_to_binary(PackagePath)},
         {repo, list_to_binary(Package)}
     ],
     erlang:port_command(Port, encode(Msg)),
     deferred;
 
-call_port({export_branch, PackagePath, Package, Branch, ExportPath}, Port) ->
+call_port({export_branch, Package, Branch, ExportPath}, Port) ->
     Msg = [
         {cmd, export_branch}, 
-        {repo_path, list_to_binary(PackagePath)},
         {repo, list_to_binary(Package)},
         {branch, list_to_binary(Branch)},
         {export_path, list_to_binary(ExportPath)}
