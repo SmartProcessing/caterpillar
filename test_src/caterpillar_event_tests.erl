@@ -165,3 +165,52 @@ select_service_test_() ->
         }
     ]
 ]}.
+
+
+
+
+
+
+select_worker_test_() ->
+{foreachx,
+    fun(Services) ->
+        Ets = ets:new(?MODULE, [protected]),
+        ets:insert(Ets, Services),
+        Ets
+    end,
+    fun(_, Ets) ->
+        ets:delete(Ets)
+    end,
+[
+    {Services, fun(_, Ets) ->
+        {Message, fun() ->
+            ?assertEqual(
+                Result,
+                caterpillar_event:select_worker(Ets, ServiceName)
+            )
+        end}
+    end} || {Message, Services, ServiceName, Result} <- [
+        {
+            "no workers",
+            [], 
+            some_worker,
+            {error, no_worker}
+        },
+        {
+            "some worker available",
+            [{ref1, worker, some_worker, pid}],
+            some_worker,
+            {ok, pid}
+        },
+        {
+            "some workers and workers available",
+            [
+                {ref1, worker, some_worker, pid1}, {ref2, worker, some_worker, pid2},
+                {ref3, worker, some_worker, pid2}
+            ],
+            some_worker,
+            {ok, pid2}
+        }
+    ]
+]}.
+

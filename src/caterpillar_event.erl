@@ -138,7 +138,7 @@ terminate(Reason, _State) ->
 select_service(Ets, Name) ->
     case catch ets:select(Ets, ?SELECT(service, Name)) of
         [] ->
-            error_logger:info_msg("no service ~p available~n", [Name]),
+            error_logger:info_msg("select_service: no service ~p available~n", [Name]),
             {error, no_service};
         [Pid|_] -> 
             {ok, Pid};
@@ -146,3 +146,18 @@ select_service(Ets, Name) ->
             error_logger:info_msg("select_service error: ~p~n", [Error]),
             {error, select_service}
     end.
+
+
+select_worker(Ets, Name) ->
+    case catch ets:select(Ets, ?SELECT(worker, Name)) of
+        [] ->
+            error_logger:info_msg("select worker: no worker ~p available~n", [Name]),
+            {error, no_worker};
+        [Pid|_] -> 
+            {ok, Pid};
+        Error -> 
+            error_logger:info_msg("select_worker error: ~p~n", [Error]),
+            {error, select_worker}
+    end.
+    
+
