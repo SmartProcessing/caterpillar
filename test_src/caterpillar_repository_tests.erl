@@ -808,8 +808,7 @@ clean_packages_test_() ->
 
 
 
-%FIXME:
-notify_test_z() ->
+notify_test_() ->
 {foreach,
     fun() ->
         NR = "__test_notify",
@@ -823,39 +822,46 @@ notify_test_z() ->
     fun(State) ->
         {Message, fun() ->
             Mock(),
-            caterpillar_repository:notify(Type, State, Packages),
+            ?assertEqual(
+                ok,
+                catch caterpillar_repository:notify(State, Notify)
+            ),
             Check(State)
         end} 
-    end || {Message, Mock, {Type, Packages}, Check} <- [
+    end || {Message, Mock, Notify, Check} <- [
         {
             "new_packages, catepillar event not available",
             fun() -> ok end,
-            {new_packages, [#package{name="p", branch="b"}]},
+            #notify{subject= <<"some change">>, body= <<"body">>},
             fun(#state{notify_root=NR}) ->
-                ?assertEqual(
-                    {ok, ["1"]},
-                    file:list_dir(NR)
+                Listing = file:list_dir(NR),
+                ?assertMatch(
+                    {ok, _},
+                    Listing
                 ),
-                {ok, Data} = file:read_file(filename:join(NR, "1")),
+                {ok, [Filename|_]} = Listing,
+                {ok, Data} = file:read_file(filename:join(NR, Filename)),
                 ?assertEqual(
                     binary_to_term(Data),
-                    {new_packages, 1, [#package{name="p", branch="b"}]}
+                    #notify{subject= <<"some change">>, body= <<"body">>}
                 )
             end
         },
         {
             "clean_packages, caterpillar event not available",
             fun() -> ok end,
-            {clean_packages, [#package{name="p", branch="b"}]},
+            #notify{subject = <<"notify">>, body = <<"notify">>},
             fun(#state{notify_root=NR}) ->
-                ?assertEqual(
-                    {ok, ["1"]},
-                    file:list_dir(NR)
+                Listing = file:list_dir(NR),
+                ?assertMatch(
+                    {ok, _},
+                    Listing
                 ),
-                {ok, Data} = file:read_file(filename:join(NR, "1")),
+                {ok, [Filename|_]} = Listing,
+                {ok, Data} = file:read_file(filename:join(NR, Filename)),
                 ?assertEqual(
                     binary_to_term(Data),
-                    {clean_packages, 1, [#package{name="p", branch="b"}]}
+                    #notify{subject = <<"notify">>, body = <<"notify">>}
                 )
             end
         }

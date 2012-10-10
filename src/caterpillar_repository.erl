@@ -82,7 +82,11 @@ handle_info(_Msg, State) ->
 handle_cast({clean_packages, Notify, PackageName}, State) ->
     clean_packages(State, PackageName),
     %FIXME: clean packages event
-    spawn(fun() -> notify(State, Notify) end),
+    spawn(fun() ->
+        Event = [#archive{name=Name, branch=Branch} || {Name, Branch} <- PackageName],
+        caterpillar_event:event({clean_packages, Event}),
+        notify(State, Notify)
+    end),
     {noreply, State};
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -199,7 +203,7 @@ clean_packages(#state{dets=D, export_root=ER, archive_root=AR}=State, [{Name, Br
 -spec notify(#state{}, #notify{}) -> no_return().
 notify(#state{notify_root=NR}, #notify{}=Notify) ->
     case catch caterpillar_event:sync_event({notify, Notify}) of
-        {ok, done} -> {ok, done};
+        {ok, done} -> ok;
         Error -> 
             {A, B, C} = os:timestamp(),
             Name = A * 1000000 * 1000000 + B * 1000000 + C,
@@ -209,7 +213,8 @@ notify(#state{notify_root=NR}, #notify{}=Notify) ->
                 [Error, FileName]
             ),
             file:write_file(FileName, term_to_binary(Notify)) 
-    end.
+    end,
+    ok.
 
 
 
