@@ -50,7 +50,7 @@ test_compile: $(BEAMS) $(TEST_BEAMS)
 
 test: export_all
 	$(ERL) -pa ebin/ -env ERL_LIBS "$(NORMALIZED_LIBS)" -noshell \
-    	-eval 'test_runner:start({dir, "ebin"}, [verbose, {test_timeout, 15000}])' \
+    	-eval 'test_runner:start({application, caterpillar}, [verbose, {test_timeout, 15000}])' \
     	-s init stop 
 
 
