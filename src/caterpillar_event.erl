@@ -55,10 +55,14 @@ handle_info(_Msg, State) ->
 
 
 
-handle_cast({event, _Event}, State) ->
-    spawn(
-        fun() -> ok end
-    ),
+
+handle_cast({changes, _, _}=Message, #state{ets=Ets}=State) ->
+    spawn(fun() ->
+        lists:foreach(
+            fun(Pid) -> gen_server:cast(Pid, Message) end,
+            ets:select(Ets, [{{'_', '$1', '_', '$2'}, [{'==', worker, '$1'}], ['$2']}])
+        )
+    end),
     {noreply, State};
 
 handle_cast(_Msg, State) ->

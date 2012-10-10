@@ -115,7 +115,7 @@ handle_call({changes, ScanPipeResult}, _From, #state{dets=D}=State) ->
         Archives = ScanPipeResult#scan_pipe_result.archives,
         case Archives of
             [] -> ok;
-            _ -> caterpillar_event:event({changes, Archives})
+            _ -> caterpillar_event:event({changes, NewWorkId, Archives})
         end,
         notify(NewState, ScanPipeResult#scan_pipe_result.notify)
     end),
