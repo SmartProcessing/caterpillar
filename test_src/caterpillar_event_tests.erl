@@ -405,6 +405,11 @@ events_test_() ->
                 end)
             end,
             fun() ->
+                timer:sleep(1),
+                ?assertEqual(
+                    [{service, repository}],
+                    caterpillar_event:get_info()
+                ),
                 ?assertEqual(
                     ok,
                     caterpillar_event:sync_event({get_archive, #archive{}})
