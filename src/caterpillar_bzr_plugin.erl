@@ -62,11 +62,17 @@ get_tag(_State, _Package, _Branch, _Revno) ->
 
 
 is_repository(_State, Package) ->
-    call_server({is_repository, Package}).
+    case call_server({is_repository, Package}) of
+        {ok, _} -> true;
+        _ -> false
+    end.
 
 
 is_branch(_State, Package, Branch) ->
-    call_server({is_branch, Package, Branch}).
+    case call_server({is_branch, Package, Branch}) of
+        {ok, _} -> true;
+        _ -> false
+    end.
 
 
 export(_State, Package, Branch, _Revno, ExportPath) ->
