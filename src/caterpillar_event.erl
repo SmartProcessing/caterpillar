@@ -67,26 +67,25 @@ handle_cast(_Msg, State) ->
 
 
 handle_call({sync_event, {register_worker, Ident}}, {Pid, _}, #state{ets=Ets}=State) ->
-    case ets:select(Ets, ?SELECT(worker, Ident)) of
-        [] ->
-            ok;
-        _Something ->
+    case catch select_worker(Ets, Ident) of
+        {ok, _Pid} ->
             error_logger:info_msg(
                 "register_worker warning: already got worker with ident ~p~n",
                 [Ident]
-            )
+            );
+        _ -> ok
     end,
     ets:insert(Ets, {erlang:monitor(process, Pid), worker, Ident, Pid}),
     {reply, ok, State};
 
 handle_call({sync_event, {register_service, Service}}, {Pid, _}, #state{ets=Ets}=State) ->
-    case ets:select(Ets, ?SELECT(service, Service)) of
-        [] -> ok;
-        [SomePid|_] ->
+    case select_service(Ets, Service) of
+        {ok, SomePid} -> 
             error_logger:info_msg(
                 "register_service warning: already got service ~p at ~p~n",
                 [Service, SomePid]
-            )
+            );
+        _ -> ok
     end,
     ets:insert(Ets, {erlang:monitor(process, Pid), service, Service, Pid}),
     {reply, ok, State};
