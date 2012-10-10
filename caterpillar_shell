@@ -13,7 +13,7 @@
 
 
 
-ERL_LIBS="ERL_LIBS /var/lib/caterpillar/:/var/lib/erlang/smprc"
+ERL_LIBS="ERL_LIBS /var/lib/caterpillar/:/var/lib/smprc/erlang/"
 ERL=$(which erl)
 ETC_PATH="/etc/caterpillar"
 CONFIG="$ETC_PATH/caterpillar.config"
