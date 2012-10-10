@@ -218,7 +218,6 @@ async_notify(#state{notify_root=NR}) ->
             exit(normal)
     end,
     case file:list_dir(NR) of
-        {ok, []} -> ok;
         {ok, Files} -> 
             ForeachFun = fun(File) ->
                 AbsFile = filename:join(NR, File),

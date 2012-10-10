@@ -60,10 +60,12 @@ devel: $(TEST_BEAMS) $(BEAMS)
 package: clean compile
 	mkdir -p $(DEB_DIR)/DEBIAN
 	cp control $(DEB_DIR)/DEBIAN
+	cp conffiles $(DEB_DIR)/DEBIAN
 	chmod +x $(DEB_DIR)/DEBIAN/*
 	mkdir -p $(DEB_DIR)/$(LIB_PATH)
 	mkdir -p $(DEB_DIR)/$(LOG_PATH)
 	mkdir -p $(DEB_DIR)/$(ETC_PATH)
+	cp caterpillar.config $(DEB_DIR)/$(ETC_PATH)/
 	cp -R ebin $(DEB_DIR)/$(LIB_PATH)
 	dpkg-deb --build $(DEB_DIR) $(DIST_DIR)
 	
