@@ -25,7 +25,8 @@ init(Args) ->
         email_to=proplists:get_value(email_to, Args),
         email_from=proplists:get_value(email_from, Args)
     },
-    self() ! check_mail,
+    %FIXME:
+    get_name(),
     {ok, State}.
 
 
@@ -33,8 +34,6 @@ handle_info({_Port, {data, Data}}, State) ->
     error_logger:error_msg("Data from port ~ts~n", [Data]),
     {noreply, State};
 handle_info({_Port, {exit_status, Status}}, State) ->
- %  Mail = get_mail(State),
- %  MailName = lists:last(filename:split(Mail)),
     case Status of
         Status -> ok
     end,
