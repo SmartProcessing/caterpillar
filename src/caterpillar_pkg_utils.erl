@@ -5,6 +5,7 @@
 -export([get_dep_list/1]).
 -export([pack_rev_def/2]).
 -define(LTB, list_to_binary).
+-define(BTL, binary_to_list).
 
 get_pkg_config_record(Archive, {control, Data}) ->
     #pkg_config{
@@ -40,9 +41,9 @@ get_valid_versions(L) ->
 
 pack_rev_def(Archive, Deps) ->
     #rev_def{
-        name=Archive#archive.name,
-        branch=Archive#archive.branch,
-        tag=Archive#archive.tag,
+        name=?LTB(Archive#archive.name),
+        branch=?LTB(Archive#archive.branch),
+        tag=?LTB(Archive#archive.tag),
         dep_object=Deps
     }.
 
@@ -62,7 +63,7 @@ parse_control(Path) ->
                 fun(Entry) ->
                     parse_control_entry(string:tokens(Entry, ":"))
                 end,
-                string:tokens(Content, "\n"))};
+                string:tokens(?BTL(Content), "\n"))};
         {error, Reason} ->
             error_logger:error_msg("no control file: ~p~n", [Reason]),
             [];
@@ -74,7 +75,7 @@ parse_control(Path) ->
 parse_control_entry(["Depends", Deps]) ->
     {"Depends", lists:map(
         fun(Dep) ->
-            {Package, _Version} = string:tokens(string:strip(Dep), "("),
+            [Package|_] = string:tokens(string:strip(Dep), "("),
             Package
         end, 
         string:tokens(Deps, ","))};

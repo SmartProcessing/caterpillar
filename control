@@ -3,5 +3,5 @@ Section: smprc
 Description: "package building tools"
 Architecture: all
 Version: 0.0.1
-Maintainer: vavdushkin@smprc.ru
+Maintainer: vavdiushkin@smprc.ru
 Depends: erlang-base(>=14)
