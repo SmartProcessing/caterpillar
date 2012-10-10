@@ -30,12 +30,15 @@
 }).
 
 -record(pkg_config, {
-    name            :: binary(),
-    dependencies    :: [version()],
-    platforms       :: [binary()],
-    builders        :: [binary()],
-    architectures   :: [binary()],
-    maintainers     :: [binary()]
+    name                :: string(),
+    version="0.0.0"     :: string(),
+    deps=[]             :: [version()|string()],
+    build_deps=[]       :: [version()|string()],
+    section="smprc"     :: string(),
+    platform="default"  :: string(),
+    package_t=["deb"]   :: [string()],
+    arch=["all"]        :: [string()],
+    maintainers=[]      :: [string()]
 }).
 
 -record(notify, {

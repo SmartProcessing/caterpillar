@@ -4,7 +4,9 @@
 
 -export([start_link/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-         terminate/2, code_change/3, prepare/3]).
+         terminate/2, code_change/3, prepare/2]).
+
+-define(CPU, caterpillar_pkg_utils).
 
 -record(state, {
         deps,
@@ -13,7 +15,6 @@
         next_to_build,
         workers=[],
         unpack_state,
-        event_service,
         build_path
     }).
 
@@ -23,8 +24,6 @@ start_link(Settings) ->
 
 init(Settings) ->
     error_logger:info_msg("starting caterpillar", []),
-    EventService = ?GV(event_service, Settings, caterpillar_event),
-    error_logger:info_msg("plugins initialized"),
     {ok, Deps} = dets:open_file(deps,
         [{file, ?GV(deps, Settings, "/var/lib/smprc/caterpillar/deps")}]),
     BuildQueue = queue:new(),
@@ -40,8 +39,7 @@ init(Settings) ->
             wait_queue=WaitQueue,
             workers=WorkerList,
             next_to_build=none,
-            unpack_state=UnpackState,
-            event_service=EventService
+            unpack_state=UnpackState
         }
     }.
 
@@ -93,16 +91,15 @@ process_archives([], _State) ->
 process_archives([A|O], State) ->
     UnpackState = State#state.unpack_state,
     BuildPath = State#state.build_path,
-    EventService = State#state.event_service,
     {ok, _Pid, ToRepeat} = erlang:spawn_monitor(
         ?MODULE, 
         prepare, 
-        [BuildPath, A, EventService]),
+        [BuildPath, A]),
     ets:insert(UnpackState, {ToRepeat, A}),
     process_archives(O, State).
 
 
-prepare(BuildPath, Archive, EventService) ->
+prepare(BuildPath, Archive) ->
     TempName = io_lib:format(
         "~s-~s~s",
         [Archive#archive.name, Archive#archive.branch, Archive#archive.tag]
@@ -110,16 +107,13 @@ prepare(BuildPath, Archive, EventService) ->
     TempArch = BuildPath ++ "/temp/" ++ TempName ++ ".tar",
     Fd = file:open(TempArch, [read, write]),
     ArchiveWithFd = Archive#archive{fd=Fd},
-    %FIXME: use caterpillar_event:sync_event
-    {ok, ArchiveWithFd} = gen_server:call(
-        EventService, 
-        {get_archive, ArchiveWithFd}, 
-        infinity),
+    Msg = {get_arhive, ArchiveWithFd},
+    {ok, ArchiveWithFd} = caterpillar_event:sync_event(Msg),
     Cwd = BuildPath ++ "/temp/" ++ TempName,
-    erl_tar:extract(Fd, [{cwd, BuildPath ++ "/temp/" ++ TempName}]),
-    PkgConfig = caterpillar_utils:get_pkg_config(Cwd),
-    Deps = caterpillar_utils:get_dep_list(PkgConfig),
-    RevDef = caterpillar_utils:pack_rev_def(Archive, Deps),
+    erl_tar:extract(Fd, [{cwd, Cwd}]),
+    PkgRecord = ?CPU:get_pkg_record(Cwd),
+    Deps = ?CPU:get_dep_list(PkgRecord),
+    RevDef = ?CPU:pack_rev_def(Archive, Deps),
     gen_server:call(caterpillar, {newref, RevDef}).
     
 
