@@ -1,0 +1,6 @@
+#! /bin/sh
+
+update-rc.d caterpillar remove >/dev/null || exit $?
+
+exit 0
+

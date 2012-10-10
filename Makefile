@@ -1,8 +1,11 @@
 include ../../devel-tools/trunk/Makefile.mk
 
-LIB_PATH = /var/lib/caterpillar
-LOG_PATH = /var/log/caterpillar
-ETC_PATH = /etc/caterpillar
+LIB_PATH = var/lib/caterpillar
+LOG_PATH = var/log/caterpillar
+ETC_PATH = etc/caterpillar
+INITD = etc/init.d
+SBIN_DIR = usr/sbin
+
 PRIV_PATH = $(LIB_PATH)/priv
 REBAR = rebar
 BEAMS = $(patsubst src/%.erl, ebin/%.beam, $(wildcard src/*.erl))
@@ -60,16 +63,20 @@ devel: $(TEST_BEAMS) $(BEAMS)
 
 package: clean compile
 	mkdir -p $(DEB_DIR)/DEBIAN
-	cp control $(DEB_DIR)/DEBIAN
-	cp conffiles $(DEB_DIR)/DEBIAN
+	cp control conffiles postinst postrm $(DEB_DIR)/DEBIAN
 	chmod +x $(DEB_DIR)/DEBIAN/*
 	mkdir -p $(DEB_DIR)/$(LIB_PATH)
 	mkdir -p $(DEB_DIR)/$(LOG_PATH)
 	mkdir -p $(DEB_DIR)/$(ETC_PATH)
+	mkdir -p $(DEB_DIR)/$(INITD)
+	mkdir -p $(DEB_DIR)/$(SBIN_DIR)
 	mkdir -p $(DEB_DIR)/$(PRIV_PATH)
 	cp caterpillar.config $(DEB_DIR)/$(ETC_PATH)/
+	cp caterpillar_shell $(DEB_DIR)/$(SBIN_DIR)/caterpillar
+	chmod +x $(DEB_DIR)/$(SBIN_DIR)/caterpillar
 	cp -R ebin $(DEB_DIR)/$(LIB_PATH)
 	cp priv/* $(DEB_DIR)/$(PRIV_PATH)
 	chmod +x $(DEB_DIR)/$(PRIV_PATH)/*
+	ln -s /$(SBIN_DIR)/caterpillar $(DEB_DIR)/$(INITD)/caterpillar
 	dpkg-deb --build $(DEB_DIR) $(DIST_DIR)
 	

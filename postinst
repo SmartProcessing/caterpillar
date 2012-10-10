@@ -1,0 +1,22 @@
+#! /bin/sh
+
+if [ "$1" = configure ]; then
+    getent group caterpillar >/dev/null 2>&1 ||
+        addgroup --system caterpillar &&
+        echo "Added group 'caterpillar'"
+
+    getent passwd caterpillar >/dev/null 2>&1 ||
+        adduser --system --home /home/caterpillar --ingroup caterpillar \
+            --gecos "caterpillar" \
+            --disabled-password --disabled-login caterpillar &&
+        echo "Added user 'caterpillar'"
+
+    chown -R caterpillar:caterpillar /var/lib/caterpillar
+    chown -R caterpillar:caterpillar /var/log/caterpillar
+
+    update-rc.d caterpillar defaults >/dev/null || exit $?
+    invoke-rc.d caterpillar restart || exit $?
+fi
+
+exit 0
+
