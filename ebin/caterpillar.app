@@ -10,7 +10,8 @@
                         caterpillar_build_worker_sup,caterpillar_bzr_plugin,
                         caterpillar_dependencies,caterpillar_event,
                         caterpillar_net_kernel,caterpillar_notifier,
-                        caterpillar_repository,caterpillar_repository_plugin,
+                        caterpillar_pkg_utils,caterpillar_repository,
+                        caterpillar_repository_plugin,
                         caterpillar_rotating_log_handler,caterpillar_sup,
                         caterpillar_utils,caterpillar_worker,
                         caterpillar_worker_plugin]}]}.

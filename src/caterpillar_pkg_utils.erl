@@ -1,7 +1,7 @@
 -module(caterpillar_pkg_utils).
 -include("caterpillar.hrl").
--export(get_pkg_config/1).
--export(get_pkg_record/2).
+-export([get_pkg_config/1]).
+-export([get_pkg_config_record/2]).
 
 get_pkg_config_record(Archive, {control, Data}) ->
     #pkg_config{
@@ -45,15 +45,17 @@ parse_control(Path) ->
                 end,
                 string:tokens(Content, "\n"))};
         {error, Reason} ->
+            error_logger:error_msg("no control file: ~p~n", [Reason]),
             [];
         Other ->
+            error_logger:error_msg("no control file: ~p~n", [Other]),
             []
     end.
 
 parse_control_entry(["Depends", Deps]) ->
     {"Depends", lists:map(
         fun(Dep) ->
-            {Package, Version} = string:tokens(string:strip(Dep), "("),
+            {Package, _Version} = string:tokens(string:strip(Dep), "("),
             Package
         end, 
         string:tokens(Deps, ","))};

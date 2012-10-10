@@ -4,7 +4,7 @@
 
 -export([start_link/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-         terminate/2, code_change/3, prepare/3]).
+         terminate/2, code_change/3, prepare/2]).
 
 -define(CPU, caterpillar_pkg_utils).
 
@@ -15,7 +15,6 @@
         next_to_build,
         workers=[],
         unpack_state,
-        event_service,
         build_path
     }).
 
@@ -25,8 +24,6 @@ start_link(Settings) ->
 
 init(Settings) ->
     error_logger:info_msg("starting caterpillar", []),
-    EventService = ?GV(event_service, Settings, caterpillar_event),
-    error_logger:info_msg("plugins initialized"),
     {ok, Deps} = dets:open_file(deps,
         [{file, ?GV(deps, Settings, "/var/lib/smprc/caterpillar/deps")}]),
     BuildQueue = queue:new(),
@@ -42,8 +39,7 @@ init(Settings) ->
             wait_queue=WaitQueue,
             workers=WorkerList,
             next_to_build=none,
-            unpack_state=UnpackState,
-            event_service=EventService
+            unpack_state=UnpackState
         }
     }.
 
@@ -95,16 +91,15 @@ process_archives([], _State) ->
 process_archives([A|O], State) ->
     UnpackState = State#state.unpack_state,
     BuildPath = State#state.build_path,
-    EventService = State#state.event_service,
     {ok, _Pid, ToRepeat} = erlang:spawn_monitor(
         ?MODULE, 
         prepare, 
-        [BuildPath, A, EventService]),
+        [BuildPath, A]),
     ets:insert(UnpackState, {ToRepeat, A}),
     process_archives(O, State).
 
 
-prepare(BuildPath, Archive, EventService) ->
+prepare(BuildPath, Archive) ->
     TempName = io_lib:format(
         "~s-~s~s",
         [Archive#archive.name, Archive#archive.branch, Archive#archive.tag]
