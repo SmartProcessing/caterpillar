@@ -405,6 +405,30 @@ events_test_() ->
                     [Receive() || _ <- [w1, w2]]
                 )
             end
+        },
+        {
+            "event 'clean_packages', few workers registered",
+            fun() ->
+                [caterpillar_event:register_worker(W) || W <- [w1, w2]]
+            end,
+            fun() ->
+                ?assertEqual(
+                    [{worker, w1}, {worker, w2}],
+                    lists:sort(caterpillar_event:get_info())
+                ),
+                caterpillar_event:event({clean_packages, [#archive{}]}),
+                Receive = fun() ->
+                    receive {_, Msg} ->
+                        Msg
+                    after 10 ->
+                        timeout
+                    end
+                end,
+                ?assertEqual(
+                    [{clean_packages, [#archive{}]} || _ <- [w1, w2]],
+                    [Receive() || _ <- [w1, w2]]
+                )
+            end
         }
     ]
 ]}.
