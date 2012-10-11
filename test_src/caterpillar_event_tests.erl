@@ -94,13 +94,13 @@ handle_call_sync_event_register_worker_test_() ->
     fun(State) ->
         {Message, fun() ->
             Setup(State),
-            caterpillar_event:handle_call({register_worker, Service}, {self(), ref}, State),
+            caterpillar_event:handle_call({register_worker, Worker, work_id}, {self(), ref}, State),
             ?assertEqual(
                 Result,
                 lists:sort([{Type, Value} || {_, Type, Value, _} <- ets:tab2list(State#state.ets)])
             )
         end}
-    end || {Message, Setup, Service, Result} <- [
+    end || {Message, Setup, Worker, Result} <- [
         {
             "ets empty",
             fun(_) -> ok end,
@@ -262,7 +262,7 @@ events_test_() ->
         {
             "register worker event",
             fun() ->
-                caterpillar_event:register_worker(test)
+                caterpillar_event:register_worker(test, work_id)
             end,
             fun() ->
                 ?assertEqual(
@@ -286,9 +286,9 @@ events_test_() ->
         {
             "register few workers and few services",
             fun() ->
-                caterpillar_event:register_worker(worker1),
-                caterpillar_event:register_worker(worker1),
-                caterpillar_event:register_worker(worker2),
+                caterpillar_event:register_worker(worker1, work_id),
+                caterpillar_event:register_worker(worker1, work_id),
+                caterpillar_event:register_worker(worker2, work_id),
                 caterpillar_event:register_service(test1),
                 caterpillar_event:register_service(test1),
                 caterpillar_event:register_service(test2)
@@ -311,7 +311,7 @@ events_test_() ->
             "registered worker down",
             fun() ->
                 spawn(fun() ->
-                    caterpillar_event:register_worker(worker1),
+                    caterpillar_event:register_worker(worker1, work_id),
                     timer:sleep(5)
                 end)
             end,
@@ -419,7 +419,7 @@ events_test_() ->
         {
             "event 'changes', few workers registered",
             fun() ->
-                [caterpillar_event:register_worker(W) || W <- [w1, w2]]
+                [caterpillar_event:register_worker(W, work_id) || W <- [w1, w2]]
             end,
             fun() ->
                 ?assertEqual(
@@ -443,7 +443,7 @@ events_test_() ->
         {
             "event 'clean_packages', few workers registered",
             fun() ->
-                [caterpillar_event:register_worker(W) || W <- [w1, w2]]
+                [caterpillar_event:register_worker(W, work_id) || W <- [w1, w2]]
             end,
             fun() ->
                 ?assertEqual(

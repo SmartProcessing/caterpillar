@@ -831,6 +831,68 @@ clean_packages_test_() ->
 ]}.
 
 
+select_archives_by_work_id_test_() ->
+{foreachx,
+    fun(Archives) -> 
+        {ok, D} = dets:open_file("__test.dets", [{access, read_write}]),
+        dets:insert(D, Archives),
+        #state{dets=D}
+    end,
+    fun(_, #state{dets=D}) ->
+        dets:close(D),
+        file:delete(D)
+    end,
+[
+    {Archives, fun(_, State) ->
+        {Message, fun() ->
+            ?assertEqual(
+                Result, 
+                lists:sort(
+                    caterpillar_repository:select_archives_by_work_id(State, WorkId)
+                )
+            )
+        end}
+    end} || {Message, Archives, WorkId, Result} <- [
+        {
+            "dets empty",
+            [],
+            1,
+            []
+        },
+        {
+            "few archives, nothing selected",
+            [
+                {{package1, branch1}, archive_name1, last_revno, tag, 1},
+                {{package2, branch2}, archive_name1, last_revno, tag, 1}
+            ],
+            1,
+            []
+        },
+        {
+            "few archives, one of them selected",
+            [
+                {{package1, branch1}, archive_name1, last_revno, tag, 2},
+                {{package2, branch2}, archive_name1, last_revno, tag, 1}
+            ],
+            1,
+            [#archive{name=package1, branch=branch1, archive_name=archive_name1, tag=tag}]
+        },
+        {
+            "few archives, all of them selected",
+            [
+                {{package1, branch1}, archive_name1, last_revno, tag, 2},
+                {{package2, branch2}, archive_name2, last_revno, tag, 2}
+            ],
+            1,
+            [
+                #archive{name=package1, branch=branch1, archive_name=archive_name1, tag=tag},
+                #archive{name=package2, branch=branch2, archive_name=archive_name2, tag=tag}
+            ]
+        }
+        
+    ]
+]}.
+
 
 async_notify_test_() ->
 {foreachx,

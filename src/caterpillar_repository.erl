@@ -87,6 +87,9 @@ handle_info(_Msg, State) ->
     {noreply, State}.
 
 
+%handle_cast({new_worker, Ident, Pid}, State) ->
+%    {
+
 handle_cast({clean_packages, Notify, PackageName}, State) ->
     clean_packages(State, PackageName),
     spawn(fun() ->
@@ -95,9 +98,13 @@ handle_cast({clean_packages, Notify, PackageName}, State) ->
         notify(State, Notify)
     end),
     {noreply, State};
+
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
+
+handle_call({get_archive, #archive{}}, From, State) ->
+    {reply, ok, State};
 
 handle_call(get_packages, _From, #state{dets=D}=State) ->
     Packages = dets:select(D, [{{'$1', '_', '_', '_', '_'}, [], ['$1']}]),
@@ -209,6 +216,22 @@ clean_packages(#state{dets=D, export_root=ER, archive_root=AR}=State, [{Name, Br
         _ -> ok
     end,
     clean_packages(State, O).
+
+
+%{{Package, Branch}, ArchiveName, LastRevision, Tag, WorkId}
+select_archives_by_work_id(#state{dets=Dets}, WorkId) ->
+    case dets:select(Dets, [{{'$1', '$2', '_', '$3', '$4'}, [{'<', WorkId, '$4'}], [['$1', '$2', '$3']]}]) of
+        List when is_list(List), List /= [] -> 
+            [
+                #archive{name=Name, branch=Branch, archive_name=ArchiveName, tag=Tag} ||
+                [{Name, Branch}, ArchiveName, Tag] <- List
+            ];
+        _ -> []
+    end.
+
+
+        
+
 
 
 async_notify() ->

@@ -11,13 +11,13 @@
 
 -export([start_link/1, stop/0, get_info/0]).
 -export([sync_event/1, event/1]).
--export([register_service/1, register_worker/1]).
+-export([register_service/1, register_worker/2]).
 -export([init/1, handle_info/2, handle_cast/2, handle_call/3, code_change/3, terminate/2]).
 
 
 
 -spec register_service(Type::term()) -> {ok, pid()} | {error, Reason :: term()}.
--spec register_worker(Ident::term()) -> {ok, pid()} | {error, Reason :: term()}.
+-spec register_worker(Ident::term(), WorkId :: non_neg_integer()) -> {ok, pid()} | {error, Reason :: term()}.
 -spec get_info() -> [{worker|service, term()}].
 -spec event(Event::term()) -> ok.
 -spec sync_event(Event::term()) -> any().
@@ -46,8 +46,8 @@ register_service(Type) ->
     gen_server:call({global, ?MODULE}, {register_service, Type}, infinity).
 
 
-register_worker(Ident) ->
-    gen_server:call({global, ?MODULE}, {register_worker, Ident}, infinity).
+register_worker(Ident, WorkId) ->
+    gen_server:call({global, ?MODULE}, {register_worker, Ident, WorkId}, infinity).
 
 
 init(_) ->
@@ -91,13 +91,17 @@ handle_cast(_Msg, State) ->
 
 
 
-handle_call({register_worker, Ident}, {Pid, _}, #state{ets=Ets}=State) ->
+handle_call({register_worker, Ident, WorkId}, {Pid, _}, #state{ets=Ets}=State) ->
     case catch select_worker(Ets, Ident) of
         {ok, _Pid} ->
             error_logger:info_msg(
                 "register_worker warning: already got worker with ident ~p~n",
                 [Ident]
             );
+        _ -> ok
+    end,
+    case catch select_service(Ets, repository) of
+        {ok, RPid} -> gen_server:cast(RPid, {new_worker, Ident, Pid});
         _ -> ok
     end,
     ets:insert(Ets, {erlang:monitor(process, Pid), worker, Ident, Pid}),
