@@ -1210,3 +1210,66 @@ handle_info_scan_repository_test_() ->
     ]
 ]}.
 
+
+handle_call_get_archives_test_() ->
+{foreachx,
+    fun(Archives) ->
+        tty_on(),
+        AR = "__test_archive",
+        caterpillar_utils:ensure_dir(AR),
+        {ok, D} = dets:open_file("__test.dets", [{access, read_write}]),
+        lists:foreach(
+            fun({Package, Branch, ArchiveName, ArchiveData}) ->
+                file:write_file(filename:join(AR, ArchiveName), ArchiveData),
+                dets:insert(D, {{Package, Branch}, ArchiveName, last_revno, tag, work_id})
+            end,
+            Archives
+        ),
+        #state{archive_root=AR, dets=D}
+    end,
+    fun(_, #state{archive_root=AR, dets=D}) ->
+        dets:close(D), file:delete(D),
+        caterpillar_utils:del_dir(AR)
+    end,
+[
+    {Archives, fun(_, State) ->
+        {Message, fun() ->
+            ?assertEqual(
+                {noreply, State},
+                caterpillar_repository:handle_call({get_archive, Archive(State)}, {self(), ref}, State)
+            ),
+            Check(State)
+        end}
+    end} || {Message, Archives, Archive, Check} <- [
+        {
+            "no archive",
+            [], 
+            fun(_) -> #archive{name="test", branch="branch"} end,
+            fun(_) ->
+                ?assertEqual(
+                    {ref, {error, get_archive}},
+                    receive Msg -> Msg after 100 -> timeout end
+                )
+            end
+        },
+        {
+            "archive exists and copied",
+            [{"test", "branch", "test_branch", "archive_data"}],
+            fun(#state{archive_root=AR}) -> 
+                {ok, Fd} = file:open(filename:join(AR, "copy_here"), [write]),
+                #archive{name="test", branch="branch", fd=Fd}
+            end,
+            fun(#state{archive_root=AR}) ->
+                ?assertEqual(
+                    {ref, ok},
+                    receive Msg -> Msg after 100 -> timeout end
+                ),
+                ?assertEqual(
+                    {ok, <<"archive_data">>},
+                    file:read_file(filename:join(AR, "copy_here"))
+                )
+            end
+        }
+    ]
+
+]}.

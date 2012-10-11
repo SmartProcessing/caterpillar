@@ -100,10 +100,7 @@ handle_call({register_worker, Ident, WorkId}, {Pid, _}, #state{ets=Ets}=State) -
             );
         _ -> ok
     end,
-    case catch select_service(Ets, repository) of
-        {ok, RPid} -> gen_server:cast(RPid, {new_worker, Ident, Pid});
-        _ -> ok
-    end,
+    push_archives_to_new_worker(State, WorkId, Pid),
     ets:insert(Ets, {erlang:monitor(process, Pid), worker, Ident, Pid}),
     {reply, {ok, self()}, State};
 
@@ -198,3 +195,20 @@ select_worker(Ets, Name) ->
 
 select_workers_pids(Ets) ->
     ets:select(Ets, [{{'_', '$1', '_', '$2'}, [{'==', worker, '$1'}], ['$2']}]).
+
+
+
+
+push_archives_to_new_worker(#state{ets=Ets}, WorkId, WorkerPid) ->
+    spawn(fun() ->
+        case select_service(Ets, repository) of
+            {ok, RepPid} ->
+                case gen_server:call(RepPid, {get_archives, WorkId}, infinity) of
+                    {ok, Event} -> gen_server:cast(WorkerPid, Event);
+                    _ -> ok
+                end;
+            _ -> ok
+        end
+    end).
+            
+

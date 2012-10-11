@@ -87,8 +87,6 @@ handle_info(_Msg, State) ->
     {noreply, State}.
 
 
-%handle_cast({new_worker, Ident, Pid}, State) ->
-%    {
 
 handle_cast({clean_packages, Notify, PackageName}, State) ->
     clean_packages(State, PackageName),
@@ -103,8 +101,38 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 
-handle_call({get_archive, #archive{}}, From, State) ->
-    {reply, ok, State};
+handle_call({get_archive, #archive{name=Name, branch=Branch, fd=Fd}}, From, State) ->
+    spawn(fun() ->
+        AR = State#state.archive_root,
+        Dets = State#state.dets,
+        SelectPattern = [{
+            {{'$1', '$2'}, '$3', '_', '_', '_'},
+            [{'andalso', {'==', '$1', Name}, {'==', '$2', Branch}}],
+            ['$3']
+        }],
+        Reply = case catch dets:select(Dets, SelectPattern) of
+            [AName] ->
+                file:copy(filename:join(AR, AName), Fd);
+            BadReturn ->
+                error_logger:info_msg(
+                    "get_archive cant select archive for package ~p/~p with: ~p~n",
+                    [Name, Branch, BadReturn]
+                ),
+                {error, get_archive}
+        end,
+        case Reply of
+            {ok, _} -> gen_server:reply(From, ok);
+            _ -> gen_server:reply(From, Reply)
+        end
+    end),
+    {noreply, State};
+
+handle_call({get_archives, WorkId}, From, State) ->
+    spawn(fun() ->
+        Archives = (catch select_archives_by_work_id(State, WorkId)),
+        gen_server:reply(From, {changes, State#state.work_id, Archives})
+    end),
+    {noreply, State};
 
 handle_call(get_packages, _From, #state{dets=D}=State) ->
     Packages = dets:select(D, [{{'$1', '_', '_', '_', '_'}, [], ['$1']}]),
