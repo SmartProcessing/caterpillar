@@ -49,7 +49,7 @@ init(Args) ->
     {ok, State}.
 
 
-
+%async event for whole repository scan, checking every package and branch
 handle_info(scan_repository, State) ->
     spawn(fun() ->
         Self = self(),
@@ -69,17 +69,20 @@ handle_info(scan_repository, State) ->
     end),
     {noreply, scan_repository(State)};
 
+%async event for pushing saved notifications
 handle_info(async_notify, State) ->
     spawn(fun() -> async_notify(State) end),
     async_notify(),
     {noreply, State};
 
+%async event for registering in caterpillar_event
 handle_info(register_service, #state{registered=Bool}=State) ->
     case Bool of 
         true -> {noreply, State};
         false -> {noreply, register_service(State)}
     end;
 
+%caterpillar_event down
 handle_info({'DOWN', _, _, _, _}, State) ->
     {noreply, register_service(State)};
 
@@ -88,6 +91,7 @@ handle_info(_Msg, State) ->
 
 
 
+%cleaning removed packages, event generatied in scan_repository
 handle_cast({clean_packages, Notify, PackageName}, State) ->
     clean_packages(State, PackageName),
     spawn(fun() ->
@@ -101,6 +105,7 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 
+%copying archive to remote fd
 handle_call({get_archive, #archive{name=Name, branch=Branch, fd=Fd}}, From, State) ->
     spawn(fun() ->
         AR = State#state.archive_root,
@@ -127,6 +132,7 @@ handle_call({get_archive, #archive{name=Name, branch=Branch, fd=Fd}}, From, Stat
     end),
     {noreply, State};
 
+%getting archives with work_id > WorkId
 handle_call({get_archives, WorkId}, From, State) ->
     spawn(fun() ->
         Archives = (catch select_archives_by_work_id(State, WorkId)),
@@ -134,10 +140,12 @@ handle_call({get_archives, WorkId}, From, State) ->
     end),
     {noreply, State};
 
+%getting all packages in local storage 
 handle_call(get_packages, _From, #state{dets=D}=State) ->
     Packages = dets:select(D, [{{'$1', '_', '_', '_', '_'}, [], ['$1']}]),
     {reply, Packages, State};
 
+%event for pushing new archives and notify, generated in scan_repository
 handle_call({changes, ScanPipeResult}, _From, #state{dets=D}=State) ->
     NewWorkId = State#state.work_id + 1,
     WorkIdFile = State#state.work_id_file,
