@@ -272,6 +272,24 @@ events_test_() ->
             end
         },
         {
+            "register worker event, checking repository service got event about new worker",
+            fun() ->
+                caterpillar_event:register_service(repository),
+                caterpillar_event:register_worker(test, work_id)
+            end,
+            fun() ->
+                ?assertEqual(
+                    [{service, repository}, {worker, test}],
+                    lists:sort(caterpillar_event:get_info())
+                ),
+                timer:sleep(10),
+                ?assertMatch(
+                    {messages, [{_, _, {get_archives, work_id}}]},
+                    process_info(self(), messages)
+                )
+            end
+        },
+        {
             "register service event",
             fun() ->
                 caterpillar_event:register_service(test)
