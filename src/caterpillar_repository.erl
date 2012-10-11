@@ -130,7 +130,7 @@ handle_call({get_archive, #archive{name=Name, branch=Branch, fd=Fd}}, From, Stat
 handle_call({get_archives, WorkId}, From, State) ->
     spawn(fun() ->
         Archives = (catch select_archives_by_work_id(State, WorkId)),
-        gen_server:reply(From, {changes, State#state.work_id, Archives})
+        gen_server:reply(From, {ok, {changes, State#state.work_id, Archives}})
     end),
     {noreply, State};
 
@@ -282,20 +282,13 @@ async_notify(#state{notify_root=NR}) ->
         {ok, Files} -> 
             ForeachFun = fun(File) ->
                 AbsFile = filename:join(NR, File),
-                case file:read_file(AbsFile) of
-                    {ok, Data} ->
-                        Msg = binary_to_term(Data),
-                        case catch caterpillar_event:sync_event({notify, Msg}) of
-                            ok -> ok = file:delete(AbsFile);
-                            Error -> 
-                                error_logger:info_msg(
-                                    "async_notify failed to send sync_event with: ~p~n",
-                                    [Error]
-                                )
-                        end;
-                    Error ->
-                        error_logger:info_msg("failed to async_notify with error: ~p~n", [Error])
-                end
+                Result = (catch begin 
+                    {ok, Data} = file:read_file(AbsFile),
+                    Msg = binary_to_term(Data),
+                    ok = caterpillar_event:sync_event({notify, Msg}),
+                    file:delete(AbsFile)
+                end),
+                error_logger:info_msg("async_notify result: ~p~n", [Result])
             end,
             lists:foreach(ForeachFun, Files);
         Error -> error_logger:info_msg("async_notify error while listing messages: ~p~n", [Error])

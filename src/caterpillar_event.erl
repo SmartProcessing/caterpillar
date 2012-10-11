@@ -170,7 +170,6 @@ terminate(Reason, _State) ->
 select_service(Ets, Name) ->
     case catch ets:select(Ets, ?SELECT(service, Name)) of
         [] ->
-            error_logger:info_msg("select_service: no service ~p available~n", [Name]),
             {error, no_service};
         [Pid|_] -> 
             {ok, Pid};
@@ -183,7 +182,6 @@ select_service(Ets, Name) ->
 select_worker(Ets, Name) ->
     case catch ets:select(Ets, ?SELECT(worker, Name)) of
         [] ->
-            error_logger:info_msg("select worker: no worker ~p available~n", [Name]),
             {error, no_worker};
         [Pid|_] -> 
             {ok, Pid};
@@ -204,8 +202,10 @@ push_archives_to_new_worker(#state{ets=Ets}, WorkId, WorkerPid) ->
         case select_service(Ets, repository) of
             {ok, RepPid} ->
                 case gen_server:call(RepPid, {get_archives, WorkId}, infinity) of
-                    {ok, Event} -> gen_server:cast(WorkerPid, Event);
-                    _ -> ok
+                    {ok, Event} ->
+                        gen_server:cast(WorkerPid, Event);
+                    _E ->
+                        ok
                 end;
             _ -> ok
         end

@@ -1211,10 +1211,9 @@ handle_info_scan_repository_test_() ->
 ]}.
 
 
-handle_call_get_archives_test_() ->
+handle_call_get_archive_test_() ->
 {foreachx,
     fun(Archives) ->
-        tty_on(),
         AR = "__test_archive",
         caterpillar_utils:ensure_dir(AR),
         {ok, D} = dets:open_file("__test.dets", [{access, read_write}]),
@@ -1272,4 +1271,48 @@ handle_call_get_archives_test_() ->
         }
     ]
 
+]}.
+
+
+
+handle_call_get_archives_test_() ->
+{foreachx,
+    fun(Archives) ->
+        {ok, D} = dets:open_file("__test_dets", [{access, read_write}]),
+        dets:insert(D, Archives),
+        #state{dets=D, work_id=3}
+    end,
+    fun(_, #state{dets=D}) ->
+        dets:close(D),
+        file:delete(D)
+    end,
+[
+    {Archives, fun(_, State) ->
+        {Message, fun() ->
+            caterpillar_repository:handle_call({get_archives, WorkId}, {self(), ref}, State),
+            ?assertEqual(
+                Result,
+                receive Msg -> Msg after 100 -> timeout end
+            )
+        end}
+    end} || {Message, Archives, WorkId, Result} <- [
+        {
+            "no archives",
+            [],
+            2,
+            {ref, {ok, {changes, 3, []}}}
+        },
+        {
+            "archive avaiable, but not pushed",
+            [{{package, branch}, achive, last_revno, tag, 2}],
+            2,
+            {ref, {ok, {changes, 3, []}}}
+        },
+        {
+            "archive avaiable and pushed",
+            [{{package, branch}, archive, last_revno, tag, 2}],
+            1,
+            {ref, {ok, {changes, 3, [#archive{name=package, branch=branch, tag=tag, archive_name=archive}]}}}
+        }
+    ]
 ]}.
