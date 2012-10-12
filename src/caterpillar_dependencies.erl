@@ -30,7 +30,8 @@ check_intersection(Candidate, CheckList) ->
             BuildDeps = BuildUnit#rev_def.dep_object,
             IsDepObject = lists:member(CandidateVersion, BuildDeps),
             IsDepSubject = lists:member(BuildVersion, CandidateDeps),
-            Res or IsDepObject or IsDepSubject
+            IsBuilding = BuildVersion =:= CandidateVersion,
+            Res or IsDepObject or IsDepSubject or IsBuilding
         end, false, CheckList),
     case Intersect of
         true ->

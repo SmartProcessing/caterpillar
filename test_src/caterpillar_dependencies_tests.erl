@@ -61,6 +61,7 @@ list_unresolved_dependencies_test_() ->
                         name = <<"test_package">>,
                         branch = <<"trunk">>,
                         tag = <<"">>,
+                        pkg_config={},
                         dep_object = [{<<"smprc-test">>, <<"trunk">>, <<"">>},
                         {<<"caterpillar">>, <<"trunk">>, <<"">>}]
                     }),
@@ -71,6 +72,7 @@ list_unresolved_dependencies_test_() ->
                         name = <<"test_package">>,
                         branch = <<"trunk">>,
                         tag = <<"">>,
+                        pkg_config={},
                         dep_object = [{<<"pequen">>, <<"trunk">>, <<"">>}]
                     }),
                 {ok, [{<<"pequen">>, <<"trunk">>, <<"">>}]})
@@ -82,21 +84,25 @@ check_intersection_test() ->
         name = <<"caterpillar">>, 
         branch = <<"trunk">>,
         tag = <<>>,
+        pkg_config={},
         dep_object = [{<<"smprc-test">>, <<"trunk">>, <<>>}]},
     Rev2  =  #rev_def{
         name = <<"new_test">>,
         branch = <<"trunk">>,
         tag = <<>>,
+        pkg_config={},
         dep_object = [{<<"smprc-test">>, <<"trunk">>, <<>>}, {<<"smprc-caterpillar">>, <<"trunk">>, <<>>}]},
     Rev3  =  #rev_def{
         name = <<"destiny">>,
         branch = <<"trunk">>,
         tag = <<>>,
+        pkg_config={},
         dep_object = [{<<"pequen">>, <<"trunk">>, <<>>}, {<<"smprc-test">>, <<"trunk">>, <<>>}]},
     Rev4  =  #rev_def{
         name = <<"depends_on_destiny">>,
         branch = <<"trunk">>,
         tag = <<>>,
+        pkg_config={},
         dep_object = [{<<"destiny">>, <<"trunk">>, <<>>}, {<<"smprc-test">>, <<"trunk">>, <<>>}]},
     ?assertEqual({ok, independent}, caterpillar_dependencies:check_intersection(Rev4, [])),
     ?assertEqual({ok, dependent}, caterpillar_dependencies:check_intersection(Rev4, [Rev3, Rev2, Rev1])).

@@ -15,7 +15,9 @@
         next_to_build,
         workers=[],
         unpack_state,
-        build_path
+        build_path,
+        poll_time,
+        prebuild=[]
     }).
 
 
@@ -26,6 +28,7 @@ init(Settings) ->
     error_logger:info_msg("starting caterpillar", []),
     {ok, Deps} = dets:open_file(deps,
         [{file, ?GV(deps, Settings, "/var/lib/smprc/caterpillar/deps")}]),
+    PollTime = ?GV(poll_time, Settings, 10000),
     BuildQueue = queue:new(),
     WaitQueue = queue:new(),
     {ok, WorkerList} = create_workers(?GV(build_workers_number, Settings, 5)),
@@ -33,6 +36,7 @@ init(Settings) ->
     caterpillar_api:start(),
     error_logger:info_msg("api started"),
     UnpackState = ets:new(unpack_state, []),
+    schedule_poller(PollTime),
     {ok, #state{
             deps=Deps,
             main_queue=BuildQueue,
@@ -66,8 +70,9 @@ handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
 handle_cast({work, _Id, Archives}, State) ->
-    process_archives(Archives, State),
-    {noreply, State};
+    ToPreprocess = lists:usort([Archives|State#state.prebuild]),
+    {ok, NewState} = process_archives(ToPreprocess, State),
+    {noreply, NewState};
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -75,6 +80,9 @@ handle_info({'DOWN', Reference, _, _, Reason}, State) when Reason /= normal ->
     [{Reference, _Archive}|_] = ets:lookup(State#state.unpack_state, Reference),
     %%TODO repeat some actions with archive, smth failed
     {noreply, State};
+handle_info(schedule, State) ->
+    {ok, NewState} = schedule_build(State),
+    {noreply, NewState};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -86,17 +94,30 @@ code_change(_OldVsn, State, _Extra) ->
 
 
 %% Preprocessing
-process_archives([], _State) ->
-    {ok, done};
+process_archives([], State) ->
+    {ok, State};
 process_archives([A|O], State) ->
     UnpackState = State#state.unpack_state,
     BuildPath = State#state.build_path,
-    {ok, _Pid, ToRepeat} = erlang:spawn_monitor(
+    Deps = State#state.deps,
+    Prebuild = State#state.prebuild,
+    case dets:lookup(Deps, ?VERSION(A)) of
+        [{_Vsn, {built, _}, _, _}|_] ->
+            process_archive(BuildPath, A, UnpackState),
+            process_archives(O, State);
+        [] ->
+            process_archive(BuildPath, A, UnpackState),
+            process_archives(O, State);
+        _Other ->
+            process_archives(O, State#state{prebuild=[Prebuild|A]})
+    end.
+
+process_archive(BuildPath, Archive, UnpackState) ->
+    {ok, _Pid, Monitor} = erlang:spawn_monitor(
         ?MODULE, 
         prepare, 
-        [BuildPath, A]),
-    ets:insert(UnpackState, {ToRepeat, A}),
-    process_archives(O, State).
+        [BuildPath, Archive]),
+    ets:insert(UnpackState, {Monitor, Archive}).
 
 
 prepare(BuildPath, Archive) ->
@@ -182,11 +203,19 @@ number_free_workers(State) ->
 %% Scheduling
 %% ------------------------------------------------------------------
 
+
+-spec schedule_poller(non_neg_integer()) -> ok.
+schedule_poller(Timeout) ->
+    erlang:send_after(Timeout, self(), schedule).
+
 -spec schedule_build(State :: #state{}) -> {ok, NewState :: #state{}}.
 schedule_build(State) when State#state.next_to_build == none ->
-    get_build_candidate(State);
+    {ok, NewState} = get_build_candidate(State),
+    schedule_poller(State#state.poll_time),
+    try_build(NewState);
 schedule_build(State) ->
-    {ok, State}.
+    schedule_poller(State#state.poll_time),
+    try_build(State).
 
 -spec get_build_candidate(State :: #state{}) -> {ok, NewState :: #state{}}.
 get_build_candidate(State) ->
@@ -210,22 +239,23 @@ get_build_candidate(main_queue, State) ->
             {ok, State#state{main_queue=MainQueue, next_to_build=Candidate}};
         dependent ->
             WaitQueue = queue:in(Candidate, State#state.wait_queue),
-            get_build_candidate(
-                State#state{main_queue=MainQueue, wait_queue=WaitQueue});
+            {ok, State#state{main_queue=MainQueue, wait_queue=WaitQueue}};
         _Other ->
             RolledMainQueue = queue:in(Candidate, MainQueue),
-            get_build_candidate(State#state{main_queue=RolledMainQueue})
+            {ok, State#state{main_queue=RolledMainQueue}}
     end;
 get_build_candidate(wait_queue, State) ->
     {{value, Candidate}, WaitQueue} = queue:out(State#state.wait_queue),
     case check_build_deps(Candidate, State) of
-        independent -> %% independent
+        independent ->
             {ok, State#state{wait_queue=WaitQueue, next_to_build=Candidate}};
         dependent ->
             WaitQueue = queue:in(Candidate, State#state.wait_queue),
-            get_build_candidate(
-                State#state{wait_queue=WaitQueue});
-        _Other ->
+            {ok, State#state{wait_queue=WaitQueue}};
+        Other ->
+            Subject = io_lib:format("Build for ~p", [Candidate]),
+            Body = io_lib:format("Error while processing dependencies: ~n~p~n", [Other]),
+            notify(Subject, Body),
             {error, broken_deps}
     end;
 get_build_candidate(both, State) ->
@@ -244,6 +274,11 @@ get_build_candidate(both, State) ->
 
 %% External communication
 %% ------------------------------------------------------------------
+-spec notify(list(), list()) -> ok.
+notify(Subject, Body) ->
+    Msg = {notify, {list_to_binary(Subject), list_to_binary(Body)}},
+    {ok, _} = caterpillar_event:sync_event(Msg).
+
 -spec check_build_deps(Candidate :: #rev_def{}, State :: #state{}) -> true|false.
 check_build_deps(Candidate, State) ->
     case caterpillar_dependencies:list_unresolved_dependencies(
@@ -255,7 +290,7 @@ check_build_deps(Candidate, State) ->
                 NowBuilding),
             Res;
         {ok, Dependencies} when is_list(Dependencies) ->
-            {unresolved, Dependencies};
+            dependent;
         {error, Res} ->
             {error, Res};
         Other ->

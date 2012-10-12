@@ -15,26 +15,6 @@
     body = <<>> :: binary
 }).
 
-
-%FIXME: move to internal hrl
--record(rev_def, {
-    name            :: binary(), 
-    branch          :: binary(),
-    tag             :: binary(),
-    dep_object      :: [version()]
-}).
-
-
-%FIXME: move to internal hrl
--record(build_info, {
-    state           :: success|error|none,
-    package_spec    :: list(),
-    description     :: list(),
-    diff            :: list(),
-    log             :: list(),
-    test_info       :: list()
-}).
-
 %FIXME: move to internal hrl
 -record(pkg_config, {
     name                :: string(),
@@ -50,14 +30,33 @@
 
 
 %FIXME: move to internal hrl
+-record(rev_def, {
+    name            :: binary(), 
+    branch          :: binary(),
+    tag             :: binary(),
+    dep_object      :: [version()],
+    pkg_config      :: #pkg_config{}
+}).
+
+
+%FIXME: move to internal hrl
+-record(build_info, {
+    state           :: success|error|none,
+    package_spec    :: list(),
+    description     :: list(),
+    diff            :: list(),
+    log             :: list(),
+    test_info       :: list()
+}).
+
+
+%FIXME: move to internal hrl
 -type version() :: 
     {
         Name        :: binary(),
         Branch      :: binary(),
         Tag         :: binary()
     }.
-
--type plugin_def() :: {atom(), [term()]}.
 
 %% @doc Dependencie record in dependencies dets table. 
 %% {PackageVersion, {State, Bucket}, [DependsOn], [HasInDependencies]}
