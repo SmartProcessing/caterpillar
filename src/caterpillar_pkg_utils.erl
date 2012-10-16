@@ -4,7 +4,7 @@
 -export([get_pkg_config/1]).
 -export([get_pkg_config_record/2]).
 -export([get_dep_list/1]).
--export([pack_rev_def/2]).
+-export([pack_rev_def/2, get_dir_name/1]).
 -define(LTB, list_to_binary).
 -define(BTL, binary_to_list).
 
@@ -40,11 +40,13 @@ get_valid_versions(L) ->
     [{?LTB(N), ?LTB(B), ?LTB(T)} || {N, B, T} <- L].
 
 
-pack_rev_def(Archive, Deps) ->
+pack_rev_def(Archive, PkgRecord) ->
+    Deps = get_dep_list(PkgRecord),
     #rev_def{
         name=?LTB(Archive#archive.name),
         branch=?LTB(Archive#archive.branch),
         tag=?LTB(Archive#archive.tag),
+        pkg_config = PkgRecord,
         dep_object=Deps
     }.
 
@@ -56,6 +58,13 @@ get_pkg_config(Path) ->
         _Other ->
             parse_control(Path)
     end.
+
+get_dir_name(Rev) ->
+    Name = ?BTL(Rev#rev_def.name),
+    Branch = ?BTL(Rev#rev_def.branch),
+    Tag = ?BTL(Rev#rev_def.tag),
+    io_lib:format(
+        "~s-~s~s", [Name, Branch, Tag]).
 
 parse_control(Path) ->
     case catch file:read_file(Path ++ "/control") of
