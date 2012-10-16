@@ -1,6 +1,7 @@
 -module(caterpillar_dependencies_tests).
 -include_lib("eunit/include/eunit.hrl").
--include("caterpillar.hrl").
+-include_lib("caterpillar.hrl").
+-include_lib("caterpillar_internal.hrl").
 
 -on_load(tty_off/0).
 

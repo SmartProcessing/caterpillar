@@ -1,5 +1,6 @@
 -module(caterpillar).
 -include_lib("caterpillar.hrl").
+-include_lib("caterpillar_internal.hrl").
 -behaviour(gen_server).
 
 -export([start_link/1]).

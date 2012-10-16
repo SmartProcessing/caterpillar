@@ -1,5 +1,6 @@
 -module(caterpillar_build_worker).
--include("caterpillar.hrl").
+-include_lib("caterpillar.hrl").
+-include_lib("caterpillar_internal.hrl").
 -behaviour(gen_server).
 -define(DEFAULT_BUILD_PATH, "/srv/caterpillar").
 -define(DEFAULT_BUCKETS_DETS, "/var/lib/smprc/caterpillar/buckets").

@@ -1,5 +1,6 @@
 -module(caterpillar_pkg_utils).
 -include("caterpillar.hrl").
+-include("caterpillar_internal.hrl").
 -export([get_pkg_config/1]).
 -export([get_pkg_config_record/2]).
 -export([get_dep_list/1]).

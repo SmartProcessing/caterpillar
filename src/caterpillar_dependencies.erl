@@ -1,5 +1,5 @@
 -module(caterpillar_dependencies).
--include_lib("caterpillar.hrl").
+-include_lib("caterpillar_internal.hrl").
 -export([check_intersection/2, list_unresolved_dependencies/2]).
 -export([update_dependencies/2]).
 
