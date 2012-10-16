@@ -175,11 +175,11 @@ find_bucket(BucketDets, Package, Deps) ->
 
 validate_bucket(Entries, Deps) ->
     validate_bucket(Entries, Deps, true).
-validate_bucket([], Deps, Prev) ->
+validate_bucket([], _Deps, Prev) ->
     Prev;
 validate_bucket([E|O], Deps, Prev) ->
     {Name, Bucket, Tag} = E,
-    Res = case [{B, T} || {Name, B, T} <- Deps] of
+    Res = case [{B, T} || {N, B, T} <- Deps, N == Name] of
         [{Bucket, Tag}|_] ->
             true;
         [] ->
