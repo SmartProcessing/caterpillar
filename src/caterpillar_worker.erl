@@ -7,6 +7,7 @@
 
 -export([start_link/1, stop/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+-export([retrieve_archive/1, deploy/0]).
 
 
 
@@ -84,7 +85,8 @@ init_worker(State, Args) ->
 %------
 
 
-get_archive(#archive{}) -> ok.
+retrieve_archive(#archive{}=A) -> 
+    caterpillar_event:sync_event({get_archive, A}).
 
 
 deploy() -> ok.

@@ -266,9 +266,6 @@ select_archives_by_work_id(#state{dets=Dets}, WorkId) ->
     end.
 
 
-        
-
-
 
 async_notify() ->
     erlang:send_after(5000, self(), async_notify).
