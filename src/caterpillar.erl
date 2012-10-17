@@ -1,5 +1,6 @@
 -module(caterpillar).
 -include_lib("caterpillar.hrl").
+-include_lib("caterpillar_internal.hrl").
 -behaviour(gen_server).
 
 -export([start_link/1]).
@@ -77,7 +78,8 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 handle_info({'DOWN', Reference, _, _, Reason}, State) when Reason /= normal ->
-    [{Reference, _Archive}|_] = ets:lookup(State#state.unpack_state, Reference),
+    [{Reference, Archive}|_] = ets:lookup(State#state.unpack_state, Reference),
+    error_logger:error_msg("preprocess on ~p failed: ~p", [Archive, Reason]),
     %%TODO repeat some actions with archive, smth failed
     {noreply, State};
 handle_info(schedule, State) ->
@@ -133,8 +135,7 @@ prepare(BuildPath, Archive) ->
     Cwd = BuildPath ++ "/temp/" ++ TempName,
     erl_tar:extract(Fd, [{cwd, Cwd}]),
     PkgRecord = ?CPU:get_pkg_record(Cwd),
-    Deps = ?CPU:get_dep_list(PkgRecord),
-    RevDef = ?CPU:pack_rev_def(Archive, Deps),
+    RevDef = ?CPU:pack_rev_def(Archive, PkgRecord),
     gen_server:call(caterpillar, {newref, RevDef}).
     
 
