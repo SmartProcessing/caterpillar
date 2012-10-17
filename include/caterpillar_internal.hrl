@@ -22,10 +22,9 @@
 
 -record(build_info, {
     state           :: success|error|none,
-    package_spec    :: list(),
+    fd              :: file:io_device(),
+    pkg_name        :: list(),
     description     :: list(),
-    diff            :: list(),
-    log             :: list(),
     test_info       :: list()
 }).
 
