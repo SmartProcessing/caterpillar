@@ -60,6 +60,7 @@ retrieve_archives([#archive{archive_name=AN}=A|O], Accum, #state{archive_root=AR
     case catch caterpillar_worker:retrieve_archive(RequestArchive) of
         ok ->
             file:close(FD),
+            error_logger:info_msg("~s/~s retrieved~n", [A#archive.name, A#archive.branch]),
             retrieve_archives(O, [A|Accum], State);
         Error ->
             error_logger:info_msg("caterpillar_simple_builder: request_packages error: ~p~n", [Error]),
@@ -90,6 +91,7 @@ unarchive([ #archive{name=Name, branch=Branch, archive_name=AR}|T ], Accum, Stat
             error;
         _ ->
             file:delete(ArchivePath),
+            error_logger:info_msg("~s/~s unarchived~n", [Name, Branch]),
             unarchive(T, State, [ Name|Accum ])
     end.
 
