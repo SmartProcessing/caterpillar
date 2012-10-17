@@ -42,7 +42,7 @@ init(Settings) ->
     PlatformPlugins = ?GV(
         platform_plugins, 
         Settings, 
-        [{default, caterpillar_default_builder}]
+        [{"default", caterpillar_default_builder}]
     ),
     BuildPath = ?GV(
         build_path, 
@@ -122,45 +122,117 @@ unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
     case find_bucket(Buckets, Package, Deps) of
         [Bucket|_] ->
             put_package_to_bucket(Buckets, DepsDets, Bucket, BuildPath, Rev),
-            arm_build_bucket(Buckets, DepsDets, Package, Deps);
+            arm_build_bucket(Buckets, DepsDets, Bucket, Deps),
+            {ok, {Rev, Bucket}};
         [] ->
-            create_bucket(Buckets, DepsDets, Package, BuildPath),
-            arm_build_bucket(Buckets, DepsDets, Package, Deps);
+            {ok, Bucket} = create_bucket(
+                Buckets, DepsDets, Package, BuildPath),
+            arm_build_bucket(Buckets, DepsDets, Bucket, Deps),
+            {ok, {Rev, Bucket}};
         _Other ->
             error_logger:error_msg("failed to find or create a bucket for ~p~n", [Rev]),
-            {error, create_bucket_failed}
+            {error, failed_to_create_bucket}
     end.
 
-platform_clean(_PkgInfo, _Plugins) ->
-    {ok, none}.
+platform_set_env({Rev, {_, BPath, _}}, Plugins) ->
+    {Name, _B, _T} = ?VERSION(Rev),
+    PkgConfig = Rev#rev_def.pkg_config,
+    Platform = PkgConfig#pkg_config.platform,
+    Plugin = ?GV(Platform, Plugins, caterpillar_default_builder),
+    file:set_cwd(BPath ++ "/" ++ Name),
+    {ok, Plugin}.
 
-platform_test(_PkgInfo, _Plugins) ->
-    {ok, none}.
+package_set_env({Rev, {_, BPath, _}}, Plugins) ->
+    {Name, _B, _T} = ?VERSION(Rev),
+    PkgConfig = Rev#rev_def.pkg_config,
+    PackageT = PkgConfig#pkg_config.package_t,
+    Plugin = ?GV(PackageT, Plugins, caterpillar_deb_plugin),
+    file:set_cwd(BPath ++ "/" ++ Name),
+    {ok, Plugin}.
 
-platform_prebuild(_PkgInfo, _Plugins) ->
-    {ok, none}.
+platform_clean(Env, Plugins) ->
+    {ok, Plugin} = platform_set_env(Env, Plugins),
+    {State, Msg} = Plugin:clean(),
+    informer(State, Msg, Env).
 
-build_prepare(_PkgInfo, _Plugins) ->
-    {ok, none}.
+platform_test(Env, Plugins) ->
+    {ok, Plugin} = platform_set_env(Env, Plugins),
+    {State, Msg} = Plugin:test(),
+    informer(State, Msg, Env).
 
-build_check(_PkgInfo, _Plugins) ->
-    {ok, none}.
+platform_prebuild(Env, Plugins) ->
+    {ok, Plugin} = platform_set_env(Env, Plugins),
+    {State, Msg} = Plugin:prebuild(),
+    informer(State, Msg, Env).
 
-build_submit(_PkgInfo, _Plugins) ->
-    {ok, none}.
+build_prepare(Env, Plugins) ->
+    {ok, Plugin} = package_set_env(Env, Plugins),
+    {State, Msg} = Plugin:prepare(),
+    informer(State, Msg, Env).
+
+build_check(Env, Plugins) ->
+    {ok, Plugin} = package_set_env(Env, Plugins),
+    {State, Msg} = Plugin:check(),
+    informer(State, Msg, Env).
+
+build_submit(Env, Plugins) ->
+    {ok, Plugin} = package_set_env(Env, Plugins),
+    {State, Msg} = Plugin:submit(),
+    case State of
+        ok ->
+            {Fd, Name, Info} = Msg,
+            #build_info{
+                state=success,
+                fd=Fd,
+                pkg_name=Name,
+                description="ok",
+                test_info=Info
+            };
+        error ->
+            #build_info{
+                state=error,
+                fd=none,
+                pkg_name=none,
+                description=Msg,
+                test_info=""
+            };
+        Other ->
+            error_logger:error_msg("failed to submit package: ~p~n", [Other]),
+            #build_info{
+                state=error,
+                fd=none,
+                pkg_name=none,
+                description="package submit failed",
+                test_info=""
+            }
+    end.
+
+
+
+informer(State, Msg, Env) ->
+    case State of
+        ok ->
+            {ok, Env};
+        error ->
+            {error, Msg};
+        Other ->
+            error_logger:error_msg("build: something went wrong: ~p ~p~n", [Other, Msg]),
+            {error, Msg}
+    end.
 
 %% 1}}}
 
 -spec create_bucket(reference(), reference(), version(), list()) ->
-    {ok, BucketRef :: binary()} | {error, Reason :: term()}.
+    {ok, BucketRef :: term()} | {error, Reason :: term()}.
 % @doc Creates a directory pool for building some packages
 create_bucket(BucketsDets, DepsDets, Package, BuildPath) ->
-    Bucket = get_new_bucket(BucketsDets),
+    BucketId = get_new_bucket(BucketsDets),
+    Bucket = {list_to_binary(BucketId), BuildPath ++ "/" ++ BucketId ++ "/", []},
     put_package_to_bucket(BucketsDets, DepsDets, Bucket, BuildPath, Package).
 
 
 -spec find_bucket(reference(), version(), list()) ->
-     [BucketRef :: binary()] | [] | {error, term()}.
+     [BucketRef :: term()] | [] | {error, term()}.
 % @doc Find a bucket suitable for current version of the package.
 find_bucket(BucketDets, Package, Deps) ->
     dets:traverse(BucketDets, 
@@ -178,9 +250,9 @@ validate_bucket(Entries, Deps) ->
 validate_bucket([], _Deps, Prev) ->
     Prev;
 validate_bucket([E|O], Deps, Prev) ->
-    {Name, Bucket, Tag} = E,
+    {Name, Branch, Tag} = E,
     Res = case [{B, T} || {N, B, T} <- Deps, N == Name] of
-        [{Bucket, Tag}|_] ->
+        [{Branch, Tag}|_] ->
             true;
         [] ->
             true;
@@ -221,18 +293,19 @@ arm_build_bucket(BucketsDets, Deps, Current, [Dep|O]) ->
 
 put_package_to_bucket(Buckets, Deps, Bucket, BuildPath, Rev) ->
     Package = ?VERSION(Rev),
+    {_BName, BPath, BContain} = Bucket,
     [{Package, {built, DepBuckets}, DepOn, HasInDep}|_] = dets:lookup(Deps, Package),
     {Name, _B, _T} = Package,
-    Path = BuildPath ++ "/" ++ Bucket ++ "/" ++ binary_to_list(Name),
+    Path = BPath ++ "/" ++ binary_to_list(Name),
     ?CU:del_dir(Path),
     filelib:ensure_dir(Path),
     TempPath = BuildPath ++ "/temp/" ++ ?CPU:get_dir_name(Rev),
     case filelib:is_dir(TempPath) of
         true ->
             ok = file:rename(TempPath, Path),
-            ok = dets:insert(Buckets, {Bucket, Path, [Package]}),
-            ok = dets:insert(Deps, {Package, {built, [DepBuckets|Bucket]}, DepOn, HasInDep}),
-            {ok, list_to_binary(Bucket)};
+            ok = dets:insert(Buckets, {Bucket, BPath, lists:usort([Package|BContain])}),
+            ok = dets:insert(Deps, {Package, {built, lists:usort([DepBuckets|Bucket])}, DepOn, HasInDep}),
+            {ok, Bucket};
         false ->
             {error, no_unpacked_package}
     end.
