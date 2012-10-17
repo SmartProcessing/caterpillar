@@ -213,13 +213,18 @@ pre_deploy(Packages, #state{deploy_root=DR, next_work_id=NWI}) ->
 
 
 deploy(Deploy, State) ->
-    Result = (catch caterpillar_event:sync_event({deploy, Deploy})),
-    error_logger:info_msg("deploy result: ~p~n", [Result]),
-    {ok, done}.
+    NewState = case catch caterpillar_event:sync_event({deploy, Deploy}) of
+        ok ->
+            State#state{work_id = State#state.next_work_id};
+        Error ->
+            error_logger:error_msg("deploy failed with ~p~n", [Error]),
+            State
+    end,
+    {ok, Deploy, NewState}.
 
 
 
-post_deploy(#deploy{packages=Packages}, _) ->
+post_deploy(#deploy{packages=Packages}, State) ->
     lists:map(fun({_, Fd}) -> file:close(Fd) end, Packages),
-    {ok, done}.
+    {ok, State}.
 

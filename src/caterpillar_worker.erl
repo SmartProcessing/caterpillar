@@ -32,7 +32,6 @@ stop(Ident) ->
 
 init(Args) ->
     Ident = ?GV(ident, Args),
-    IdentList = atom_to_list(Ident),
     State = #state{
         worker_pid = self(),
         ident = Ident
@@ -50,8 +49,11 @@ handle_info(_Msg, State) ->
 
 
 handle_cast({changes, WorkId, Archives}, #state{worker_plugin=WP, worker_state=WS}=State) ->
-    WP:changes(WS, WorkId, Archives),
-    {noreply, State};
+    NewWorkerState = WP:changes(WS, WorkId, Archives),
+    {noreply, State#state{worker_state=NewWorkerState}};
+handle_cast({deploy, WorkId, Deploy}, #state{worker_plugin=WP, worker_state=WS}=State) ->
+    NewWorkerState = WP:deploy(WorkId, Deploy),
+    {noreply, State#state{worker_state=NewWorkerState}};
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
