@@ -2,11 +2,8 @@
 -define(caterpillar_worker_internal, true).
 
 
--define(ARCHIVE_ROOT, "").
--define(REPOSITORY_ROOT, "").
-
-
 -record(state, {
+    worker_pid :: pid(),
     ident :: atom(),
     worker_plugin :: atom(),
     worker_state :: term(),

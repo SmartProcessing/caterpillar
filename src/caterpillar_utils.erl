@@ -8,6 +8,7 @@
 -export([package_to_archive/2, archive_to_package/1]).
 -export([list_packages/1, del_dir/1]).
 -export([ensure_dir/1]).
+-export([get_value_or_die/2]).
 
 
 -type function_spec()   :: {function(), [term()]}.
@@ -131,3 +132,12 @@ del_dir(Dir, []) ->
 
 ensure_dir(Path) ->
     filelib:ensure_dir(Path ++ "/"), Path.
+
+
+
+get_value_or_die(Key, PropList) ->
+    case proplists:get_value(Key, PropList, '$$die$$') of
+        '$$die$$' -> erlang:exit({no_value, Key});
+        Value -> Value
+    end.
+

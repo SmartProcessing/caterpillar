@@ -248,3 +248,31 @@ ensure_dir_test_() ->
         {"dir passed with few '/' in the end", "ensure_dir////"}
     ]
 ]}.
+
+
+
+get_value_or_die_test_() ->
+{foreach,
+    fun() -> ok end,
+[
+    {Message, fun() ->
+        ?assertEqual(
+            Result,
+            catch caterpillar_utils:get_value_or_die(Key, Data)
+        )
+    end} || {Message, Key, Data, Result} <- [
+        {
+            "key not found",
+            test,
+            [],
+            {'EXIT', {no_value, test}}
+        },
+        {
+            "key found",
+            key,
+            [{key, value}],
+            value
+        }
+        
+    ]
+]}.

@@ -33,13 +33,8 @@ init(Args) ->
     Ident = ?GV(ident, Args),
     IdentList = atom_to_list(Ident),
     State = #state{
-        ident = Ident,
-        archive_root = caterpillar_utils:ensure_dir(
-            ?GV(archive_root, Args, filename:join(?ARCHIVE_ROOT, IdentList))
-        ),
-        repository_root = caterpillar_utils:ensure_dir(
-            ?GV(repository_root, Args, filename:join(?REPOSITORY_ROOT, IdentList))
-        )
+        worker_pid = self(),
+        ident = Ident
 
     },
     case catch init_worker(State, Args) of
@@ -53,6 +48,9 @@ handle_info(_Msg, State) ->
     {noreply, State}.
 
 
+handle_cast({changes, WorkId, Archives}, #state{worker_plugin=WP, worker_state=WS}=State) ->
+    WP:changes(WS, WorkId, Archives),
+    {noreply, State};
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -76,7 +74,17 @@ code_change(_Old, State, _Extra) ->
 init_worker(State, Args) ->
     Plugin = proplists:get_value(worker_plugin, Args),
     WorkerArgs = proplists:get_value(worker_plugin_init, Args),
-    case Plugin:init_worker(State, WorkerArgs) of
+    case Plugin:init_worker(WorkerArgs) of
         {ok, WorkerState} -> {ok, State#state{worker_plugin = Plugin, worker_state = WorkerState}};
         Error -> Error
     end.
+
+
+
+%------
+
+
+get_archive(#archive{}) -> ok.
+
+
+deploy() -> ok.

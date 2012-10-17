@@ -6,9 +6,7 @@
 behaviour_info(callbacks) ->
     [
         {init_worker, 2},
-        {handle_build, 2},
-        {handle_deploy, 2},
-        {handle_clean, 2},
+        {changes, 3},
         {terminate_worker, 1}
 
     ];
