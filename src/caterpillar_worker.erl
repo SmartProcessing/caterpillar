@@ -37,6 +37,7 @@ init(Args) ->
         ident = Ident
 
     },
+    register_as_worker(1000),
     case catch init_worker(State, Args) of
         {ok, #state{}} = NewState -> NewState;
         {error, Reason} -> {stop, Reason};
@@ -44,6 +45,19 @@ init(Args) ->
     end.
 
 
+handle_info({'DOWN', _, _, _, _}, State) ->
+    register_as_worker(1000),
+    {noreply, State#state{registered=false}};
+handle_info(register_as_worker, #state{registered=false, ident=Ident}=State) ->
+    NewState = case catch caterpillar_event:register_worker(Ident) of
+        {ok, Pid} ->
+            erlang:monitor(process, Pid),
+            State#state{registered=true};
+        _ ->
+            register_as_worker(5000),
+            State
+    end,
+    {noreply, NewState};
 handle_info(_Msg, State) -> 
     {noreply, State}.
 
@@ -81,6 +95,10 @@ init_worker(State, Args) ->
         {ok, WorkerState} -> {ok, State#state{worker_plugin = Plugin, worker_state = WorkerState}};
         Error -> Error
     end.
+
+
+register_as_worker(Delay) ->
+    erlang:send_after(Delay, self(), register_as_worker).
 
 
 

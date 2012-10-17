@@ -5,6 +5,7 @@
 -record(state, {
     worker_pid :: pid(),
     ident :: atom(),
+    registered=false :: boolean(),
     worker_plugin :: atom(),
     worker_state :: term(),
     archive_root :: filelib:dirname(),
