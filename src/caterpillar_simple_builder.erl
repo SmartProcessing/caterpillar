@@ -5,11 +5,10 @@
 
 -define(GVOD, caterpillar_utils:get_value_or_die).
 
--export([init_worker/1, changes/3]).
+-export([init_worker/1, changes/3, get_work_id/1]).
 
 
 
-        
 
 
 init_worker(Args) ->
@@ -46,6 +45,12 @@ changes(State, WorkId, Archives) ->
 deploy(_, _, _) -> ok.
 
 
+get_work_id(#state{work_id=WI}) -> {ok, WI}.
+
+
+
+%--------------------
+
 
 retrieve_archives(Archives, State) ->
     retrieve_archives(Archives, [], State).
@@ -63,7 +68,10 @@ retrieve_archives([#archive{archive_name=AN}=A|O], Accum, #state{archive_root=AR
             error_logger:info_msg("~s/~s retrieved~n", [A#archive.name, A#archive.branch]),
             retrieve_archives(O, [A|Accum], State);
         Error ->
-            error_logger:info_msg("caterpillar_simple_builder: request_packages error: ~p~n", [Error]),
+            error_logger:info_msg(
+                "caterpillar_simple_builder: request_packages error on ~s/~s: ~p~n",
+                [A#archive.name, A#archive.branch, Error]
+            ),
             {error, {request_packages, Error}}
     end.
 
@@ -74,7 +82,7 @@ unarchive(Archives, State) ->
 
 unarchive([], Accum, _State) ->
     {ok, Accum};
-unarchive([ #archive{name=Name, branch=Branch, archive_name=AR}|T ], Accum, State) ->
+unarchive([ #archive{name=Name, branch=Branch, archive_name=AR}=A|T ], Accum, State) ->
     ArchiveRoot = State#state.archive_root,
     RepositoryRoot = State#state.repository_root,
     ArchivePath = filename:join([ArchiveRoot, AR]),
@@ -92,7 +100,7 @@ unarchive([ #archive{name=Name, branch=Branch, archive_name=AR}|T ], Accum, Stat
         _ ->
             file:delete(ArchivePath),
             error_logger:info_msg("~s/~s unarchived~n", [Name, Branch]),
-            unarchive(T, State, [ Name|Accum ])
+            unarchive(T, [ A|Accum ], State)
     end.
 
 
@@ -108,7 +116,7 @@ make_packages(Archives, State) ->
 make_packages([], Accum, State) ->
     {ok, Accum};
 make_packages([ #package{name=Name, branch=Branch}=Package|T ], Accum, State) ->
-    UnArchivePath = filename:join([State#state.repository_root, Package, Branch]),
+    UnArchivePath = filename:join([State#state.repository_root, Name, Branch]),
     DistDir = filename:join(UnArchivePath, "dist"),
     caterpillar_utils:del_dir(DistDir),
     NewPackage = case filelib:is_dir(UnArchivePath) of
@@ -215,8 +223,10 @@ pre_deploy(Packages, #state{deploy_root=DR, next_work_id=NWI}) ->
 
 
 deploy(Deploy, State) ->
+    error_logger:info_msg("deploy result: ~n~p~n", [Deploy]),
     NewState = case catch caterpillar_event:sync_event({deploy, Deploy}) of
         ok ->
+            caterpillar_utils:write_work_id(State#state.work_id_file, State#state.next_work_id),
             State#state{work_id = State#state.next_work_id};
         Error ->
             error_logger:error_msg("deploy failed with ~p~n", [Error]),

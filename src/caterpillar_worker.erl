@@ -48,9 +48,11 @@ init(Args) ->
 handle_info({'DOWN', _, _, _, _}, State) ->
     register_as_worker(1000),
     {noreply, State#state{registered=false}};
-handle_info(register_as_worker, #state{registered=false, ident=Ident}=State) ->
-    NewState = case catch caterpillar_event:register_worker(Ident) of
+handle_info(register_as_worker, #state{worker_plugin=WP, worker_state=WS, registered=false, ident=Ident}=State) ->
+    {ok, WorkId} = WP:get_work_id(WS),
+    NewState = case catch caterpillar_event:register_worker(Ident, WorkId) of
         {ok, Pid} ->
+            error_logger:info_msg("registered in event service"),
             erlang:monitor(process, Pid),
             State#state{registered=true};
         _ ->
@@ -59,11 +61,13 @@ handle_info(register_as_worker, #state{registered=false, ident=Ident}=State) ->
     end,
     {noreply, NewState};
 handle_info(_Msg, State) -> 
+    error_logger:info_msg("unknown message: ~p~n", [_Msg]),
     {noreply, State}.
 
 
 handle_cast({changes, WorkId, Archives}, #state{worker_plugin=WP, worker_state=WS}=State) ->
-    NewWorkerState = WP:changes(WS, WorkId, Archives),
+    error_logger:info_msg("changes for work id ~p arrived~n", [WorkId]),
+    {ok, NewWorkerState} = WP:changes(WS, WorkId, Archives),
     {noreply, State#state{worker_state=NewWorkerState}};
 handle_cast({deploy, WorkId, Deploy}, #state{worker_plugin=WP, worker_state=WS}=State) ->
     NewWorkerState = WP:deploy(WorkId, Deploy),

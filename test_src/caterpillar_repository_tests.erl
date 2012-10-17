@@ -316,7 +316,7 @@ cast_clean_packages_test_() ->
                 {clean_packages,
                     #notify{
                         subject= <<"some packages deleted">>,
-                        body= <<"package3/branch3">>
+                        body= <<"package3/branch3\n">>
                     },
                     [{"package3", "branch3"}]
                 }

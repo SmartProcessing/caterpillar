@@ -405,10 +405,7 @@ cast_clean_packages(Branches, #state{dets=Dets}) ->
         [] -> ok;
         ToClean ->
             Body = list_to_binary(
-                string:join(
-                    [io_lib:format("~s/~s", [Package, Name]) || {Package, Name} <- ToClean],
-                    $\n
-                )
+                [io_lib:format("~s/~s~n", [Package, Name]) || {Package, Name} <- ToClean]
             ),
             Notify = #notify{subject = <<"some packages deleted">>, body = Body},
             gen_server:cast(?MODULE, {clean_packages, Notify, ToClean})
@@ -561,7 +558,7 @@ get_diff([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugin, vc
     Diff = case catch VCSPlugin:get_diff(VCSState, filename:join(RR, Name), Branch, OldRevno, CurrentRevno) of
         {ok, D} when is_binary(D) -> D;
         Error ->
-            error_logger:error_msg("get_diff error: ~p~n at ~p/~p~n", [Error, Name, Branch]),
+            error_logger:error_msg("get_diff error: ~p~n at ~s/~s~n", [Error, Name, Branch]),
             <<"cant get diff">>
     end,
     get_diff(O, [Package#package{diff=Diff}|Accum], State).
@@ -588,7 +585,7 @@ get_changelog([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugi
     Changelog = case catch VCSPlugin:get_changelog(VCSState, AbsPath, Branch, OldRevno, CurrentRevno) of
         {ok, C} when is_binary(C) -> C;
         Error ->
-            error_logger:error_msg("get_changelog bad return: ~p~n at ~p/~p~n", [Error, Name, Branch]),
+            error_logger:error_msg("get_changelog bad return: ~p~n at ~s/~s~n", [Error, Name, Branch]),
             <<"cant get changelog">>
     end,
     get_changelog(O, [Package#package{changelog=Changelog}|Accum], State).
