@@ -127,7 +127,7 @@ make_packages(Archives, State) ->
 
 make_packages([], Accum, State) ->
     {ok, Accum};
-make_packages([ #package{name=Name, branch=Branch}=Package|T ], Accum, #state{work_id=WorkId}=State) ->
+make_packages([ #package{name=Name, branch=Branch}=Package|T ], Accum, #state{next_work_id=WorkId}=State) ->
     UnArchivePath = filename:join([State#state.repository_root, Name, Branch]),
     ControlFile = filename:join(UnArchivePath, "control"),
     case filelib:is_regular(ControlFile) of
