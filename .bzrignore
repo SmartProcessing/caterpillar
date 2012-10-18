@@ -13,3 +13,4 @@ test_work_id
 test_mail_root
 dist
 test_simple_builder
+test_deploy

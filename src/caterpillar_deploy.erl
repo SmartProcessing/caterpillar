@@ -21,10 +21,9 @@ stop() ->
 
 
 init(Args) ->
-    {ok, Dets} = dets:open_file(
-        proplists:get_value(deploy_db, Args, ?DEPLOY_DATABASE),
-        [{access, read_write}]
-    ),
+    DetsFile = proplists:get_value(deploy_db, Args, ?DEPLOY_DATABASE),
+    filelib:ensure_dir(DetsFile),
+    {ok, Dets} = dets:open_file(DetsFile, [{access, read_write}]),
     State = #state{
         ets = init_ets(proplists:get_value(idents, Args, [])),
         dets = Dets,

@@ -20,7 +20,6 @@ stop() ->
 
 init(Args) ->
     DetsFile = ?GV(repository_db, Args, ?DETS),
-    error_logger:error_msg("DETS FILE IN ~p~n", [DetsFile]),
     filelib:ensure_dir(DetsFile),
     Dets = case dets:open_file(DetsFile, [{access, read_write}]) of
         {ok, D} -> D;

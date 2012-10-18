@@ -32,7 +32,7 @@ init_worker(Ident, Args) ->
 terminate_worker(_State) -> ok.
 
 
-changes(#state{work_id=WorkId}, WorkId, _) -> ok;
+changes(#state{work_id=WorkId}=State, WorkId, _) -> {ok, State};
 changes(State, WorkId, Archives) ->
     FunList = [
         {retrieve_archives, fun retrieve_archives/2},

@@ -57,6 +57,7 @@ test: export_all
 
 devel: $(TEST_BEAMS) $(BEAMS) 
 	$(ERL) -pa ebin -env ERL_LIBS "$(NORMALIZED_LIBS)" -config test.config \
+		-boot start_sasl \
 		-s caterpillar_app start
 			 
 
