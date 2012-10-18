@@ -28,7 +28,7 @@ init(Args) ->
         ets = init_ets(proplists:get_value(idents, Args, [])),
         dets = Dets,
         deploy_script = proplists:get_value(deploy_script, Args),
-        rotate = proplists:get_value(pkg_rotation, Args, 1)
+        rotate = proplists:get_value(rotate, Args, 1)
     },
     register_as_service(0),
     {ok, State}.
@@ -92,8 +92,8 @@ init_ets(Idents) when is_list(Idents) ->
     InsertFun = fun({Ident, Branches}) ->
         [
             begin
-                caterpillar_utils:ensure_dir(Path),
-                ets:insert(Ets, {{Ident, Branch}, Path}),
+                AbsPath = caterpillar_utils:ensure_dir(Path),
+                ets:insert(Ets, {{Ident, Branch}, AbsPath}),
                 ok
             end || {Branch, Path} <- Branches
         ]
@@ -128,9 +128,9 @@ find_deploy_paths(#deploy{ident=Ident}=Deploy, #state{ets=Ets}) ->
     Select = [{
         {{'$1', '$2'}, '$3'}, 
         [{'orelse', {'==', '$1', Ident}, {'==', '$1', 'default'}}],
-        [['$2', '$3']]
+        [['$1', '$2', '$3']]
     }],
-    SelectResult = [{Branch, Path} || [Branch, Path] <- ets:select(Ets, Select)],
+    SelectResult = [{{I, Branch}, Path} || [I, Branch, Path] <- ets:select(Ets, Select)],
     case SelectResult of
         [] ->
             %FIXME: notify about
@@ -141,11 +141,12 @@ find_deploy_paths(#deploy{ident=Ident}=Deploy, #state{ets=Ets}) ->
 
 
 copy_packages({Paths, #deploy{packages=Packages, ident=Ident}=Deploy}, #state{dets=Dets}=State) ->
-    DefaultPathValue = caterpillar_utils:get_value_or_die(default, Paths),
+    DefaultPathValue = caterpillar_utils:get_value_or_die({Ident, default}, Paths),
     Fun = fun(#deploy_package{package=Package, name=Name, branch=Branch, fd=FD}) ->
-        Path = proplists:get_value(Branch, Paths, DefaultPathValue),
-        {ok, _} = file:copy(FD, filename:join(Path, Package)),
-        dets:insert(Dets, {{Ident, Name, Branch}, Path, unixtime()})
+        Path = proplists:get_value({Ident, Branch}, Paths, DefaultPathValue),
+        AbsPackage = filename:join(Path, Package),
+        {ok, _} = file:copy(FD, AbsPackage),
+        dets:insert(Dets, {{Ident, AbsPackage}, {Name, Branch}, unixtime()})
     end,
     lists:foreach(Fun, Packages),
     {ok, Deploy}.
@@ -170,21 +171,27 @@ cast_rotate(Deploy, _State) ->
 
 
 rotate(#deploy{packages=Packages, ident=Ident}, #state{dets=Dets, rotate=Rotate}) ->
+    error_logger:info_msg("rotating packages"),
     Fun = fun(#deploy_package{name=Name, branch=Branch}) ->
         Select = [{
-            {{'$1', '$2', '$3'}, '$4', '$5'},
-            [{'==', '$1', Ident}, {'==', '$2', Name}, {'==', '$3', Branch}],
-            [['$4', '$5']]
+            {{'$1', '$2'}, {'$3', '$4'}, '$5'},
+            [{'==', '$1', Ident}, {'==', '$3', Name}, {'==', '$4', Branch}],
+            [['$2', '$5']]
         }],
         SelectResult = lists:sort(
             fun([Package1, Time1], [Package2, Time2]) ->
-                Time1 > Time2
+                Time1 < Time2
             end, 
             dets:select(Dets, Select)
         ),
+        error_logger:info_msg("select result: ~p~n", [SelectResult]),
         case length(SelectResult) > Rotate of
-            true -> delete(SelectResult, SelectResult - Rotate, Dets);
-            false -> ok
+            true ->
+                error_logger:info_msg("deleting some files~n"),
+                delete(SelectResult, length(SelectResult) - Rotate, Dets);
+            false ->
+                error_logger:info_msg("nothing to delete~n"),
+                ok
         end
     end,
     lists:foreach(Fun, Packages).
@@ -194,7 +201,7 @@ delete(_, 0, _) -> ok;
 delete([ [Package, _Time]|O ], Num, Dets) ->
     error_logger:info_msg("deleting ~p~n", [Package]),
     file:delete(Package),
-    dets:match_delete(Dets, {'_', Package, '_'}),
+    dets:match_delete(Dets, {{'_', Package}, '_', '_'}),
     delete(O, Num-1, Dets).
 
 

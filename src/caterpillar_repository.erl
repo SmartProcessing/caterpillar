@@ -485,7 +485,7 @@ export_packages([Package|O], Accum, #state{export_root=ER, repository_root=RR}=S
         ok -> [Package|Accum];
         Error ->
             error_logger:error_msg(
-                "export_packages error ~p~n at ~p/~p~n", [Error, Name, Branch]
+                "export_packages error ~p~n at ~s/~s~n", [Error, Name, Branch]
             ),
             [Package#package{status=error, failed_at=export_packages, reason=Error}|Accum]
     end,
