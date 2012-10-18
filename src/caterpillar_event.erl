@@ -67,7 +67,6 @@ handle_info(_Msg, State) ->
 
 
 
-
 handle_cast({event, {changes, _, _}=Event}, #state{ets=Ets}=State) ->
     spawn(fun() ->
         lists:foreach(
