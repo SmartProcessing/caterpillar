@@ -264,7 +264,7 @@ deploy(Deploy, State) ->
 
 
 post_deploy(#deploy{packages=Packages}, State) ->
-    lists:map(fun({_, Fd}) -> file:close(Fd) end, Packages),
+    lists:map(fun(#deploy_package{fd=Fd}) -> file:close(Fd) end, Packages),
     {ok, State}.
 
 
