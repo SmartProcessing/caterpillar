@@ -132,7 +132,10 @@ del_dir(Dir, []) ->
 
 
 ensure_dir(Path) ->
-    filelib:ensure_dir(Path ++ "/"), Path.
+    case filelib:ensure_dir(Path ++ "/") of
+        ok -> Path;
+        Err -> exit({ensure_dir, Err})
+    end.
 
 
 

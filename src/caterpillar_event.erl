@@ -136,6 +136,16 @@ handle_call({sync_event, {notify, #notify{}}=Request}, From, #state{ets=Ets}=Sta
     end),
     {noreply, State};
 
+handle_call({sync_event, {deploy, #deploy{}}=Request}, From, #state{ets=Ets}=State) ->
+    spawn(fun() ->
+        Reply = case catch select_service(Ets, deploy) of
+            {ok, Pid} -> catch gen_server:call(Pid, Request, infinity);
+            Error -> Error
+        end,
+        gen_server:reply(From, Reply)
+    end),
+    {noreply, State};
+
 handle_call(get_info, _From, #state{ets=Ets}=State) ->
     Info = [
         list_to_tuple(X) || X <- 

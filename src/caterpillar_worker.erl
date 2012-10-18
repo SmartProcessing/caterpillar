@@ -7,7 +7,9 @@
 
 -export([start_link/1, stop/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
--export([retrieve_archive/1, deploy/0]).
+-export([retrieve_archive/1, deploy/1]).
+
+-define(GVOD, caterpillar_utils:get_value_or_die).
 
 
 
@@ -32,13 +34,8 @@ stop(Ident) ->
 
 init(Args) ->
     Ident = ?GV(ident, Args),
-    State = #state{
-        worker_pid = self(),
-        ident = Ident
-
-    },
     register_as_worker(1000),
-    case catch init_worker(State, Args) of
+    case catch init_worker(#state{}, Args) of
         {ok, #state{}} = NewState -> NewState;
         {error, Reason} -> {stop, Reason};
         Error -> error_logger:error_msg("init_worker failed with: ~p~n", [Error]), {stop, crashed}
@@ -95,7 +92,7 @@ code_change(_Old, State, _Extra) ->
 init_worker(State, Args) ->
     Plugin = proplists:get_value(worker_plugin, Args),
     WorkerArgs = proplists:get_value(worker_plugin_init, Args),
-    case Plugin:init_worker(WorkerArgs) of
+    case Plugin:init_worker(?GVOD(ident, Args), WorkerArgs) of
         {ok, WorkerState} -> {ok, State#state{worker_plugin = Plugin, worker_state = WorkerState}};
         Error -> Error
     end.
@@ -113,4 +110,5 @@ retrieve_archive(#archive{}=A) ->
     caterpillar_event:sync_event({get_archive, A}).
 
 
-deploy() -> ok.
+deploy(#deploy{}=D) ->
+    caterpillar_event:sync_event({deploy, D}).

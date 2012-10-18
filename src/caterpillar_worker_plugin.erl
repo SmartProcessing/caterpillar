@@ -7,6 +7,8 @@ behaviour_info(callbacks) ->
     [
         {init_worker, 2},
         {changes, 3},
+        {deploy, 3},
+        {get_work_id/1},
         {terminate_worker, 1}
 
     ];

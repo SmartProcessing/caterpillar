@@ -8,14 +8,25 @@
     fd              :: file:io_device()
 }).
 
+
 -record(notify, {
     subject = <<>> :: binary,
     body = <<>> :: binary
 }).
 
 
+-record(deploy_package, {
+    name :: string(),
+    branch :: string(),
+    package :: string(),
+    fd :: file:io_device()
+}).
+
+
 -record(deploy, {
-    packages = [] :: [{DeployName :: string(), DeployPackage :: file:io_device()}],
+    ident :: term(),
+    work_id :: term(),
+    packages = [] :: [#deploy_package{}],
     pre_deploy_actions = [],
     post_deploy_actions = []
 }).

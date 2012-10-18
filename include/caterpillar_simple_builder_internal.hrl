@@ -2,6 +2,7 @@
 -define(caterpillar_simple_builder_internal, true).
 
 -record(state, {
+    ident,
     work_id,
     next_work_id,
     work_id_file,

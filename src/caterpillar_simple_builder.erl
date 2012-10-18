@@ -1,23 +1,25 @@
 -module(caterpillar_simple_builder).
 
+-behaviour(caterpillar_worker).
 -include_lib("caterpillar_simple_builder_internal.hrl").
 -include_lib("caterpillar.hrl").
 
 -define(GVOD, caterpillar_utils:get_value_or_die).
 
--export([init_worker/1, changes/3, get_work_id/1]).
+-export([init_worker/2, changes/3, get_work_id/1]).
 
 
 
 
 
-init_worker(Args) ->
+init_worker(Ident, Args) ->
     WorkIdFile = ?GVOD(work_id_file, Args),
     [ArchiveRoot, RepositoryRoot, DeployRoot] = [
         caterpillar_utils:ensure_dir(?GVOD(Root, Args)) ||
         Root <- [archive_root, repository_root, deploy_root]
     ],
     State = #state{
+        ident=Ident,
         work_id = caterpillar_utils:read_work_id(WorkIdFile),
         work_id_file = WorkIdFile,
         archive_root = ArchiveRoot,
@@ -26,6 +28,8 @@ init_worker(Args) ->
     },
     {ok, State}.
 
+
+terminate_worker(_State) -> ok.
 
 
 changes(#state{work_id=WorkId}, WorkId, _) -> ok;
@@ -199,7 +203,7 @@ receive_data_from_port(Log) ->
 
 
 
-pre_deploy(Packages, #state{deploy_root=DR, next_work_id=NWI}) ->
+pre_deploy(Packages, #state{deploy_root=DR, next_work_id=NWI, ident=Ident}) ->
     RawNotify = #notify{
         subject = list_to_binary(io_lib:format(<<"deploy for build ~p">>, [NWI])),
         body = <<>>
@@ -207,7 +211,12 @@ pre_deploy(Packages, #state{deploy_root=DR, next_work_id=NWI}) ->
     DeployFold = fun
         (#package{name=N, branch=B, build_status=ok, package=Package}, {Deploy, Notify}) ->
             {ok, Fd} = file:open(filename:join(DR, Package)),
-            NewDeploy = Deploy#deploy{packages=[{Package, Fd}|Deploy#deploy.packages]},
+            NewDeploy = Deploy#deploy{
+                packages=[
+                    #deploy_package{name=N, branch=B, package=Package, fd=Fd}|
+                    Deploy#deploy.packages
+                ]
+            },
             Body = list_to_binary(io_lib:format("ok ~s/~s~n", [N, B])),
             OldBody = Notify#notify.body,
             NewNotify = Notify#notify{body = <<OldBody/binary, Body/binary>>},
@@ -219,12 +228,17 @@ pre_deploy(Packages, #state{deploy_root=DR, next_work_id=NWI}) ->
             {Deploy, NewNotify}
     end,
     {RawDeploy, NewNotify} = lists:foldl(DeployFold, {#deploy{packages=[]}, RawNotify}, Packages),
-    {ok, RawDeploy#deploy{post_deploy_actions = [{caterpillar_event, sync_event, [{notify, NewNotify}]}]}}.
+    Deploy = RawDeploy#deploy{
+        post_deploy_actions = [{caterpillar_event, sync_event, [{notify, NewNotify}]}],
+        ident=Ident,
+        work_id=NWI
+    },
+    {ok, Deploy}.
 
 
 deploy(Deploy, State) ->
     error_logger:info_msg("deploy result: ~n~p~n", [Deploy]),
-    NewState = case catch caterpillar_event:sync_event({deploy, Deploy}) of
+    NewState = case catch caterpillar_worker:deploy(Deploy) of
         ok ->
             caterpillar_utils:write_work_id(State#state.work_id_file, State#state.next_work_id),
             State#state{work_id = State#state.next_work_id};
@@ -239,4 +253,3 @@ deploy(Deploy, State) ->
 post_deploy(#deploy{packages=Packages}, State) ->
     lists:map(fun({_, Fd}) -> file:close(Fd) end, Packages),
     {ok, State}.
-

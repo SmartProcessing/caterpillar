@@ -6,7 +6,15 @@
 -include_lib("caterpillar.hrl").
 -include_lib("caterpillar_repository_internal.hrl").
 
--define(ARGS, [{vcs_plugin, test_vcs_plugin}, {repository_db, "repo.db"}]).
+-define(ARGS, [
+    {vcs_plugin, test_vcs_plugin},
+    {repository_db, "repo.db"},
+    {work_id_file, "work_id_file"},
+    {repository_root, "__test_repo"},
+    {export_root, "__test_export"},
+    {archive_root, "__archive_root"},
+    {notify_root, "__notify_root"}
+]).
 
 
 tty_off() ->
@@ -21,9 +29,17 @@ tty_on() ->
 start_link_test_() ->
 {setup,
     fun() -> ok end,
-    fun(_) -> ok = caterpillar_repository:stop(), file:delete("repo.db") end,
+    fun(_) ->
+        ok = caterpillar_repository:stop(),
+        file:delete("repo.db"),
+        file:delete("work_id_file"),
+        [
+            caterpillar_utils:del_dir(proplists:get_value(D, ?ARGS)) || 
+            D <- [repository_root, archive_root, notify_root, export_root]
+        ]
+    end,
     fun() ->
-        Res = caterpillar_repository:start_link(?ARGS),
+        Res = (catch caterpillar_repository:start_link(?ARGS)),
         ?assertMatch({ok, _}, Res),
         {ok, Pid} = Res,
         ?assertEqual(Pid, whereis(caterpillar_repository))
@@ -35,7 +51,15 @@ start_link_test_() ->
 stop_test_() ->
 {setup,
     fun() -> {ok, _Pid} = caterpillar_repository:start_link(?ARGS) end,
-    fun(_) -> catch (ok = caterpillar_repository:stop()), file:delete("repo.db") end,
+    fun(_) -> 
+        catch (ok = caterpillar_repository:stop()),
+        file:delete("repo.db"),
+        file:delete("work_id_file"),
+        [
+            caterpillar_utils:del_dir(proplists:get_value(D, ?ARGS)) || 
+            D <- [repository_root, archive_root, notify_root, export_root]
+        ]
+    end,
     fun() ->
         Pid = whereis(caterpillar_repository),
         ?assert(is_pid(Pid)),
