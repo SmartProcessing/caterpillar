@@ -170,7 +170,7 @@ make(Package, DistDir, Commands, #state{deploy_root=DeployRoot}) ->
                     DebName = lists:last(filename:split(Deb)),
                     DeployName = filename:join(DeployRoot, DebName),
                     {ok, _} = file:copy(Deb, DeployName),
-                    {ok, Deb};
+                    {ok, DebName};
                 Other ->
                     error_logger:error_msg("cant find deb package, ~p~n", [Other]),
                     {error, <<"no package build">>}
@@ -223,6 +223,7 @@ pre_deploy(Packages, #state{deploy_root=DR, next_work_id=NWI, ident=Ident}) ->
     },
     DeployFold = fun
         (#package{name=N, branch=B, build_status=ok, package=Package}, {Deploy, Notify}) ->
+            error_logger:info_msg("openning ~p~n", [Package]),
             {ok, Fd} = file:open(filename:join(DR, Package), [read, binary]),
             NewDeploy = Deploy#deploy{
                 packages=[
@@ -249,6 +250,7 @@ pre_deploy(Packages, #state{deploy_root=DR, next_work_id=NWI, ident=Ident}) ->
     {ok, Deploy}.
 
 
+
 deploy(Deploy, State) ->
     error_logger:info_msg("deploy result: ~n~p~n", [Deploy]),
     NewState = case catch caterpillar_worker:deploy(Deploy) of
@@ -269,9 +271,8 @@ post_deploy(#deploy{packages=Packages}, State) ->
 
 
 
-
-
 %----------
+
 
 
 modify_control(ControlFile, Branch, Revision) ->
