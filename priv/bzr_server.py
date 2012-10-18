@@ -10,6 +10,13 @@ from bzrlib import revisionspec
 from StringIO import StringIO
 
 
+if hasattr(diff, "get_trees_and_branches_to_diff_locked"):
+    def cleanup(*args, **kwargs):
+        pass
+    def get_diff(pathlist, revision, old_label, new_label):
+        return diff.get_trees_and_branches_to_diff_locked(pathlist, revision, old_label, new_label, cleanup)
+    diff.get_trees_and_branches_to_diff = get_diff
+
 class EOF(Exception):
     pass
 

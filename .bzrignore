@@ -14,3 +14,4 @@ test_mail_root
 dist
 test_simple_builder
 test_deploy
+log.log

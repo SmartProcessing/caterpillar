@@ -33,6 +33,7 @@ terminate_worker(_State) -> ok.
 
 
 changes(#state{work_id=WorkId}=State, WorkId, _) -> {ok, State};
+changes(State, _, []) -> {ok, State};
 changes(State, WorkId, Archives) ->
     FunList = [
         {retrieve_archives, fun retrieve_archives/2},

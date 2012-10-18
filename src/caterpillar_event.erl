@@ -212,9 +212,13 @@ push_archives_to_new_worker(#state{ets=Ets}, WorkId, WorkerPid) ->
         case select_service(Ets, repository) of
             {ok, RepPid} ->
                 case gen_server:call(RepPid, {get_archives, WorkId}, infinity) of
-                    {ok, Event} ->
-                        gen_server:cast(WorkerPid, Event);
-                    _E ->
+                    {ok, {changes, _WorkId, Archives}=Event} ->
+                        case Archives of
+                            [] -> ok;
+                            _ -> gen_server:cast(WorkerPid, Event)
+                        end;
+                    Err ->
+                        error_logger:info_msg("push_archives_to_new_worker error: ~p~n", [Err]),
                         ok
                 end;
             _ -> ok
