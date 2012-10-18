@@ -223,7 +223,7 @@ pre_deploy(Packages, #state{deploy_root=DR, next_work_id=NWI, ident=Ident}) ->
     },
     DeployFold = fun
         (#package{name=N, branch=B, build_status=ok, package=Package}, {Deploy, Notify}) ->
-            {ok, Fd} = file:open(filename:join(DR, Package)),
+            {ok, Fd} = file:open(filename:join(DR, Package), [read, binary]),
             NewDeploy = Deploy#deploy{
                 packages=[
                     #deploy_package{name=N, branch=B, package=Package, fd=Fd}|
