@@ -252,7 +252,6 @@ pre_deploy(Packages, #state{deploy_root=DR, next_work_id=NWI, ident=Ident}) ->
 
 
 deploy(Deploy, State) ->
-    error_logger:info_msg("deploy result: ~n~p~n", [Deploy]),
     NewState = case catch caterpillar_worker:deploy(Deploy) of
         ok ->
             caterpillar_utils:write_work_id(State#state.work_id_file, State#state.next_work_id),

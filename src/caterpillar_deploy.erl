@@ -136,7 +136,7 @@ find_deploy_paths(#deploy{ident=Ident}=Deploy, #state{ets=Ets}) ->
             %FIXME: notify about
             {error, no_deploy};
         _ -> 
-            {SelectResult, Deploy}
+            {ok, {SelectResult, Deploy}}
     end.
 
 
