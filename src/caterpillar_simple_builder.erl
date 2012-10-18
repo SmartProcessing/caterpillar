@@ -38,6 +38,7 @@ changes(State, WorkId, Archives) ->
     FunList = [
         {retrieve_archives, fun retrieve_archives/2},
         {unarchive, fun unarchive/2},
+        {clean_deploy_root, fun clean_deploy_root/2},
         {make_packages, fun make_packages/2},
         {pre_deploy, fun pre_deploy/2},
         {deploy, fun deploy/2},
@@ -107,6 +108,12 @@ unarchive([ #archive{name=Name, branch=Branch, archive_name=AR}=A|T ], Accum, St
             error_logger:info_msg("~s/~s unarchived~n", [Name, Branch]),
             unarchive(T, [ A|Accum ], State)
     end.
+
+
+clean_deploy_root(Archives, #state{deploy_root=DR}) ->
+    caterpillar_utils:del_dir(DR),
+    caterpillar_utils:ensure_dir(DR),
+    {ok, Archives}.
 
 
 make_packages(Archives, State) ->
