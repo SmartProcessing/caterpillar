@@ -120,8 +120,13 @@ make_packages(Archives, State) ->
 
 make_packages([], Accum, State) ->
     {ok, Accum};
-make_packages([ #package{name=Name, branch=Branch}=Package|T ], Accum, State) ->
+make_packages([ #package{name=Name, branch=Branch}=Package|T ], Accum, #state{work_id=WorkId}=State) ->
     UnArchivePath = filename:join([State#state.repository_root, Name, Branch]),
+    ControlFile = filename:join(UnArchivePath, "control"),
+    case filelib:is_regular(ControlFile) of
+        true -> catch modify_control(ControlFile, Branch, WorkId);
+        _ -> ok
+    end,
     DistDir = filename:join(UnArchivePath, "dist"),
     caterpillar_utils:del_dir(DistDir),
     NewPackage = case filelib:is_dir(UnArchivePath) of
@@ -254,3 +259,44 @@ deploy(Deploy, State) ->
 post_deploy(#deploy{packages=Packages}, State) ->
     lists:map(fun({_, Fd}) -> file:close(Fd) end, Packages),
     {ok, State}.
+
+
+
+
+
+%----------
+
+
+modify_control(ControlFile, Branch, Revision) ->
+    {ok, Data} = file:read_file(ControlFile),
+    NewData = lists:map(
+        fun(Bin) ->
+            NewBin = case split(Bin, <<":">>, []) of
+                [<<"Version">>, Version] ->
+                    RawVersion = pick_out_version(string:strip(binary_to_list(Version), right, $ ), []),
+                    NewVersion = list_to_binary(RawVersion++"-"++Branch++"."++integer_to_list(Revision)),
+                    <<"Version:", NewVersion/binary>>;
+                ["Section", Section] ->
+                    RawSection = string:strip(binary_to_list(Section), right, $ ),
+                    NewSection = list_to_binary(RawSection++"-"++Branch),
+                    <<"Section:", NewSection/binary>>;
+                _ -> Bin
+            end,
+            <<NewBin/binary, "\n">>
+        end,
+        split(Data, <<"\n">>, [global])
+    ),
+    file:write_file(ControlFile, NewData).
+    
+
+split(<<>>, _, _) -> <<>>;
+split(Bin, D, Opts) -> binary:split(Bin, D, Opts).
+
+
+pick_out_version([], Buf) ->
+    lists:reverse(Buf);
+pick_out_version([$-|T], Buf) ->
+    pick_out_version([], Buf);
+pick_out_version([H|T], Buf) ->
+    pick_out_version(T, [H|Buf]).
+
