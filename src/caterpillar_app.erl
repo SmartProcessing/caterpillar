@@ -7,7 +7,18 @@
 
 
 start() ->
-    application:start(caterpillar).
+    case application:start(caterpillar) of
+        ok -> ok;
+        {error, {already_started, _}} -> ok;
+        Err -> 
+            error_logger:error_msg(
+                "failed to start caterpillar with ~p~n"
+                "stopping node~n",
+                [Err]
+            ),
+            init:stop(),
+            Err
+    end.
 
 
 stop_node([Node]) ->
