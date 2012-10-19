@@ -101,10 +101,10 @@ find_deploy_paths_test_() ->
             {ok, {Paths, _}} = R,
             ?assertEqual(
                 Result,
-                [
+                lists:sort([
                     {{Ident, Branch}, lists:last(filename:split(Path))} ||
                     {{Ident, Branch}, Path} <- Paths
-                ]
+                ])
             )
         end}
     end} || {Message, Idents, Deploy, Result} <- [
@@ -119,9 +119,9 @@ find_deploy_paths_test_() ->
             [{test, [{test, "__test_test"}]}],
             #deploy{ident=test},
             [
-                {{test, test}, "__test_test"},
+                {{default, default}, "unknown"},
                 {{test, default}, "unknown"},
-                {{default, default}, "unknown"}
+                {{test, test}, "__test_test"}
             ]
         },
         {
@@ -221,3 +221,12 @@ copy_packages_test_() ->
         }
     ]
 ]}.
+
+
+run_post_deploy_test_() ->
+{foreach,
+    fun() -> ok end,
+[
+
+
+]}. 

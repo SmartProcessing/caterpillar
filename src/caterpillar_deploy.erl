@@ -170,7 +170,7 @@ copy_packages({Paths, #deploy{packages=Packages, ident=Ident}=Deploy}, #state{de
 
 run_post_deploy(#deploy{post_deploy_actions=Actions}=Deploy, State) ->
     lists:foreach(
-        fun({M, F, A}) -> apply(M, F, A) end,
+        fun({M, F, A}) -> catch apply(M, F, A) end,
         Actions
     ),
     {ok, Deploy}.
