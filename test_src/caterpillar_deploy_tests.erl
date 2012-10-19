@@ -141,7 +141,6 @@ find_deploy_paths_test_() ->
 copy_packages_test_() ->
 {foreachx,
     fun({Paths, #deploy{}}) -> 
-        tty_on(),
         caterpillar_utils:ensure_dir("__test_packages"),
         [caterpillar_utils:ensure_dir(Path) || {_, Path} <- Paths],
         {ok, D} = dets:open_file("__test_dets.deploy", [{access, read_write}]),
@@ -225,8 +224,37 @@ copy_packages_test_() ->
 
 run_post_deploy_test_() ->
 {foreach,
-    fun() -> ok end,
+    fun() -> 
+        ok
+    end,
 [
-
-
+    {Message, fun() ->
+        register(deploy_test, self()),
+        ?assertEqual(
+            {ok, Deploy},
+            caterpillar_deploy:run_post_deploy(Deploy, state)
+        ),
+        Check()
+    end} || {Message, Deploy, Check} <- [
+        {
+            "no post_deploy_actions",
+            #deploy{},
+            fun() -> ok end
+        },
+        {
+            "some postdeploy actions, sending message to self",
+            #deploy{post_deploy_actions=[{erlang, send, [deploy_test, post_deploy]}]},
+            fun() ->
+                ?assertEqual(
+                    post_deploy,
+                    receive Msg -> Msg after 50 -> timeout end
+                )
+            end
+        },
+        {
+            "postdeploy mfa crash",
+            #deploy{post_deploy_actions=[{erlang, exit, [normal]}]},
+            fun() -> ?assert(true) end
+        }
+    ]
 ]}. 

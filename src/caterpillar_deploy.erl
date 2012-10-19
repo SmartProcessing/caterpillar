@@ -168,11 +168,24 @@ copy_packages({Paths, #deploy{packages=Packages, ident=Ident}=Deploy}, #state{de
 
 
 
-run_post_deploy(#deploy{post_deploy_actions=Actions}=Deploy, State) ->
+run_post_deploy(#deploy{post_deploy_actions=Actions}=Deploy, _State) when is_list(Actions) ->
     lists:foreach(
-        fun({M, F, A}) -> catch apply(M, F, A) end,
+        fun
+            ({M, F, A}) -> 
+                error_logger:info_msg(
+                    "post_deploy ~p/~p result: ~p~n",
+                    [M, F, catch apply(M, F, A)]
+                );
+            (Bad) ->
+                error_logger:error_msg(
+                    "post_deploy badarg: ~p~n", [Bad]
+                )
+        end,
         Actions
     ),
+    {ok, Deploy};
+run_post_deploy(#deploy{post_deploy_actions=BadAction}=Deploy, _State) ->
+    error_logger:error_msg("bad post_deploy actions: ~p~n", [BadAction]),
     {ok, Deploy}.
 
 
