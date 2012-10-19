@@ -10,7 +10,9 @@
 -export([list_packages/1, del_dir/1]).
 -export([ensure_dir/1]).
 -export([get_value_or_die/2]).
+-export([command/1, command/2, command/4]).
 
+-define(DEFAULT_TIMEOUT, 300000).
 
 -type function_spec()   :: {function(), [term()]}.
 
@@ -145,3 +147,43 @@ get_value_or_die(Key, PropList) ->
         Value -> Value
     end.
 
+command(Cmd) ->
+    command(Cmd, "").
+
+command(Cmd, Dir) ->
+    command(Cmd, Dir, [], ?DEFAULT_TIMEOUT).
+
+command(Cmd, Dir, Env, Timeout) ->
+    CD = if Dir =:= "" -> [];
+	    true -> [{cd, Dir}]
+	 end,
+    SetEnv = if Env =:= [] -> []; 
+		true -> [{env, Env}]
+	     end,
+    Opt = CD ++ SetEnv ++ [stream, exit_status, use_stdio,
+			   stderr_to_stdout, in, eof],
+    P = open_port({spawn, Cmd}, Opt),
+    get_port_data(P, [], Timeout).
+
+get_port_data(P, D, Timeout) ->
+    receive
+	{P, {data, D1}} ->
+	    get_port_data(P, [D1|D], Timeout);
+	{P, eof} ->
+	    port_close(P),    
+	    receive
+		{P, {exit_status, N}} ->
+		    {N, normalize(lists:flatten(lists:reverse(D)))}
+	    end
+    after Timeout ->
+        {110, "timeout"}
+    end.
+
+normalize([$\r, $\n | Cs]) ->
+    [$\n | normalize(Cs)];
+normalize([$\r | Cs]) ->
+    [$\n | normalize(Cs)];
+normalize([C | Cs]) ->
+    [C | normalize(Cs)];
+normalize([]) ->
+    [].
