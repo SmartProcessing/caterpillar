@@ -258,3 +258,13 @@ run_post_deploy_test_() ->
         }
     ]
 ]}. 
+
+
+
+cast_rotate_test() ->
+    caterpillar_deploy:cast_rotate(deploy, state),
+    ?assertMatch(
+        {_, {rotate, deploy}},
+        receive Msg -> Msg after 50 -> timeout end
+    ).
+
