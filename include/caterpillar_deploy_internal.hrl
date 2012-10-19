@@ -1,4 +1,5 @@
 -define(DEPLOY_DATABASE, "/var/lib/caterpillar/deploy/deploy.db").
+-define(DEPLOY_DEFAULT_PATH, "/srv/deploy/unknown").
 
 -record(state, {
     ets :: ets:tab(),

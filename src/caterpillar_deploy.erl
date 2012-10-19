@@ -46,7 +46,7 @@ handle_info(register_as_service, #state{registered=false}=State) ->
             register_as_service(5000),
             State
     end,
-    {noreply, State};
+    {noreply, NewState};
 handle_info(_Message, State) ->
     {noreply, State}.
 
@@ -86,19 +86,34 @@ register_as_service(Delay) ->
     erlang:send_after(Delay, self(), register_as_service).
 
 
-init_ets(Idents) when is_list(Idents) ->
-    %FIXME: check default values
+init_ets(Idents) ->
     Ets = ets:new(?MODULE, [protected, named_table]),
-    InsertFun = fun({Ident, Branches}) ->
-        [
-            begin
-                AbsPath = caterpillar_utils:ensure_dir(Path),
-                ets:insert(Ets, {{Ident, Branch}, AbsPath}),
-                ok
-            end || {Branch, Path} <- Branches
-        ]
+    ets:insert(Ets, {{default, default}, ?DEPLOY_DEFAULT_PATH}),
+    case is_list(Idents) of
+        true ->
+            InsertFun = fun({Ident, Branches}) ->
+                Flag = lists:foldl(
+                    fun({Branch, Path}, Bool) ->
+                        AbsPath = caterpillar_utils:ensure_dir(Path),
+                        ets:insert(Ets, {{Ident, Branch}, AbsPath}),
+                        case {Bool, Branch} of
+                            {false, default} -> true;
+                            {true, _} -> true;
+                            _ -> false
+                        end
+                    end,
+                    false,
+                    Branches
+                ),
+                case Flag of 
+                    false -> ets:insert(Ets, {{Ident, default}, ?DEPLOY_DEFAULT_PATH});
+                    _ -> ok
+                end
+            end,
+            lists:foreach(InsertFun, Idents);
+        false ->
+            error_logger:error_msg("bad idents type: ~p~n", [Idents])
     end,
-    lists:foreach(InsertFun, Idents),
     Ets.
 
 
