@@ -164,13 +164,13 @@ copy_packages_test_() ->
         end}
     end} || {Message, Paths, Deploy, Check} <- [
         {
-            "deploy without packages",
+            "nothing to copy",
             [{{test, default}, "__test"}], 
             #deploy{packages=[], ident=test},
             fun(_) -> ok end
         },
         {
-            "some packages in deploy",
+            "some packages copied",
             [
                 {{test, test}, "__test_test"},
                 {{test, default}, "__test_default"}
@@ -215,6 +215,18 @@ copy_packages_test_() ->
                 ?assertEqual(
                     ["package1", "package2"],
                     lists:sort(Test)
+                ),
+                ?assertEqual(
+                    [
+                        file:read_file(F) || F <- [
+                            "__test_test/package1", "__test_test/package2", "__test_default/package3"
+                        ]
+                    ],
+                    [
+                        {ok,<<"name1">>},
+                        {ok,<<"name2">>},
+                        {ok,<<"name3">>}
+                    ]
                 )
             end
         }
@@ -267,4 +279,73 @@ cast_rotate_test() ->
         {_, {rotate, deploy}},
         receive Msg -> Msg after 50 -> timeout end
     ).
+
+
+
+%FIXME:
+
+rotate_test_() ->
+{foreachx,
+    fun(Packages) -> 
+        caterpillar_utils:ensure_dir("__test_packages"),
+        {ok, D} = dets:open_file("__test_dets.deploy", [{access, read_write}]),
+        lists:foreach(
+            fun({Ident, Package, Name, Branch, Time}) ->
+                filelib:ensure_dir(Package),
+                file:write_file(Package, Name),
+                dets:insert(D, {{Ident, Package}, {Name, Branch}, Time})
+            end,
+            Packages
+        ),
+        #state{dets=D, rotate=2}
+    end,
+    fun(_, #state{dets=D}) ->
+        caterpillar_utils:del_dir("__test_packages"),
+        dets:close(D),
+        file:delete(D)
+    end,
+[
+    {Packages, fun(_, State) ->
+        {Message, fun() ->
+            ?assertEqual(
+                ok,
+                caterpillar_deploy:rotate(Deploy, State)
+            ),
+            Check(State)
+        end}
+    end} || {Message, Packages, Deploy, Check} <- [
+        {
+            "no package rotated",
+            [],
+            #deploy{},
+            fun(_) -> ok end
+        },
+        {
+            "some package rotated, some not",
+            [
+                {test, "__test_packages/p1", "p1", "b1", 1},
+                {test, "__test_packages/p1_1", "p1", "b1", 2},
+                {test, "__test_packages/p1_2", "p1", "b1", 3},
+                {default, "__test_packages/p1_1", "p1", "b1", 2}
+            ],
+            #deploy{ident=test, packages=[#deploy_package{name="p1", branch="b1"}]},
+            fun(#state{dets=D}) ->
+                ?assertEqual(
+                    [
+                        [{{default, "__test_packages/p1_1"}, {"p1", "b1"}, 2}],
+                        [{{test, "__test_packages/p1_1"}, {"p1", "b1"}, 2}],
+                        [{{test,"__test_packages/p1_2"}, {"p1","b1"}, 3}]
+                    ],
+                    lists:sort(dets:match(D, '$1'))
+                ),
+                {ok, Listing} = file:list_dir("__test_packages"),
+                ?assertEqual(
+                    ["p1_1", "p1_2"],
+                    lists:sort(Listing)
+                )
+            end
+        }
+
+    ]
+]}.
 
