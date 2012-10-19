@@ -194,7 +194,6 @@ cast_rotate(Deploy, _State) ->
     {ok, Deploy}.
 
 
-
 %---------- end of deploy pipe ----------%
 
 
