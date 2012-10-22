@@ -8,6 +8,7 @@
               {modules,[caterpillar,caterpillar_api,caterpillar_api_handler,
                         caterpillar_app,caterpillar_build_worker,
                         caterpillar_build_worker_sup,caterpillar_bzr_plugin,
+                        caterpillar_deb_plugin,caterpillar_default_builder,
                         caterpillar_dependencies,caterpillar_deploy,
                         caterpillar_event,caterpillar_net_kernel,
                         caterpillar_notifier,caterpillar_pkg_utils,

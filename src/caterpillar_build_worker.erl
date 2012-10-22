@@ -121,7 +121,7 @@ unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
     Deps = ?CPU:get_dep_list(Rev#rev_def.pkg_config),
     case find_bucket(Buckets, Package, Deps) of
         [Bucket|_] ->
-            put_package_to_bucket(Buckets, DepsDets, Bucket, BuildPath, Rev),
+            update_package_buckets(Buckets, DepsDets, Bucket, BuildPath, Rev),
             arm_build_bucket(Buckets, DepsDets, Bucket, Deps),
             {ok, {Rev, Bucket}};
         [] ->
@@ -228,7 +228,7 @@ informer(State, Msg, Env) ->
 create_bucket(BucketsDets, DepsDets, Package, BuildPath) ->
     BucketId = get_new_bucket(BucketsDets),
     Bucket = {list_to_binary(BucketId), BuildPath ++ "/" ++ BucketId ++ "/", []},
-    put_package_to_bucket(BucketsDets, DepsDets, Bucket, BuildPath, Package).
+    update_package_buckets(BucketsDets, DepsDets, Bucket, BuildPath, Package).
 
 
 -spec find_bucket(reference(), version(), list()) ->
@@ -283,7 +283,7 @@ arm_build_bucket(BucketsDets, Deps, Current, [Dep|O]) ->
     DepPath = Path ++ "/" ++ Name,
     case filelib:is_dir(DepPath) of
         true ->
-            file:rename(DepPath, BPath ++ "/" ++ Name),
+            ?CU:recursive_copy(DepPath, BPath ++ "/" ++ Name),
             dets:insert(BucketsDets, {BName, BPath, [BPackages|BPath]}),
             dets:insert(Deps, {Dep, {built, [DepBuckets|Current]}, DepOn, HasInDep}),
             arm_build_bucket(BucketsDets, Deps, Current, [Dep|O]);
@@ -291,21 +291,27 @@ arm_build_bucket(BucketsDets, Deps, Current, [Dep|O]) ->
             {error, no_dir}
     end.
 
-put_package_to_bucket(Buckets, Deps, Bucket, BuildPath, Rev) ->
+update_package_buckets(BucketsTable, DepsTable, Bucket, BuildPath, Rev) ->
+    Package = ?VERSION(Rev),
+    [{Package, {State, DepBuckets}, DepOn, HasInDep}|_] = dets:lookup(DepsTable, Package),
+    AllBuckets = lists:usort([DepBuckets|Bucket]),
+    {ok, SuccessBuckets} = update_buckets(BucketsTable, BuildPath, Rev, AllBuckets, []),
+    dets:insert(DepsTable, 
+        {Package, {State, SuccessBuckets}, DepOn, HasInDep}),
+    ?CU:del_dir(get_temp_path(BuildPath, Rev)).
+
+update_buckets(_, _, _, [], Acc) ->
+    {ok, Acc};
+update_buckets(BucketsTable, BuildPath, Rev, [Bucket|O], Acc) ->
     Package = ?VERSION(Rev),
     {_BName, BPath, BContain} = Bucket,
-    [{Package, {built, DepBuckets}, DepOn, HasInDep}|_] = dets:lookup(Deps, Package),
     {Name, _B, _T} = Package,
     Path = BPath ++ "/" ++ binary_to_list(Name),
     ?CU:del_dir(Path),
     filelib:ensure_dir(Path),
-    TempPath = BuildPath ++ "/temp/" ++ ?CPU:get_dir_name(Rev),
-    case filelib:is_dir(TempPath) of
-        true ->
-            ok = file:rename(TempPath, Path),
-            ok = dets:insert(Buckets, {Bucket, BPath, lists:usort([Package|BContain])}),
-            ok = dets:insert(Deps, {Package, {built, lists:usort([DepBuckets|Bucket])}, DepOn, HasInDep}),
-            {ok, Bucket};
-        false ->
-            {error, no_unpacked_package}
-    end.
+    ok = ?CU:recursive_copy(get_temp_path(BuildPath, Rev), Path),
+    ok = dets:insert(BucketsTable, {Bucket, BPath, lists:usort([Package|BContain])}),
+    update_buckets(BucketsTable, BuildPath, Rev, O, [Bucket|Acc]).
+
+get_temp_path(BuildPath, Rev) ->
+    BuildPath ++ "/temp/" ++ ?CPU:get_dir_name(Rev).

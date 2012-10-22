@@ -7,7 +7,7 @@
 -export([pipe/3]).
 -export([read_work_id/1, write_work_id/2]).
 -export([package_to_archive/2, archive_to_package/1]).
--export([list_packages/1, del_dir/1]).
+-export([list_packages/1, del_dir/1, recursive_copy/2]).
 -export([ensure_dir/1]).
 -export([get_value_or_die/2]).
 -export([command/1, command/2, command/4]).
@@ -187,3 +187,30 @@ normalize([C | Cs]) ->
     [C | normalize(Cs)];
 normalize([]) ->
     [].
+
+-spec recursive_copy(list(), list()) -> ok.                            
+recursive_copy(From, To) ->
+    {ok, Files} = file:list_dir(From),
+    [ok = rec_copy(From, To, X) || X <- Files],
+    ok.
+ 
+-spec rec_copy(list(), list(), list()) -> ok.                            
+rec_copy(_From, _To, [$. | _T]) ->
+    ok; 
+rec_copy(From, To, File) ->
+    NewFrom = filename:join(From, File),
+    NewTo   = filename:join(To, File),
+    case filelib:is_dir(NewFrom) of
+        true  ->
+            ok = filelib:ensure_dir(NewTo),
+            recursive_copy(NewFrom, NewTo);
+        false ->
+            case filelib:is_file(NewFrom) of                
+                true  ->
+                    ok = filelib:ensure_dir(NewTo),
+                    {ok, _} = file:copy(NewFrom, NewTo),
+                    ok;
+                false ->
+                    ok            
+            end
+    end.
