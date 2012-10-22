@@ -67,7 +67,7 @@ get_dir_name(Rev) ->
         "~s-~s~s", [Name, Branch, Tag]).
 
 parse_control(Path) ->
-    case catch file:read_file(Path ++ "/control") of
+    case catch file:read_file(filename:join([Path, "control"])) of
         {ok, Content} ->
             {control, lists:map(
                 fun(Entry) ->
