@@ -691,7 +691,8 @@ build_result([Package|O], Notify, ArchiveAccum) ->
 
 
 send_result(Result, _State) ->
-    {ok, gen_server:call(?MODULE, {changes, Result}, infinity)}.
+    gen_server:call(?MODULE, {changes, Result}, infinity),
+    {ok, done}.
 
 
 -spec limit_output(binary(), non_neg_integer()) -> {non_neg_integer(), binary()}.

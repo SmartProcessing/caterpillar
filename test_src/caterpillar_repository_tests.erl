@@ -780,6 +780,38 @@ build_result_test_() ->
 ]}.
 
 
+
+send_result_test_() ->
+{foreach,
+    fun() -> ok end,
+[
+    {Message, fun() ->
+        Mock(),
+        ?assertEqual(
+            Result,
+            catch caterpillar_repository:send_result(result, state)
+        )
+    end} || {Message, Mock, Result} <- [
+        {
+            "caterpillar_repository down",
+            fun() -> ok end,
+            {'EXIT', {noproc, {gen_server, call, [caterpillar_repository,{changes,result},infinity]}}}
+        },
+        {
+            "caterpillar_repository up",
+            fun() ->
+                spawn(fun() ->
+                    register(caterpillar_repository, self()),
+                    receive {_, From, _} -> gen_server:reply(From, ok) after 50 -> timeout end
+                end),
+                timer:sleep(1)
+            end,
+            {ok, done}
+        }
+    ]
+]}.
+
+
 limit_output_test_() ->
 {foreach,
     fun() -> ok end,
