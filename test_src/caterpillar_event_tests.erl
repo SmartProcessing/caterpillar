@@ -508,3 +508,81 @@ events_test_() ->
         }
     ]
 ]}.
+
+
+
+sync_event_to_service_test_() ->
+{foreachx,
+    fun(Setup) ->
+        Ets = ets:new(?MODULE, [public]),
+        ets:insert(Ets, Setup),
+        Ets
+    end,
+    fun(_, Ets) ->
+        ets:delete(Ets)
+    end,
+[
+    {Setup, fun(_, Ets) ->
+        {Message, fun() ->
+            From = {self(), ref},
+            Mock(),
+            caterpillar_event:sync_event_to_service(test, From, Ets, request), 
+            Check()
+        end}
+    end} || {Message, Setup, Mock, Check} <- [
+        {
+            "no service in ets",
+            [],
+            fun() -> ok end,
+            fun() -> 
+                ?assertEqual(
+                    {error, no_service},
+                    receive {_, Msg} -> Msg after 50 -> timeout end
+                )
+            end
+        },
+        {
+            "service in ets, but crashes after query",
+            [{ref, service, test, test_service}],
+            fun() ->
+                spawn(fun() ->
+                    register(test_service, self()),
+                    receive _ ->
+                        exit(normal)
+                    after 50 ->
+                        ok
+                    end
+                end),
+                timer:sleep(5)
+            end,
+            fun() ->
+                ?assertEqual(
+                    {'EXIT', {normal,{gen_server,call,[test_service,request,infinity]}}},
+                    receive {_, Msg} -> Msg after 50 -> timeout end
+                )
+            end
+        },
+        {
+            "service in ets, returns response",
+            [{ref, service, test, test_service}],
+            fun() ->
+                spawn(fun() ->
+                    register(test_service, self()),
+                    receive {_, From, _} ->
+                        gen_server:reply(From, ok)
+                    after 50 ->
+                        ok
+                    end
+                end),
+                timer:sleep(5)
+            end,
+            fun() ->
+                ?assertEqual(
+                    ok, 
+                    receive {_, Msg} -> Msg after 50 -> timeout end
+                )
+            end
+        }
+        
+    ]
+]}.
