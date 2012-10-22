@@ -95,11 +95,13 @@ handle_call(rescan_repository, _From, State) ->
     scan_repository(0),
     {reply, ok, State};
 
-handle_call({rescan_packages, {_Package, _Branch}=Request}, _From, State) ->
+handle_call({rescan_package, {_Package, _Branch}=Request}, _From, State) ->
     spawn(fun() ->
         scan_pipe(Request, State)
     end),
     {reply, ok, State};
+
+
 
 %copying archive to remote fd
 handle_call({get_archive, #archive{name=Name, branch=Branch, fd=Fd}}, From, State) ->

@@ -123,7 +123,7 @@ handle_call({sync_event, rescan_repository}, From, #state{ets=Ets}=State) ->
     sync_event_to_service(repository, From, Ets, rescan_repository),
     {noreply, State};
 
-handle_call({sync_event, {rescan_packages, {_Package, _Name}}=Request}, From, #state{ets=Ets}=State) ->
+handle_call({sync_event, {rescan_package, {_Package, _Name}}=Request}, From, #state{ets=Ets}=State) ->
     sync_event_to_service(repository, From, Ets, Request),
     {noreply, State};
 
