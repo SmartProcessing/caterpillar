@@ -382,14 +382,10 @@ events_test_() ->
             fun() -> 
                 spawn(fun() ->
                     caterpillar_event:register_service(notifier),
-                    receive {_, From, Msg} ->
-                        ?assertEqual(
-                            {notify, #notify{}},
-                            Msg
-                        ),
+                    receive {_, From, {notify, #notify{}}} ->
                         gen_server:reply(From, {ok, done})
-                    after 50 ->
-                        ?assert(false)
+                    after 10 ->
+                        timeout
                     end
                 end)
             end,
@@ -415,7 +411,7 @@ events_test_() ->
             fun() -> 
                 spawn(fun() ->
                     caterpillar_event:register_service(repository),
-                    receive {_, From, _} ->
+                    receive {_, From, {get_archive, #archive{}}} ->
                         gen_server:reply(From, ok)
                     after 10 ->
                         timeout
@@ -435,11 +431,11 @@ events_test_() ->
             end
         },
         {
-            "sync event rescan_packages",
+            "sync event rescan_repository",
             fun() -> 
                 spawn(fun() ->
                     caterpillar_event:register_service(repository),
-                    receive {_, From, _} ->
+                    receive {_, From, rescan_repository} ->
                         gen_server:reply(From, ok)
                     after 10 ->
                         timeout
@@ -455,6 +451,30 @@ events_test_() ->
                 ?assertEqual(
                     ok,
                     caterpillar_event:sync_event(rescan_repository)
+                )
+            end
+        }, 
+        {
+            "sync event rebuild_package",
+            fun() -> 
+                spawn(fun() ->
+                    caterpillar_event:register_service(repository),
+                    receive {_, From, {rebuild_package, {package, branch}}} ->
+                        gen_server:reply(From, ok)
+                    after 10 ->
+                        timeout
+                    end
+                end)
+            end,
+            fun() ->
+                timer:sleep(1),
+                ?assertEqual(
+                    [{service, repository}],
+                    caterpillar_event:get_info()
+                ),
+                ?assertEqual(
+                    ok,
+                    caterpillar_event:sync_event({rebuild_package, {package, branch}})
                 )
             end
         }, 
