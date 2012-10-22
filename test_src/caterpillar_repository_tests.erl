@@ -690,7 +690,7 @@ get_tag_test_() ->
 ]}.
 
 
-build_result_test_() ->
+build_changes_test_() ->
 {foreach,
     fun() ->
         ok
@@ -702,7 +702,7 @@ build_result_test_() ->
     {Message, fun() ->
         ?assertEqual(
             Result, 
-            catch caterpillar_repository:build_result(Packages, state)
+            catch caterpillar_repository:build_changes(Packages, state)
         )
     end} || {Message, Packages, Result} <- [
         {
@@ -711,7 +711,7 @@ build_result_test_() ->
                 name="package", branch="branch", archive_name="archive",
                 diff= <<"diff">>, changelog= <<"changelog">>
             }],
-            {ok, #scan_pipe_result{
+            {ok, #changes{
                 notify=#notify{
                     subject = <<>>,
                     body = <<"\n\npackage/branch\nchangelog\nDiff contains 4 bytes\ndiff\n">>
@@ -731,7 +731,7 @@ build_result_test_() ->
                 name="p", branch="b", failed_at=somewhere, reason=some_error, status=error
             }],
             {ok,
-                #scan_pipe_result{
+                #changes{
                 notify=#notify{
                     subject = <<>>,
                     body = <<"\n\np/b failed at somewhere\nsome_error\n">>
@@ -754,7 +754,7 @@ build_result_test_() ->
                 }
             ],
             {ok,
-                #scan_pipe_result{
+                #changes{
                 notify=#notify{
                     subject = <<>>,
                     body = <<
@@ -781,7 +781,7 @@ build_result_test_() ->
 
 
 
-send_result_test_() ->
+send_changes_test_() ->
 {foreach,
     fun() -> ok end,
 [
@@ -789,7 +789,7 @@ send_result_test_() ->
         Mock(),
         ?assertEqual(
             Result,
-            catch caterpillar_repository:send_result(result, state)
+            catch caterpillar_repository:send_changes(result, state)
         )
     end} || {Message, Mock, Result} <- [
         {
@@ -1162,7 +1162,7 @@ handle_call_changes_test_() ->
     end} || {Message, Request, Setup, Check, Result} <- [
         {
             "changes test",
-            {changes, #scan_pipe_result{packages=[#package{}], archives=[#archive{}], notify=#notify{}}},
+            {changes, #changes{packages=[#package{}], archives=[#archive{}], notify=#notify{}}},
             #state{work_id_file="test_work_id_file", dets="test_d", work_id=1, ets=ets:new(t, [])},
             fun(#state{work_id_file=BIF, dets=D}) -> 
                 ?assertEqual(
@@ -1278,7 +1278,7 @@ handle_info_scan_repository_test_() ->
                 timer:sleep(15),
                 ?assertMatch(
                     {messages, [
-                        {'$gen_call', _, {changes, #scan_pipe_result{
+                        {'$gen_call', _, {changes, #changes{
                             notify=#notify{
                                 subject = <<>>,
                                 body = <<
@@ -1423,3 +1423,74 @@ handle_call_rescan_repository_test() ->
         scan_repository,
         receive Msg -> Msg after 50 -> timeout end
     ).
+
+
+%---------
+
+
+rebuild_package_test_() ->
+{foreachx,
+    fun(Packages) ->
+        {ok, D} = dets:open_file("__test_repo.dets", [{access, read_write}]),
+        dets:insert(D, Packages),
+        #state{dets=D}
+    end,
+    fun(_, #state{dets=D}) ->
+        dets:close(D),
+        file:delete(D)
+    end,
+[
+    {Setup, fun(_, State) ->
+        {Message, fun() ->
+            register(caterpillar_repository, self()),
+            spawn(fun() ->
+                ?assertEqual(
+                    ok,
+                    caterpillar_repository:rebuild_package(Package, Branch, State)
+                )
+            end),
+            timer:sleep(1),
+            Check()
+        end}
+    end} || {Message, Setup, {Package, Branch}, Check} <- [
+        {
+            "no packages in dets",
+            [],
+            {package, branch},
+            fun() ->
+                ?assertEqual(
+                    timeout,
+                    receive _ -> ok after 10 -> timeout end
+                )
+            end
+        },
+        {
+            "package marked for rebuild",
+            [{{package, branch}, archive_name, last_revno, tag, work_id}],
+            {package, branch},
+            fun() ->
+                Msg = receive A -> A after 50 -> timeout end,
+                ?assertMatch(
+                    {_, _, {changes, #changes{}}},
+                    Msg
+                ),
+                {_, From, Changes} = Msg,
+                ?assertEqual(
+                    {changes, #changes{
+                        packages = [
+                            #package{
+                                name=package, branch=branch, tag=tag, archive_name=archive_name,
+                                current_revno = last_revno
+                            }
+                        ],
+                        archives = [
+                            #archive{name=package, branch=branch, tag=tag, archive_name=archive_name}
+                        ],
+                        notify = #notify{body = <<"rebuild request\n">>}
+                    }},
+                    Changes
+                )
+            end
+        }
+    ]
+]}.

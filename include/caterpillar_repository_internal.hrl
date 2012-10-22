@@ -46,7 +46,7 @@
 }).
 
 
--record(scan_pipe_result, {
+-record(changes, {
     notify :: NotifyRecord::record(),
     archives :: [ArchiveRecord::record()],
     packages :: [PackageRecord::record()]

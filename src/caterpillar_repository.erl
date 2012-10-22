@@ -101,6 +101,13 @@ handle_call({rescan_package, {_Package, _Branch}=Request}, _From, State) ->
     end),
     {reply, ok, State};
 
+handle_call({rebuild_package, {Package, Branch}}, _From, State) ->
+    spawn(fun() ->
+        rebuild_package(Package, Branch, State)
+    end),
+    {reply, ok, State};
+
+
 
 
 %copying archive to remote fd
@@ -144,11 +151,11 @@ handle_call(get_packages, _From, #state{dets=D}=State) ->
     {reply, Packages, State};
 
 %event for pushing new archives and notify, generated in scan_repository
-handle_call({changes, ScanPipeResult}, _From, #state{dets=D}=State) ->
+handle_call({changes, Changes}, _From, #state{dets=D}=State) ->
     NewWorkId = State#state.work_id + 1,
     WorkIdFile = State#state.work_id_file,
-    Notify = ScanPipeResult#scan_pipe_result.notify,
-    Packages = ScanPipeResult#scan_pipe_result.packages,
+    Notify = Changes#changes.notify,
+    Packages = Changes#changes.packages,
     [
         dets:insert(D, {{Name, Branch}, Archive, Revno, Tag, NewWorkId}) ||
         #package{name=Name, branch=Branch, archive_name=Archive, current_revno=Revno, tag=Tag} <- Packages
@@ -156,7 +163,7 @@ handle_call({changes, ScanPipeResult}, _From, #state{dets=D}=State) ->
     caterpillar_utils:write_work_id(WorkIdFile, NewWorkId),
     NewState = State#state{work_id=NewWorkId},
     spawn(fun() ->
-        Archives = ScanPipeResult#scan_pipe_result.archives,
+        Archives = Changes#changes.archives,
         case Archives of
             [] -> ok;
             _ -> caterpillar_event:event({changes, NewWorkId, Archives})
@@ -339,8 +346,8 @@ scan_pipe(Packages, State) ->
         {get_diff, fun get_diff/2},
         {get_changelog, fun get_changelog/2},
         {get_tag, fun get_tag/2},
-        {build_result, fun build_result/2},
-        {send_result, fun send_result/2}
+        {build_changes, fun build_changes/2},
+        {send_changes, fun send_changes/2}
     ],
     FunList = case Packages of 
         [] -> ScanPackages ++ CommonFunList;
@@ -639,25 +646,25 @@ get_tag([Package|O], Accum, #state{vcs_plugin=VcsP, vcs_state=VcsS}=State) ->
 
 
 
-build_result(Packages, _State) ->
+build_changes(Packages, _State) ->
     Notify = #notify{
         subject = <<>>,
         body = <<>>
     },
-    case catch build_result(Packages, Notify, []) of
+    case catch build_changes(Packages, Notify, []) of
         {ok, {NewNotify, Archives}} ->
             NewPackages = [Package#package{diff= <<>>, changelog= <<>>} || Package <- Packages],
-            {ok, #scan_pipe_result{notify=NewNotify, archives=Archives, packages=NewPackages}};
+            {ok, #changes{notify=NewNotify, archives=Archives, packages=NewPackages}};
         Err ->
-            error_logger:error_msg("build_result error: ~p~n", [Err]),
-            {error, build_result}
+            error_logger:error_msg("build_changes error: ~p~n", [Err]),
+            {error, build_changes}
     end.
 
 
-build_result([], Notify, Archives) ->
+build_changes([], Notify, Archives) ->
     {ok, {Notify, lists:reverse(Archives)}};
 
-build_result([Package|O], Notify, ArchiveAccum) ->
+build_changes([Package|O], Notify, ArchiveAccum) ->
     Name = Package#package.name,
     Branch = Package#package.branch,
     {PackageBody, NewArchiveAccum} = case Package#package.status of
@@ -689,10 +696,10 @@ build_result([Package|O], Notify, ArchiveAccum) ->
     end,
     OldBody = Notify#notify.body,
     NewBody = <<OldBody/binary, $\n, $\n, PackageBody/binary>>,
-    build_result(O, Notify#notify{body=NewBody}, NewArchiveAccum).
+    build_changes(O, Notify#notify{body=NewBody}, NewArchiveAccum).
 
 
-send_result(Result, _State) ->
+send_changes(Result, _State) ->
     gen_server:call(?MODULE, {changes, Result}, infinity),
     {ok, done}.
 
@@ -704,3 +711,31 @@ limit_output(Bin, Size) when is_binary(Bin), is_integer(Size), Size > 0 ->
         S -> {S, << (binary_part(Bin, {0, Size}))/binary, "..." >>}
     end.
 
+
+
+%----------
+
+
+rebuild_package(Package, Branch, #state{dets=Dets}) ->
+    case catch dets:lookup(Dets, {Package, Branch}) of
+        [] ->
+            error_logger:error_msg("no ~p/~p for rebuild~n", [Package, Branch]);
+        [{{Package, Branch}, ArchiveName, LastRevision, Tag, _WorkId}] ->
+            Pkg = #package{
+                name=Package, branch=Branch, tag=Tag, current_revno=LastRevision,
+                archive_name=ArchiveName, status=ok
+            },
+            Archive = #archive{
+                name=Package, branch=Branch, archive_name=ArchiveName, tag=Tag 
+            },
+            Notify = #notify{body = <<"rebuild request\n">>},
+            Changes = #changes{
+                notify = Notify,
+                archives = [Archive],
+                packages = [Pkg]
+            },
+            gen_server:call(?MODULE, {changes, Changes}, infinity);
+        Error ->
+            error_logger:error_msg("rebuild_package error: ~p~n", [Error])
+    end,
+    ok.
