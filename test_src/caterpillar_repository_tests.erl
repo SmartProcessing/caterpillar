@@ -1340,3 +1340,14 @@ handle_call_get_archives_test_() ->
         }
     ]
 ]}.
+
+
+handle_call_rescan_repository_test() ->
+    ?assertEqual(
+        {reply, ok, state},
+        caterpillar_repository:handle_call(rescan_repository, from, state)
+    ),
+    ?assertEqual(
+        scan_repository,
+        receive Msg -> Msg after 50 -> timeout end
+    ).

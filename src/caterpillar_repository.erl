@@ -104,6 +104,9 @@ handle_cast({clean_packages, Notify, PackageName}, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
+handle_call(rescan_repository, From, State) ->
+    scan_repository(0),
+    {reply, ok, State};
 
 %copying archive to remote fd
 handle_call({get_archive, #archive{name=Name, branch=Branch, fd=Fd}}, From, State) ->
