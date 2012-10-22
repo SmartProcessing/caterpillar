@@ -319,6 +319,8 @@ notify(#state{notify_root=NR}, #notify{}=Notify) ->
 scan_pipe(State) ->
     scan_pipe([], State).
 
+scan_pipe({Package, Branch}, State) ->
+    scan_pipe([#package{name=Package, branch=Branch}], State);
 
 scan_pipe(Packages, State) ->
     SetupScan = [
