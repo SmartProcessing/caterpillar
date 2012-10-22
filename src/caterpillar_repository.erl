@@ -52,12 +52,7 @@ init(Args) ->
 %async event for whole repository scan, checking every package and branch
 handle_info(scan_repository, State) ->
     spawn(fun() ->
-        case catch scan_pipe(State) of
-            {ok, #scan_pipe_result{}=Result} ->
-                gen_server:call(?MODULE, {changes, Result}, infinity);
-            Error ->
-                error_logger:error_msg("scan pipe failed with: ~p~n", [Error])
-        end
+        scan_pipe(State)
     end),
     {noreply, scan_repository(State)};
 
@@ -96,8 +91,14 @@ handle_cast({clean_packages, Notify, PackageName}, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-handle_call(rescan_repository, From, State) ->
+handle_call(rescan_repository, _From, State) ->
     scan_repository(0),
+    {reply, ok, State};
+
+handle_call({rescan_packages, {_Package, _Branch}=Request}, _From, State) ->
+    spawn(fun() ->
+        scan_pipe(Request, State)
+    end),
     {reply, ok, State};
 
 %copying archive to remote fd
@@ -323,10 +324,8 @@ scan_pipe({Package, Branch}, State) ->
     scan_pipe([#package{name=Package, branch=Branch}], State);
 
 scan_pipe(Packages, State) ->
-    SetupScan = [
-        {register_scan_pipe, fun register_scan_pipe/2}
-    ],
     ScanPackages = [
+        {register_scan_pipe, fun register_scan_pipe/2},
         {get_packages, fun get_packages/2},
         {get_brances, fun get_branches/2},
         {cast_clean_packages, fun cast_clean_packages/2}
@@ -338,13 +337,14 @@ scan_pipe(Packages, State) ->
         {get_diff, fun get_diff/2},
         {get_changelog, fun get_changelog/2},
         {get_tag, fun get_tag/2},
-        {build_result, fun build_result/2}
+        {build_result, fun build_result/2},
+        {send_result, fun send_result/2}
     ],
     FunList = case Packages of 
-        [] -> SetupScan ++ ScanPackages ++ CommonFunList;
-        _ -> SetupScan ++ CommonFunList
+        [] -> ScanPackages ++ CommonFunList;
+        _ -> CommonFunList
     end,
-    caterpillar_utils:pipe(FunList, none, State).
+    caterpillar_utils:pipe(FunList, Packages, State).
 
 
 register_scan_pipe(PrevRes, _State) ->
@@ -688,6 +688,10 @@ build_result([Package|O], Notify, ArchiveAccum) ->
     OldBody = Notify#notify.body,
     NewBody = <<OldBody/binary, $\n, $\n, PackageBody/binary>>,
     build_result(O, Notify#notify{body=NewBody}, NewArchiveAccum).
+
+
+send_result(Result, _State) ->
+    {ok, gen_server:call(?MODULE, {changes, Result}, infinity)}.
 
 
 -spec limit_output(binary(), non_neg_integer()) -> {non_neg_integer(), binary()}.
