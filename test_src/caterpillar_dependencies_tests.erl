@@ -9,14 +9,12 @@
 tty_off() -> 
     error_logger:tty(false).
 
--ifdef(TEST).
-
 setup() ->
     dets:open_file('test', [{file, "test.dets"}]),
     DepObj = [
         {
             {<<"smprc-test">>, <<"trunk">>, <<>>},
-            built,
+            {built, [<<"0001">>]},
             [],
             [
                 {<<"caterpillar">>, <<"trunk">>, <<>>},
@@ -25,19 +23,19 @@ setup() ->
         },
         {
             {<<"caterpillar">>, <<"trunk">>, <<>>},
-            built,
+            {built, [<<"0001">>]},
             [{<<"smprc-test">>, <<"trunk">>, <<>>}],
             []
         },
         {
             {<<"pequen">>, <<"trunk">>, <<>>},
-            wait,
+            {error, [<<"0001">>]},
             [{<<"smprc-test">>, <<"trunk">>, <<>>}],
             [{<<"destiny">>, <<"trunk">>, <<>>}]
         },
         {
             {<<"destiny">>, <<"trunk">>, <<>>},
-            wait,
+            {error, [<<"0001">>]},
             [
                 {<<"smprc-test">>, <<"trunk">>, <<>>},
                 {<<"pequen">>, <<"trunk">>, <<>>}
@@ -107,5 +105,3 @@ check_intersection_test() ->
         dep_object = [{<<"destiny">>, <<"trunk">>, <<>>}, {<<"smprc-test">>, <<"trunk">>, <<>>}]},
     ?assertEqual({ok, independent}, caterpillar_dependencies:check_intersection(Rev4, [])),
     ?assertEqual({ok, dependent}, caterpillar_dependencies:check_intersection(Rev4, [Rev3, Rev2, Rev1])).
-
--endif.
