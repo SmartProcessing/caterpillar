@@ -52,14 +52,6 @@ init(Args) ->
 %async event for whole repository scan, checking every package and branch
 handle_info(scan_repository, State) ->
     spawn(fun() ->
-        Self = self(),
-        case catch register(scan_pipe_caterpillar_repository, Self) of
-            true -> ok;
-            _Err ->
-                error_logger:error_msg("scan_pipe already in process~n"),
-                exit(normal)
-        end,
-        error_logger:info_msg("scan pipe started at ~p~n", [Self]),
         case catch scan_pipe(State) of
             {ok, #scan_pipe_result{}=Result} ->
                 gen_server:call(?MODULE, {changes, Result}, infinity);
@@ -325,10 +317,19 @@ notify(#state{notify_root=NR}, #notify{}=Notify) ->
 
 
 scan_pipe(State) ->
-    FunList = [
+    scan_pipe([], State).
+
+
+scan_pipe(Packages, State) ->
+    SetupScan = [
+        {register_scan_pipe, fun register_scan_pipe/2}
+    ],
+    ScanPackages = [
         {get_packages, fun get_packages/2},
         {get_brances, fun get_branches/2},
-        {cast_clean_packages, fun cast_clean_packages/2},
+        {cast_clean_packages, fun cast_clean_packages/2}
+    ],
+    CommonFunList = [
         {find_modified_packages, fun find_modified_packages/2},
         {export_packages, fun export_packages/2},
         {archive_packages, fun archive_packages/2},
@@ -337,7 +338,24 @@ scan_pipe(State) ->
         {get_tag, fun get_tag/2},
         {build_result, fun build_result/2}
     ],
+    FunList = case Packages of 
+        [] -> SetupScan ++ ScanPackages ++ CommonFunList;
+        _ -> SetupScan ++ CommonFunList
+    end,
     caterpillar_utils:pipe(FunList, none, State).
+
+
+register_scan_pipe(PrevRes, _State) ->
+    Self = self(),
+    case catch register(scan_pipe_caterpillar_repository, Self) of
+        true -> ok;
+        _Err ->
+            error_logger:error_msg("scan_pipe already in process~n"),
+            exit(normal)
+    end,
+    error_logger:info_msg("scan pipe started at ~p~n", [Self]),
+    {ok, PrevRes}.
+    
 
 
 get_packages(_, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSState}) ->

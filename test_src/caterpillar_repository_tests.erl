@@ -239,6 +239,44 @@ get_packages_test_() ->
 ]}.
 
 
+register_scan_pipe_test_() ->
+{foreach, 
+    fun() -> ok end,
+    fun(_) ->
+        catch erlang:exit(whereis(scan_pipe_caterpillar_repository), kill)
+    end,
+[
+    {Message, fun() ->
+        Setup(),
+        ?assertEqual(
+            Result,
+            catch caterpillar_repository:register_scan_pipe(prevres, state)
+        )
+    end} || {Message, Setup, Result} <- [
+        {
+            "scan pipe successful registered",
+            fun() -> ok end,
+            {ok, prevres}
+        },
+        {
+            "scan pipe failed to register",
+            fun() ->
+                register(
+                    scan_pipe_caterpillar_repository,
+                    spawn(
+                        fun() ->
+                            receive _ -> ok after 50 -> timeout end 
+                        end
+                    )
+                ),
+                timer:sleep(1)
+            end,
+            {'EXIT', normal}
+        }
+    ]
+]}.
+
+
 get_branches_test_() ->
 {foreachx,
     fun(Directories) ->
@@ -1180,7 +1218,9 @@ handle_info_scan_repository_test_() ->
         end}
     end} || {Message, Packages, Check} <- [
         {
-            "no packages", [], fun() -> ok end
+            "no packages",
+            [],
+            fun() -> ok end
         },
         {
             "some packages, without branch",
