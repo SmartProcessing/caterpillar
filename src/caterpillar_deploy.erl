@@ -127,7 +127,8 @@ deploy(Deploy, State) ->
         {find_deploy_paths, fun find_deploy_paths/2},
         {copy_packages, fun copy_packages/2},
         {run_post_deploy, fun run_post_deploy/2},
-        {cast_rotate, fun cast_rotate/2}
+        {cast_rotate, fun cast_rotate/2},
+        {run_deploy_script, fun run_deploy_script/2}
     ],
     case caterpillar_utils:pipe(FunList, Deploy, State) of
         {ok, _} -> ok;
@@ -191,6 +192,11 @@ run_post_deploy(#deploy{post_deploy_actions=BadAction}=Deploy, _State) ->
 
 cast_rotate(Deploy, _State) ->
     gen_server:cast(self(), {rotate, Deploy}),
+    {ok, Deploy}.
+
+
+run_deploy_script(Deploy, #state{deploy_script=DS}) ->
+    error_logger:info_msg("deploy script result: ~p~n", [os:cmd(DS)]),
     {ok, Deploy}.
 
 
