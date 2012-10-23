@@ -34,8 +34,6 @@ init(Settings) ->
     WaitQueue = queue:new(),
     {ok, WorkerList} = create_workers(?GV(build_workers_number, Settings, 5)),
     error_logger:info_msg("workers initialized"),
-    caterpillar_api:start(),
-    error_logger:info_msg("api started"),
     UnpackState = ets:new(unpack_state, []),
     schedule_poller(PollTime),
     {ok, #state{

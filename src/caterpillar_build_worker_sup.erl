@@ -10,12 +10,13 @@
 -ifndef(TEST).
 
 start_link() ->
-    case application:get_env(caterpillar, worker) of
+    {ok, Settings} = application:get_env(caterpillar, services),
+    case proplists:get_value(caterpillar_build_worker, Settings) of
         undefined ->
             {error, settings_not_set};
-        {ok, Settings} ->
+        Data when is_list(Data) ->
             {ok, Pid} = supervisor:start_link(
-                {local, ?MODULE}, ?MODULE, Settings),
+                {local, ?MODULE}, ?MODULE, Data),
             erlang:unlink(Pid),
             {ok, Pid}
     end.
