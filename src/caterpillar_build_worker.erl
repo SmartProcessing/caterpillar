@@ -281,13 +281,11 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
             pass;
         false ->
             {Name, _B, _T} = Dep,
-            io:format("working with ~p~n", [Dep]),
             [{Dep, {built, DepBuckets}, DepOn, HasInDep}|_] = dets:lookup(Deps, Dep),
             [AnyBucket|_] = DepBuckets,
             [{AnyBucket, Path, _Packages}] = dets:lookup(BucketsDets, AnyBucket),
-            DepPath = filename:join([BuildPath, Path, Name]),
-            io:format("copyying: ~s to ~s~n", [DepPath, filename:join([BuildPath, BPath, Name])]),
-            ?CU:recursive_copy(DepPath, filename:join([BuildPath, BPath, Name])),
+            DepPath = filename:join([BuildPath, Path, binary_to_list(Name)]),
+            ?CU:recursive_copy(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)])),
             dets:insert(BucketsDets, {BName, BPath, [BPackages|BPath]}),
             dets:insert(Deps, {Dep, {built, [DepBuckets|Current]}, DepOn, HasInDep})
     end,
