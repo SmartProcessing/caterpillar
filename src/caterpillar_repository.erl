@@ -95,17 +95,19 @@ handle_call(rescan_repository, _From, State) ->
     scan_repository(0),
     {reply, ok, State};
 
-handle_call({rescan_package, {_Package, _Branch}=Request}, _From, State) ->
+handle_call({rescan_package, {_Package, _Branch}=Request}, From, State) ->
     spawn(fun() ->
-        scan_pipe(Request, State)
+        catch scan_pipe(Request, State),
+        gen_server:reply(From, ok)
     end),
-    {reply, ok, State};
+    {noreply, State};
 
-handle_call({rebuild_package, {Package, Branch}}, _From, State) ->
+handle_call({rebuild_package, {Package, Branch}}, From, State) ->
     spawn(fun() ->
-        rebuild_package(Package, Branch, State)
+        catch rebuild_package(Package, Branch, State),
+        gen_server:reply(From, ok)
     end),
-    {reply, ok, State};
+    {noreply, State};
 
 
 
