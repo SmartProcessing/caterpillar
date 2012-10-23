@@ -728,7 +728,8 @@ rebuild_package(Package, Branch, #state{dets=Dets}) ->
             Archive = #archive{
                 name=Package, branch=Branch, archive_name=ArchiveName, tag=Tag 
             },
-            Notify = #notify{body = <<"rebuild request\n">>},
+            Body = io_lib:format("rebuild request for ~s/~s~n", [Package, Branch])
+            Notify = #notify{body = list_to_binary(Body)},
             Changes = #changes{
                 notify = Notify,
                 archives = [Archive],

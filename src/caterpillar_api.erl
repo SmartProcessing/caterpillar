@@ -34,40 +34,25 @@ ensure_started(App) ->
 
 
 init({tcp, http}, Req, _Opts) ->
-    Ets = ets:new(?MODULE, [named_table, public]),
-    {ok, Req, #state{ets=Ets}}.
+    {ok, Req, []}.
 
 
 
-handle(#http_req{path=[Cmd, Package, Branch]}=Req, #state{ets=Ets}=State)
+handle(#http_req{path=[Cmd, Package, Branch]}=Req, State)
   when Cmd == <<"rescan">>; Cmd == <<"rebuild">>
 ->
-    Key = {Package, Branch},
-    Reply = case ets:lookup(Ets, {Package, Branch}) of
-        [] ->
-            ets:insert(Ets, {Key, self()}),
-            AtomCmd = binary_to_atom(<<Cmd/binary, "_package">>, latin1),
-            Msg = {AtomCmd, {binary_to_list(Package), binary_to_list(Branch)}},
-            NewReq = case catch caterpillar_event:sync_event(Msg) of
-                ok -> 
-                    {ok, Req2} = cowboy_http_req:reply(200, [], <<"ok">>, Req),
-                    Req2;
-                Error ->
-                    Response = list_to_binary(io_lib:format("~p~n", [Error])),
-                    {ok, Req2} = cowboy_http_req:reply(500, [], Response, Req),
-                    Req2
-            end,
-            ets:delete(Ets, Key),
-            NewReq;
-        NotEmpty ->
-            error_logger:info_msg(
-                "already in process at ~p~n",
-                [[Pid || {_, Pid} <- NotEmpty]]
-            ),
+    AtomCmd = binary_to_atom(<<Cmd/binary, "_package">>, latin1),
+    Msg = {AtomCmd, {binary_to_list(Package), binary_to_list(Branch)}},
+    NewReq = case catch caterpillar_event:sync_event(Msg) of
+        ok -> 
             {ok, Req2} = cowboy_http_req:reply(200, [], <<"ok">>, Req),
+            Req2;
+        Error ->
+            Response = list_to_binary(io_lib:format("~p~n", [Error])),
+            {ok, Req2} = cowboy_http_req:reply(500, [], Response, Req),
             Req2
     end,
-    {ok, Reply, State};
+    {ok, NewReq, State};
 
 handle(Req, State) ->
     {ok, Req2} = cowboy_http_req:reply(400, [], <<"bad request">>, Req),
