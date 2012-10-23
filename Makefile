@@ -34,6 +34,7 @@ clean:
 
 
 compile:
+	@echo $(PWD)
 	$(REBAR) compile
 
 
@@ -41,9 +42,6 @@ compile:
 export_all:
 	$(MAKE) EXPORT_ALL=true test_compile
 
-
-ech:
-	@echo $(BEAMS)
 
 test_compile: $(BEAMS) $(TEST_BEAMS)
 

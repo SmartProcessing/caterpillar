@@ -33,7 +33,6 @@ stop(Ident) ->
 
 
 init(Args) ->
-    Ident = ?GV(ident, Args),
     register_as_worker(1000),
     case catch init_worker(#state{}, Args) of
         {ok, #state{}} = NewState -> NewState;
@@ -66,9 +65,9 @@ handle_cast({changes, WorkId, Archives}, #state{worker_plugin=WP, worker_state=W
     error_logger:info_msg("changes for work id ~p arrived~n", [WorkId]),
     {ok, NewWorkerState} = WP:changes(WS, WorkId, Archives),
     {noreply, State#state{worker_state=NewWorkerState}};
-handle_cast({deploy, WorkId, Deploy}, #state{worker_plugin=WP, worker_state=WS}=State) ->
-    NewWorkerState = WP:deploy(WorkId, Deploy),
-    {noreply, State#state{worker_state=NewWorkerState}};
+%handle_cast({deploy, WorkId, Deploy}, #state{worker_plugin=WP, worker_state=WS}=State) ->
+%    NewWorkerState = WP:deploy(WorkId, Deploy),
+%    {noreply, State#state{worker_state=NewWorkerState}};
 handle_cast({clean_packages, Packages}, State) ->
     error_logger:info_msg("packages to clean: ~p~n", [Packages]),
     {noreply, State};

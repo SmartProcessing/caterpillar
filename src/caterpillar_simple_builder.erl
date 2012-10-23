@@ -1,12 +1,11 @@
 -module(caterpillar_simple_builder).
 
--behaviour(caterpillar_worker).
 -include_lib("caterpillar_simple_builder_internal.hrl").
 -include_lib("caterpillar.hrl").
 
 -define(GVOD, caterpillar_utils:get_value_or_die).
 
--export([init_worker/2, changes/3, get_work_id/1]).
+-export([init_worker/2, changes/3, get_work_id/1, terminate_worker/1]).
 
 
 
@@ -46,9 +45,6 @@ changes(State, WorkId, Archives) ->
     ],
     caterpillar_utils:pipe(FunList, Archives, State#state{next_work_id=WorkId}).
 
-
-
-deploy(_, _, _) -> ok.
 
 
 get_work_id(#state{work_id=WI}) -> {ok, WI}.
@@ -125,7 +121,7 @@ make_packages(Archives, State) ->
     make_packages(Packages, [], State).
 
 
-make_packages([], Accum, State) ->
+make_packages([], Accum, _State) ->
     {ok, Accum};
 make_packages([ #package{name=Name, branch=Branch}=Package|T ], Accum, #state{next_work_id=WorkId}=State) ->
     UnArchivePath = filename:join([State#state.repository_root, Name, Branch]),
@@ -184,7 +180,7 @@ make(_, []) ->
 make(#package{name=Name, branch=Branch}=Package, [ Cmd|T ]) ->
     P = open_port({spawn, Cmd}, [binary, use_stdio, stderr_to_stdout, exit_status]),
     case receive_data_from_port() of
-        {ok, 0, Log} ->
+        {ok, 0, _Log} ->
             error_logger:info_msg("~p succeed at ~s/~s~n", [Cmd, Name, Branch]),
             make(Package, T); 
         {ok, _, Log} ->
@@ -302,7 +298,7 @@ split(Bin, D, Opts) -> binary:split(Bin, D, Opts).
 
 pick_out_version([], Buf) ->
     lists:reverse(Buf);
-pick_out_version([$-|T], Buf) ->
+pick_out_version([$-|_T], Buf) ->
     pick_out_version([], Buf);
 pick_out_version([H|T], Buf) ->
     pick_out_version(T, [H|Buf]).

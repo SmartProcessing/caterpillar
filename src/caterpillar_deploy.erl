@@ -156,7 +156,7 @@ find_deploy_paths(#deploy{ident=Ident}=Deploy, #state{ets=Ets}) ->
     end.
 
 
-copy_packages({Paths, #deploy{packages=Packages, ident=Ident}=Deploy}, #state{dets=Dets}=State) ->
+copy_packages({Paths, #deploy{packages=Packages, ident=Ident}=Deploy}, #state{dets=Dets}) ->
     DefaultPathValue = caterpillar_utils:get_value_or_die({Ident, default}, Paths),
     Fun = fun(#deploy_package{package=Package, name=Name, branch=Branch, fd=FD}) ->
         Path = proplists:get_value({Ident, Branch}, Paths, DefaultPathValue),
@@ -212,7 +212,7 @@ rotate(#deploy{packages=Packages, ident=Ident}, #state{dets=Dets, rotate=Rotate}
             [['$2', '$5']]
         }],
         SelectResult = lists:sort(
-            fun([Package1, Time1], [Package2, Time2]) ->
+            fun([_Package1, Time1], [_Package2, Time2]) ->
                 Time1 < Time2
             end, 
             dets:select(Dets, Select)

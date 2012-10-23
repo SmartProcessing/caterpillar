@@ -4,15 +4,15 @@
 
 -define(CMD, caterpillar_utils:command).
 
-check(Dir) ->
+check(_Dir) ->
     {ok, ""}.
 
-prepare(Dir) ->
+prepare(_Dir) ->
     {ok, ""}.
 
 submit(Dir) ->
     case ?CMD("make package PATH_MOD=../ PATH_MK=../devel-tools/Makefile.mk", Dir) of
-        {0, Msg} ->
+        {0, _Msg} ->
             find_deb_file(Dir ++ "dist");
         {Code, Msg} when is_integer(Code) ->
             error_logger:info_msg("clean failed with status ~B: ~s", [Code, Msg]),

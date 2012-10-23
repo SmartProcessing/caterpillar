@@ -25,7 +25,7 @@ test(Dir) ->
             {error, io_lib:format("make test returned ~B: ~s", [Code, Msg])}
     end.
 
-prebuild(Dir) ->
+prebuild(_Dir) ->
     {ok, ""}.
 
 

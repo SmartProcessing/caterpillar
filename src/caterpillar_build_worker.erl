@@ -272,7 +272,7 @@ get_new_bucket(Dets) ->
     end.
 
 
-arm_build_bucket(_Buckets, _Deps, _Current, BuildPath, []) ->
+arm_build_bucket(_Buckets, _Deps, _Current, _BuildPath, []) ->
     {ok, done};
 arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
     {BName, BPath, BPackages} = Current,

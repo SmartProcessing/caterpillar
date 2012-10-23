@@ -1,7 +1,7 @@
 -module(caterpillar_api).
 
--include_lib("caterpillar.hrl").
 -include_lib("http.hrl").
+-include_lib("caterpillar.hrl").
 -behaviour(cowboy_http_handler).
 
 -export([init/3, handle/2, terminate/2]).
@@ -28,7 +28,7 @@ ensure_started(App) ->
     end.
 
 
-init({tcp, http}, Req, Opts) ->
+init({tcp, http}, Req, _Opts) ->
     {ok, Req, []}.
 
 
@@ -48,11 +48,6 @@ handle(#http_req{path=[Cmd, Package, Branch]}=Req, State)
             {ok, Req2, State}
     end;
             
-
-handle(#http_req{path=[<<"rebuild">>, Package, Branch]}=Req, State) ->
-    {ok, Req2} = cowboy_http_req:reply(200, [], <<"ok">>, Req),
-    {ok, Req2, State};
-
 
 handle(Req, State) ->
     {ok, Req2} = cowboy_http_req:reply(400, [], <<"bad request">>, Req),
