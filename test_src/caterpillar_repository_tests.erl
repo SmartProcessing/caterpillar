@@ -1486,7 +1486,7 @@ rebuild_package_test_() ->
                         archives = [
                             #archive{name=package, branch=branch, tag=tag, archive_name=archive_name}
                         ],
-                        notify = #notify{body = <<"rebuild request\n">>}
+                        notify = #notify{body = <<"rebuild request for package/branch\n">>}
                     }},
                     Changes
                 )
