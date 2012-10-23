@@ -26,7 +26,8 @@ setup() ->
         {<<"0002">>, "0002", 
             [
                 {<<"smprc-test">>, <<"test">>, <<>>},
-                {<<"caterpillar">>, <<"test">>, <<>>}
+                {<<"caterpillar">>, <<"test">>, <<>>},
+                {<<"newpkg_dep">>, <<"test">>, <<>>}
             ]
         },
         {<<"0003">>, "0003", 
@@ -39,7 +40,7 @@ setup() ->
     DepObj = [
         {
             {<<"smprc-test">>, <<"trunk">>, <<>>},
-            {built, ["0001"]},
+            {built, [<<"0001">>]},
             [],
             [
                 {<<"caterpillar">>, <<"trunk">>, <<>>},
@@ -48,7 +49,7 @@ setup() ->
         },
         {
             {<<"caterpillar">>, <<"trunk">>, <<>>},
-            {built, ["0001"]},
+            {built, [<<"0001">>]},
             [{<<"smprc-test">>, <<"trunk">>, <<>>}],
             []
         },
@@ -66,12 +67,31 @@ setup() ->
                 {<<"pequen">>, <<"trunk">>, <<>>}
             ],
             []
+        },
+        {
+            {<<"newpkg">>, <<"trunk">>, <<"1.0.1">>},
+            {in_process, [<<"0003">>]},
+            [
+                {<<"smprc-test">>, <<"trunk">>, <<>>},
+                {<<"caterpillar">>, <<"trunk">>, <<>>}
+            ],
+            []
+        },
+        {
+            {<<"newpkg_dep">>, <<"test">>, <<>>},
+            {built, [<<"0002">>]},
+            [],
+            [{<<"newpkg">>, <<"trunk">>, <<"1.0.1">>}]
         }
     ],
     filelib:ensure_dir("./test_src/temp/newpkg-trunk1.0.1/"),
     {ok, File} = file:open("./test_src/temp/newpkg-trunk1.0.1/sample", [write]),
-    file:write(File, <<"test">>),
+    file:write(File, <<"{test, 1}.">>),
     file:close(File),
+    filelib:ensure_dir("./test_src/0002/newpkg_dep/"),
+    {ok, ArmFile} = file:open("./test_src/0002/newpkg_dep/dep_test", [write]),
+    file:write(ArmFile, <<"{test, 2}.">>),
+    file:close(ArmFile),
     filelib:ensure_dir("./test_src/0001/smprc-test"),
     filelib:ensure_dir("./test_src/0001/caterpillar"),
     filelib:ensure_dir("./test_src/0002/smprc-test"),
@@ -152,7 +172,45 @@ update_bucket_test_() ->
                 dep_object = [], 
                 pkg_config=#pkg_config{name = "name"}
             },
-            ?CBW:update_buckets('buckets', "./test_src", Rev, [{<<"0001">>, "0001", []}], []),
-            ?assertEqual(filelib:is_file("./test_src/0001/newpkg/sample"), true)
+            ?CBW:update_buckets('buckets', "./test_src", Rev, [
+                    {<<"0001">>, "0001", []}, 
+                    {<<"0002">>, "0002", []}, 
+                    {<<"0003">>, "0003", []}], []),
+            ?assertEqual(file:consult("./test_src/0001/newpkg/sample"), {ok, [{test, 1}]}),
+            ?assertEqual(file:consult("./test_src/0002/newpkg/sample"), {ok, [{test, 1}]}),
+            ?assertEqual(file:consult("./test_src/0003/newpkg/sample"), {ok, [{test, 1}]})
+        end
+    }.
+
+update_package_buckets_test_() ->
+    {setup,
+        fun setup/0,
+        fun cleanup/1,
+        fun() ->
+            Rev = #rev_def{
+                name = <<"newpkg">>, 
+                branch = <<"trunk">>, 
+                tag = <<"1.0.1">>, 
+                dep_object = [], 
+                pkg_config=#pkg_config{name = "name"}
+            },
+            ?CBW:update_package_buckets('buckets', 'deps', {<<"0001">>, "0001", []}, "./test_src", Rev),
+            ?assertEqual(file:consult("./test_src/0001/newpkg/sample"), {ok, [{test, 1}]}),
+            ?assertEqual(file:consult("./test_src/0003/newpkg/sample"), {ok, [{test, 1}]}),
+            ResB = dets:lookup('buckets', <<"0001">>),
+            ?assertEqual([{<<"0001">>, "0001", [{<<"newpkg">>, <<"trunk">>, <<"1.0.1">>}]}], ResB),
+            [ResD] = dets:lookup('deps', {<<"newpkg">>, <<"trunk">>, <<"1.0.1">>}),
+            ?assertMatch({_, {in_process, [<<"0003">>, <<"0001">>]}, _, _}, ResD)
+        end
+    }.
+
+arm_build_bucket_test_() ->
+    {setup,
+        fun setup/0,
+        fun cleanup/1,
+        fun() ->
+            Vsn = {<<"newpkg_dep">>, <<"test">>, <<>>},
+            ?CBW:arm_build_bucket('buckets', 'deps', {<<"0001">>, "0001", []}, "./test_src", [Vsn]),
+            ?assertEqual(file:consult("./test_src/0001/newpkg_dep/dep_test"), {ok, [{test, 2}]})
         end
     }.
