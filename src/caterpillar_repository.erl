@@ -97,17 +97,15 @@ handle_call(rescan_repository, _From, State) ->
 
 handle_call({rescan_package, {_Package, _Branch}=Request}, From, State) ->
     spawn(fun() ->
-        catch scan_pipe(Request, State),
-        gen_server:reply(From, ok)
+        scan_pipe(Request, State)
     end),
-    {noreply, State};
+    {reply, ok, State};
 
 handle_call({rebuild_package, {Package, Branch}}, From, State) ->
     spawn(fun() ->
-        catch rebuild_package(Package, Branch, State),
-        gen_server:reply(From, ok)
+        rebuild_package(Package, Branch, State)
     end),
-    {noreply, State};
+    {reply, ok, State};
 
 
 

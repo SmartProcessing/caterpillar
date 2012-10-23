@@ -57,7 +57,6 @@ handle(#http_req{path=[Cmd, Package, Branch]}=Req, #state{ets=Ets}=State)
                     {ok, Req2} = cowboy_http_req:reply(500, [], Response, Req),
                     Req2
             end,
-            timer:sleep(1000),
             ets:delete(Ets, Key),
             NewReq;
         NotEmpty ->
