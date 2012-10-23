@@ -126,9 +126,9 @@ deploy(Deploy, State) ->
         {run_pre_deploy, fun run_pre_deploy/2},
         {find_deploy_paths, fun find_deploy_paths/2},
         {copy_packages, fun copy_packages/2},
+        {run_deploy_script, fun run_deploy_script/2},
         {run_post_deploy, fun run_post_deploy/2},
-        {cast_rotate, fun cast_rotate/2},
-        {run_deploy_script, fun run_deploy_script/2}
+        {cast_rotate, fun cast_rotate/2}
     ],
     case caterpillar_utils:pipe(FunList, Deploy, State) of
         {ok, _} -> ok;

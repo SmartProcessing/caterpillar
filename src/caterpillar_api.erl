@@ -1,31 +1,26 @@
 -module(caterpillar_api).
--include("caterpillar.hrl").
--export([start/0]).
 
--ifndef(TEST).
-start() ->
-    APISet = case application:get_env(caterpillar, api) of
-        {ok, Settings} ->
-            Settings;
-        Other ->
-            throw({api_settings_not_set, Other})
-    end,
-    Port = ?GV(port, APISet, 39567),
-    Dispatch = [{'_', [{'_', caterpillar_api_handler, [APISet]}]}],
-    error_logger:info_msg("starting api: ~p",
-        [catch cowboy:start_listener(
-        caterpillar_api_listener,
-        100,
-        cowboy_tcp_transport,
-        [{port, Port}],
-        cowboy_http_protocol,
-        [{dispatch, Dispatch}]
-    )]).
--endif.
+-include_lib("caterpillar.hrl").
+-behaviour(cowboy_http_handler).
+
+-export([init/3, handle/2, terminate/2]).
+-export([start_link/1]).
+
+
+start_link(_) -> ok.
 
 
 
--ifdef(TEST).
-start() ->
+init({tcp, http}, Req, Opts) ->
+    {ok, Req, undefined_state}.
+
+
+
+handle(Req, State) ->
+    {ok, Req2} = cowboy_req:reply(200, [], <<"Hello World!">>, Req),
+    {ok, Req2, State}.
+
+
+
+terminate(_Req, _State) ->
     ok.
--endif.
