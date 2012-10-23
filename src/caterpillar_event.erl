@@ -123,16 +123,16 @@ handle_call({sync_event, rescan_repository}, From, #state{ets=Ets}=State) ->
     sync_event_to_service(repository, From, Ets, rescan_repository),
     {noreply, State};
 
-handle_call({sync_event, {rescan_package, {_Package, _Name}}=Request}, From, #state{ets=Ets}=State) ->
-    sync_event_to_service(repository, From, Ets, Request),
-    {noreply, State};
-
 handle_call({sync_event, {notify, #notify{}}=Request}, From, #state{ets=Ets}=State) ->
     sync_event_to_service(notifier, From, Ets, Request),
     {noreply, State};
 
 handle_call({sync_event, {deploy, #deploy{}}=Request}, From, #state{ets=Ets}=State) ->
     sync_event_to_service(deploy, From, Ets, Request),
+    {noreply, State};
+
+handle_call({sync_event, {rescan_package, {_Package, _Name}}=Request}, From, #state{ets=Ets}=State) ->
+    sync_event_to_service(repository, From, Ets, Request),
     {noreply, State};
 
 handle_call({sync_event, {rebuild_package, {_Package, _Branch}}=Request}, From, #state{ets=Ets}=State) ->
