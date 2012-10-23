@@ -27,5 +27,3 @@ test(Dir) ->
 
 prebuild(_Dir) ->
     {ok, ""}.
-
-

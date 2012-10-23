@@ -31,9 +31,10 @@ start_link() ->
     gen_server:start_link(?MODULE, [], []).
 
 start_link(Settings) ->
-    gen_server:start_link(?MODULE, [Settings], []).
+    gen_server:start_link(?MODULE, Settings, []).
 
 init(Settings) ->
+    error_logger:info_msg("initialized build worker: ~p~n", [Settings]),
     BuildPlugins = ?GV(
         build_plugins, 
         Settings, 
