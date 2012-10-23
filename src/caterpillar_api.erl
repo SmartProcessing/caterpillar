@@ -8,11 +8,6 @@
 -export([start_link/1]).
 
 
--record(state, {
-    ets
-}).
-
-
 start_link(Args) ->
     ensure_started(cowboy),
     Dispatch = [
