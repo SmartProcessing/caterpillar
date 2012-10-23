@@ -122,12 +122,12 @@ unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
     case find_bucket(Buckets, Package, Deps) of
         [Bucket|_] ->
             update_package_buckets(Buckets, DepsDets, Bucket, BuildPath, Rev),
-            arm_build_bucket(Buckets, DepsDets, Bucket, Deps),
+            arm_build_bucket(Buckets, DepsDets, Bucket, BuildPath, Deps),
             {ok, {Rev, Bucket}};
         [] ->
             {ok, Bucket} = create_bucket(
                 Buckets, DepsDets, Package, BuildPath),
-            arm_build_bucket(Buckets, DepsDets, Bucket, Deps),
+            arm_build_bucket(Buckets, DepsDets, Bucket, BuildPath, Deps),
             {ok, {Rev, Bucket}};
         _Other ->
             error_logger:error_msg("failed to find or create a bucket for ~p~n", [Rev]),
@@ -272,29 +272,34 @@ get_new_bucket(Dets) ->
     end.
 
 
-arm_build_bucket(_Buckets, _Deps, _Current, []) ->
+arm_build_bucket(_Buckets, _Deps, _Current, BuildPath, []) ->
     {ok, done};
-arm_build_bucket(BucketsDets, Deps, Current, [Dep|O]) ->
+arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
     {BName, BPath, BPackages} = Current,
-    {Name, _B, _T} = Dep,
-    [{Dep, {built, DepBuckets}, DepOn, HasInDep}|_] = dets:lookup(Deps, Dep),
-    [AnyBucket|_] = DepBuckets,
-    [{AnyBucket, Path, _Packages}] = dets:lookup(BucketsDets, AnyBucket),
-    DepPath = filename:join([Path, Name]),
-    case filelib:is_dir(DepPath) of
+    case lists:member(Dep, BPackages) of
         true ->
-            ?CU:recursive_copy(DepPath, filename:join([BPath, Name])),
-            dets:insert(BucketsDets, {BName, BPath, [BPackages|BPath]}),
-            dets:insert(Deps, {Dep, {built, [DepBuckets|Current]}, DepOn, HasInDep}),
-            arm_build_bucket(BucketsDets, Deps, Current, [Dep|O]);
+            pass;
         false ->
-            {error, no_dir}
-    end.
+            {Name, _B, _T} = Dep,
+            [{Dep, {built, DepBuckets}, DepOn, HasInDep}|_] = dets:lookup(Deps, Dep),
+            [AnyBucket|_] = DepBuckets,
+            [{AnyBucket, Path, _Packages}] = dets:lookup(BucketsDets, AnyBucket),
+            DepPath = filename:join([BuildPath, Path, binary_to_list(Name)]),
+            ?CU:recursive_copy(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)])),
+            dets:insert(BucketsDets, {BName, BPath, [BPackages|BPath]}),
+            dets:insert(Deps, {Dep, {built, [DepBuckets|Current]}, DepOn, HasInDep})
+    end,
+    arm_build_bucket(BucketsDets, Deps, Current, BuildPath, O).
 
 update_package_buckets(BucketsTable, DepsTable, Bucket, BuildPath, Rev) ->
     Package = ?VERSION(Rev),
-    [{Package, {State, DepBuckets}, DepOn, HasInDep}|_] = dets:lookup(DepsTable, Package),
-    AllBuckets = lists:usort([DepBuckets|Bucket]),
+    [{Package, {State, DepBucketIds}, DepOn, HasInDep}|_] = dets:lookup(DepsTable, Package),
+    DepBuckets = lists:map(
+        fun(Id) -> 
+            [Res|_] = dets:lookup(BucketsTable, Id), 
+            Res 
+        end, DepBucketIds),
+    AllBuckets = lists:usort([Bucket|DepBuckets]),
     {ok, SuccessBuckets} = update_buckets(BucketsTable, BuildPath, Rev, AllBuckets, []),
     dets:insert(DepsTable, 
         {Package, {State, SuccessBuckets}, DepOn, HasInDep}),
@@ -304,14 +309,14 @@ update_buckets(_, _, _, [], Acc) ->
     {ok, Acc};
 update_buckets(BucketsTable, BuildPath, Rev, [Bucket|O], Acc) ->
     Package = ?VERSION(Rev),
-    {_BName, BPath, BContain} = Bucket,
+    {BName, BPath, BContain} = Bucket,
     {Name, _B, _T} = Package,
-    Path = filename:join([BPath, binary_to_list(Name)]),
+    Path = filename:join([BuildPath, BPath, binary_to_list(Name)]) ++ "/",
     ?CU:del_dir(Path),
     filelib:ensure_dir(Path),
     ok = ?CU:recursive_copy(get_temp_path(BuildPath, Rev), Path),
-    ok = dets:insert(BucketsTable, {Bucket, BPath, lists:usort([Package|BContain])}),
-    update_buckets(BucketsTable, BuildPath, Rev, O, [Bucket|Acc]).
+    ok = dets:insert(BucketsTable, {BName, BPath, lists:usort([Package|BContain])}),
+    update_buckets(BucketsTable, BuildPath, Rev, O, [BName|Acc]).
 
 get_temp_path(BuildPath, Rev) ->
     filename:join([BuildPath, "temp", ?CPU:get_dir_name(Rev)]).
