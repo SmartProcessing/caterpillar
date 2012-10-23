@@ -306,9 +306,10 @@ update_buckets(BucketsTable, BuildPath, Rev, [Bucket|O], Acc) ->
     Package = ?VERSION(Rev),
     {_BName, BPath, BContain} = Bucket,
     {Name, _B, _T} = Package,
-    Path = filename:join([BPath, binary_to_list(Name)]),
+    Path = filename:join([BuildPath, BPath, binary_to_list(Name)]) ++ "/",
     ?CU:del_dir(Path),
     filelib:ensure_dir(Path),
+    io:format("copyying ~s to ~s~n", [get_temp_path(BuildPath, Rev), Path]),
     ok = ?CU:recursive_copy(get_temp_path(BuildPath, Rev), Path),
     ok = dets:insert(BucketsTable, {Bucket, BPath, lists:usort([Package|BContain])}),
     update_buckets(BucketsTable, BuildPath, Rev, O, [Bucket|Acc]).
