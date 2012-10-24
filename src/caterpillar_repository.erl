@@ -96,16 +96,16 @@ handle_call(rescan_repository, _From, State) ->
     {reply, ok, State};
 
 handle_call({rescan_package, {_Package, _Branch}=Request}, _From, State) ->
-    spawn(fun() ->
+    Pid = spawn(fun() ->
         scan_pipe(Request, State)
     end),
-    {reply, ok, State};
+    {reply, {ok, Pid}, State};
 
 handle_call({rebuild_package, {Package, Branch}}, _From, State) ->
-    spawn(fun() ->
+    Pid = spawn(fun() ->
         rebuild_package(Package, Branch, State)
     end),
-    {reply, ok, State};
+    {reply, {ok, Pid}, State};
 
 
 

@@ -1425,6 +1425,61 @@ handle_call_rescan_repository_test() ->
     ).
 
 
+handle_call_rescan_n_rebuild_package_test_() ->
+{foreach,
+    fun() -> ok end,
+[
+    {Message, fun() ->
+        Check(caterpillar_repository:handle_call(Request, from, state))
+    end} || {Message, Request, Check} <- [
+        {
+            "rescan package test",
+            {rescan_package, {package, branch}},
+            fun(Match) ->
+                ?assertMatch(
+                    {reply, {ok, _}, state},
+                    Match
+                ),
+                {reply, {ok, Pid}, state} = Match,
+                ?assert(is_pid(Pid))
+            end
+        },
+        {
+            "rescan package bad request",
+            {rescan_package, bad},
+            fun(Match) ->
+                ?assertEqual(
+                    {reply, {error, bad_msg}, state},
+                    Match
+                )
+            end
+        },
+        {
+            "rebuild package test",
+            {rebuild_package, {package, branch}},
+            fun(Match) ->
+                ?assertMatch(
+                    {reply, {ok, _}, state},
+                    Match
+                ),
+                {reply, {ok, Pid}, state} = Match,
+                ?assert(is_pid(Pid))
+            end
+        },
+        {
+            "rebuild package bad request",
+            {rebuild_package, bad},
+            fun(Match) ->
+                ?assertMatch(
+                    {reply, {error, bad_msg}, state},
+                    Match
+                )
+            end
+        }
+    ]
+]}.
+
+
 %---------
 
 
