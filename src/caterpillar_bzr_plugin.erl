@@ -58,7 +58,7 @@ get_branches(_State, Package) ->
 
 
 get_tag(_State, _Package, _Branch, _Revno) ->
-    {ok, tag}.
+    {ok, ""}.
 
 
 is_repository(_State, Package) ->

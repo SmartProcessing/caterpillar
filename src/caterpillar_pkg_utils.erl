@@ -1,7 +1,7 @@
 -module(caterpillar_pkg_utils).
 -include("caterpillar.hrl").
 -include("caterpillar_internal.hrl").
--export([get_pkg_config/1]).
+-export([get_pkg_config/2]).
 -export([get_pkg_config_record/2]).
 -export([get_dep_list/1]).
 -export([pack_rev_def/2, get_dir_name/1]).
@@ -12,7 +12,7 @@ get_pkg_config_record(Archive, {control, Data}) ->
     #pkg_config{
         name=?GV("Package", Data, Archive#archive.name),
         version=?GV("Version", Data, "0.0.0"),
-        section=?GV("Section", Data, "default"),
+        section=?GV("Section", Data, "smprc"),
         package_t=["deb"],
         arch=?GV("Architecture", Data, "all"),
         maintainers=[?GV("Maintainer", Data, "example@example.org")],
@@ -23,7 +23,19 @@ get_pkg_config_record(Archive, {config, Data}) ->
     #pkg_config{
         name=?GV("name", Data, Archive#archive.name),
         version=?GV("version", Data, "0.0.0"),
-        section=?GV("section", Data, "default"),
+        section=?GV("section", Data, "smprc"),
+        package_t=?GV("package_t", Data, ["deb"]),
+        arch=?GV("architecture", Data, "all"),
+        maintainers=?GV("maintainers", Data, ["example@example.org"]),
+        platform=?GV("platform", Data, "default"),
+        deps=?GV("deps", Data, []),
+        build_deps=?GV("build_deps", Data, [])
+    };
+get_pkg_config_record(Archive, {empty, Data}) ->
+    #pkg_config{
+        name=?GV("name", Data, Archive#archive.name),
+        version=?GV("version", Data, "0.0.0"),
+        section=?GV("section", Data, "smprc"),
         package_t=?GV("package_t", Data, ["deb"]),
         arch=?GV("architecture", Data, "all"),
         maintainers=?GV("maintainers", Data, ["example@example.org"]),
@@ -51,13 +63,22 @@ pack_rev_def(Archive, PkgRecord) ->
     }.
 
 
-get_pkg_config(Path) ->
-    case catch file:consult(Path ++ "/pkg.config") of
-        {ok, Term} ->
+get_pkg_config_list(Path) ->
+    case [
+            catch file:consult(filename:join(Path, "/pkg.config")),
+            filelib:is_file(Path ++ "control") ] of
+        [{ok, Term}|_] ->
             {config, Term};
+        [_, true] ->
+            {control, parse_control(Path)};
         _Other ->
-            parse_control(Path)
+            {empty, []}
     end.
+
+
+get_pkg_config(Arch, Path) ->
+    get_pkg_config_record(Arch, get_pkg_config_list(Path)).
+
 
 get_dir_name(Rev) ->
     Name = ?BTL(Rev#rev_def.name),

@@ -182,7 +182,8 @@ handle_call({changes, Changes}, _From, #state{dets=D}=State) ->
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 
-handle_call(_Msg, _From, State) ->
+handle_call(Msg, _From, State) ->
+    error_logger:error_msg("bad message: ~p~n", [Msg]),
     {reply, {error, bad_msg}, State}.
 
 

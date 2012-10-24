@@ -150,7 +150,8 @@ handle_call(get_info, _From, #state{ets=Ets}=State) ->
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 
-handle_call(_Msg, _From, State) ->
+handle_call(Msg, _From, State) ->
+    error_logger:error_msg("bad msg in event: ~p~n", [Msg]),
     {reply, {error, bad_msg}, State}.
 
 
