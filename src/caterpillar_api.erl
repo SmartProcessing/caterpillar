@@ -58,13 +58,14 @@ handle(#http_req{path=[Cmd, Package, Branch]}=Req, #state{ets=Ets}=State)
         end
     end),
     ets:delete(Ets, {Package, Branch}),
-    case Response of
+    {ok, _Res} = case Response of
         {ok, _} -> Response;
         Err->
-            error_logger:error_msg("api: handle ~p error: ~p~n", [Cmd, Err]),
-            cowboy_http_req:reply(500, [], Response, Req)
+            FormattedError = lists:flatten(io_lib:format("~p", [Err])),
+            error_logger:error_msg("api: handle ~p error: ~s~n", [Cmd, FormattedError]),
+            cowboy_http_req:reply(500, [], list_to_binary(FormattedError), Req)
     end,
-    {ok, Response, State};
+    {ok, _Res, State};
 
 handle(Req, State) ->
     {ok, Req2} = cowboy_http_req:reply(400, [], <<"bad request">>, Req),
