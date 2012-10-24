@@ -41,7 +41,7 @@ handle(#http_req{path=[Cmd, Package, Branch]}=Req, #state{ets=Ets}=State)
   when Cmd == <<"rescan">>; Cmd == <<"rebuild">>
 ->
     Response = (catch begin
-        case ets:lookup(Ets, {Package, Branch}, self()) of
+        case ets:lookup(Ets, {Package, Branch}) of
             [] -> ets:insert(Ets, {{Package, Branch}, self()});
             _ -> exit(in_process)
         end,
@@ -57,13 +57,13 @@ handle(#http_req{path=[Cmd, Package, Branch]}=Req, #state{ets=Ets}=State)
                 {ok, Req2}
         end
     end),
+    ets:delete(Ets, {Package, Branch}),
     case Response of
         {ok, _} -> Response;
         Err->
             error_logger:error_msg("api: handle ~p error: ~p~n", [Cmd, Err]),
             cowboy_http_req:reply(500, [], Response, Req)
     end,
-    ets:delete(Ets, {Package, Branch}),
     {ok, Response, State};
 
 handle(Req, State) ->
