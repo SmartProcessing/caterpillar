@@ -113,8 +113,6 @@ process_archives([], State) ->
 process_archives([A|O], State) ->
     UnpackState = State#state.unpack_state,
     BuildPath = State#state.build_path,
-    Deps = State#state.deps,
-    Prebuild = State#state.prebuild,
     process_archive(BuildPath, A, UnpackState),
     process_archives(O, State).
 
@@ -214,7 +212,7 @@ number_free_workers(State) ->
 
 release_worker(Worker, Workers) ->
     lists:map(
-        fun({Worker, V}) ->
+        fun({W, _V}) when W==Worker ->
             {Worker, none};
         (Other) ->
             Other
