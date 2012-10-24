@@ -37,9 +37,21 @@ handle_info(_, State) ->
     {noreply, State}.
 
 
-handle_call({monitor, Package, Branch, Pid}, _From, #state{ets=Ets}=State) ->
-    Ref = erlang:monitor(process, Pid),
-    {reply, ets:insert_new(Ets, {{Package, Branch}, Ref}), State};
+handle_call({execute, {Cmd, Package, Branch}=Key}, _From, #state{ets=Ets}=State) ->
+    Response = case ets:lookup(Ets, Key) of
+        [] -> 
+            Msg = {Cmd, {binary_to_list(Package), binary_to_list(Branch)}},
+            case catch caterpillar_event:sync_event(Msg) of
+                {ok, Pid} ->
+                    Ref = erlang:monitor(process, Pid),
+                    ets:insert(Ets, {Key, Ref}),
+                    true;
+                Error ->
+                    {error, Error}
+            end;
+        _ -> false
+    end, 
+    {reply, Response, State};
 handle_call(_, _, State) ->
     {reply, {error, bad_msg}, State}.
 
@@ -71,12 +83,14 @@ handle(#http_req{path=[Cmd, Package, Branch]}=Req, State)
   when Cmd == <<"rescan">>; Cmd == <<"rebuild">>
 ->
     AtomCmd = binary_to_atom(<<Cmd/binary, "_package">>, latin1),
-    Msg = {AtomCmd, {binary_to_list(Package), binary_to_list(Branch)}},
-    Response = case catch caterpillar_event:sync_event(Msg) of
-        {ok, _Pid} -> 
+    Response = case gen_server:call(?MODULE, {execute, {AtomCmd, Package, Branch}}, infinity) of
+        true ->
             {ok, Req2} = cowboy_http_req:reply(200, [], <<"ok">>, Req),
             Req2;
-        Error ->
+        false ->
+            {ok, Req2} = cowboy_http_req:reply(200, [], <<"already in process">>, Req),
+            Req2;
+        Error -> 
             Res = list_to_binary(io_lib:format("~p~n", [Error])),
             {ok, Req2} = cowboy_http_req:reply(500, [], Res, Req),
             Req2
