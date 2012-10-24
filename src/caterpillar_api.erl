@@ -47,7 +47,7 @@ handle(#http_req{path=[Cmd, Package, Branch]}=Req, #state{ets=Ets}=State)
         end,
         AtomCmd = binary_to_atom(<<Cmd/binary, "_package">>, latin1),
         Msg = {AtomCmd, {binary_to_list(Package), binary_to_list(Branch)}},
-        NewReq = case catch caterpillar_event:sync_event(Msg) of
+        case catch caterpillar_event:sync_event(Msg) of
             {ok, _Pid} -> 
                 {ok, Req2} = cowboy_http_req:reply(200, [], <<"ok">>, Req),
                 {ok, Req2};
@@ -61,8 +61,7 @@ handle(#http_req{path=[Cmd, Package, Branch]}=Req, #state{ets=Ets}=State)
         {ok, _} -> Response;
         Err->
             error_logger:error_msg("api: handle ~p error: ~p~n", [Cmd, Err]),
-            {ok, R} = cowboy_http_req:reply(500, [], Response, Req),
-            {ok, R}
+            cowboy_http_req:reply(500, [], Response, Req)
     end,
     ets:delete(Ets, {Package, Branch}),
     {ok, Response, State};
@@ -73,5 +72,5 @@ handle(Req, State) ->
 
 
 
-terminate(_Req, State) ->
+terminate(_Req, _State) ->
     ok.
