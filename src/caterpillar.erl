@@ -28,13 +28,14 @@ start_link(Settings) ->
 init(Settings) ->
     error_logger:info_msg("starting caterpillar", []),
     {ok, Deps} = dets:open_file(deps,
-        [{file, ?GV(deps, Settings, "/var/lib/smprc/caterpillar/deps")}]),
+        [{file, ?GV(deps, Settings, ?DEFAULT_DEPENDENCIES_DETS)}]),
     PollTime = ?GV(poll_time, Settings, 10000),
     BuildQueue = queue:new(),
     WaitQueue = queue:new(),
     {ok, WorkerList} = create_workers(?GV(build_workers_number, Settings, 5)),
     error_logger:info_msg("workers initialized"),
     UnpackState = ets:new(unpack_state, []),
+    BuildPath = ?GV(build_path, Settings, ?DEFAULT_BUILD_PATH),
     schedule_poller(PollTime),
     {ok, #state{
             deps=Deps,
@@ -42,7 +43,9 @@ init(Settings) ->
             wait_queue=WaitQueue,
             workers=WorkerList,
             next_to_build=none,
-            unpack_state=UnpackState
+            unpack_state=UnpackState,
+            build_path=BuildPath,
+            poll_time=PollTime
         }
     }.
 
@@ -65,8 +68,10 @@ handle_call({err_built, _Worker, _RevDef, _BuildInfo}, _From, State) ->
     {ok, ScheduledState} = schedule_build(State),
     {ok, NewState} = try_build(ScheduledState),
     {reply, ok, NewState};
+handle_call(state, _From, State) ->
+    {reply, State, State};
 handle_call(_Request, _From, State) ->
-    {reply, ok, State}.
+    {reply, unknown, State}.
 
 handle_cast({work, _Id, Archives}, State) ->
     ToPreprocess = lists:usort([Archives|State#state.prebuild]),
@@ -151,10 +156,13 @@ try_build(State) ->
 
 -spec job_free_worker(State :: #state{}) -> {ok, NewState :: #state{}}.
 job_free_worker(State) ->
+    error_logger:info_msg("job to do: ~p~n", [State#state.next_to_build]),
     NewWorkers = job_free_worker(
         State#state.workers, State#state.next_to_build),
     {ok, State#state{workers=NewWorkers}}.
 
+job_free_worker(Workers, none) ->
+    Workers;
 job_free_worker([{Pid, none}|Other], ToBuild) ->
     gen_server:cast(Pid, {build, ToBuild}),
     [{Pid, ToBuild}|Other];
@@ -196,7 +204,7 @@ number_free_workers(State) ->
                     Cnt + 1; 
                 ({_Pid, _Other}, Cnt) ->
                     Cnt
-            end, State#state.workers)}.
+            end, 0, State#state.workers)}.
 
 
 %% Scheduling
