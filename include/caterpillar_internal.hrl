@@ -1,4 +1,7 @@
 -define(VERSION, caterpillar_utils:get_version_by_revdef).
+-define(DEFAULT_BUILD_PATH, "/srv/caterpillar").
+-define(DEFAULT_BUCKETS_DETS, "/var/lib/smprc/caterpillar/buckets").
+-define(DEFAULT_DEPENDENCIES_DETS, "/var/lib/smprc/caterpillar/deps").
 
 -record(pkg_config, {
     name                :: string(),
