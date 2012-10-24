@@ -2,7 +2,7 @@
 
 -behaviour(application).
 
--export([start/0, stop_node/1, status_node/1]).
+-export([start/0, stop_node/1, restart_node/1, status_node/1]).
 -export([start/2, stop/1]).
 
 
@@ -29,6 +29,17 @@ stop_node([Node]) ->
         pang ->
             io:format("down or unknown~n")
     end.
+
+
+restart_node([Node]) ->
+    case net_adm:ping(Node) of
+        pong ->
+            rpc:call(Node, init, restart, []),
+            io:format("restaring~n");
+        pang ->
+            io:format("down or unknown~n")
+    end.
+
 
 
 status_node([Node]) ->
