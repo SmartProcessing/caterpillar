@@ -18,7 +18,8 @@
         unpack_state,
         build_path,
         poll_time,
-        prebuild=[]
+        prebuild=[],
+        work_id
     }).
 
 
@@ -36,6 +37,9 @@ init(Settings) ->
     error_logger:info_msg("workers initialized"),
     UnpackState = ets:new(unpack_state, []),
     BuildPath = ?GV(build_path, Settings, ?DEFAULT_BUILD_PATH),
+    WorkIdFile = ?GV(work_id, Settings, ?DEFAULT_WORK_ID_FILE),
+    WorkId = get_work_id(WorkIdFile),
+    caterpillar_event:register_worker(caterpillar, WorkId),
     schedule_poller(PollTime),
     {ok, #state{
             deps=Deps,
@@ -45,11 +49,13 @@ init(Settings) ->
             next_to_build=none,
             unpack_state=UnpackState,
             build_path=BuildPath,
-            poll_time=PollTime
+            poll_time=PollTime,
+            work_id=WorkIdFile
         }
     }.
 
-handle_call({newref, RevDef, _RevInfo}, _From, State) ->
+handle_call({newref, RevDef}, _From, State) ->
+    error_logger:info_msg("received new revision: ~p~n", [RevDef]),
     Queue = queue:in(RevDef, State#state.main_queue),
     QueuedState = State#state{main_queue=Queue},
     case State#state.next_to_build of
@@ -59,13 +65,15 @@ handle_call({newref, RevDef, _RevInfo}, _From, State) ->
             {ok, NewState} = try_build(QueuedState)
     end,
     {reply, ok, NewState};
-handle_call({built, _Worker, RevDef, _BuildInfo}, _From, State) ->
+handle_call({built, Worker, RevDef, _BuildInfo}, _From, State) ->
     caterpillar_dependencies:update(State#state.deps, RevDef),
-    {ok, ScheduledState} = schedule_build(State),
+    NewWorkers = release_worker(Worker, State#state.workers),
+    {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
     {ok, NewState} = try_build(ScheduledState),
     {reply, ok, NewState};
-handle_call({err_built, _Worker, _RevDef, _BuildInfo}, _From, State) ->
-    {ok, ScheduledState} = schedule_build(State),
+handle_call({err_built, Worker, _RevDef, _BuildInfo}, _From, State) ->
+    NewWorkers = release_worker(Worker, State#state.workers),
+    {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
     {ok, NewState} = try_build(ScheduledState),
     {reply, ok, NewState};
 handle_call(state, _From, State) ->
@@ -73,8 +81,9 @@ handle_call(state, _From, State) ->
 handle_call(_Request, _From, State) ->
     {reply, unknown, State}.
 
-handle_cast({work, _Id, Archives}, State) ->
-    ToPreprocess = lists:usort([Archives|State#state.prebuild]),
+handle_cast({changes, WorkId, Archives}, State) ->
+    update_work_id(State#state.work_id, WorkId),
+    ToPreprocess = lists:usort(Archives++State#state.prebuild),
     {ok, NewState} = process_archives(ToPreprocess, State),
     {noreply, NewState};
 handle_cast(_Msg, State) ->
@@ -104,21 +113,11 @@ process_archives([], State) ->
 process_archives([A|O], State) ->
     UnpackState = State#state.unpack_state,
     BuildPath = State#state.build_path,
-    Deps = State#state.deps,
-    Prebuild = State#state.prebuild,
-    case dets:lookup(Deps, ?VERSION(A)) of
-        [{_Vsn, {built, _}, _, _}|_] ->
-            process_archive(BuildPath, A, UnpackState),
-            process_archives(O, State);
-        [] ->
-            process_archive(BuildPath, A, UnpackState),
-            process_archives(O, State);
-        _Other ->
-            process_archives(O, State#state{prebuild=[Prebuild|A]})
-    end.
+    process_archive(BuildPath, A, UnpackState),
+    process_archives(O, State).
 
 process_archive(BuildPath, Archive, UnpackState) ->
-    {ok, _Pid, Monitor} = erlang:spawn_monitor(
+    {_Pid, Monitor} = erlang:spawn_monitor(
         ?MODULE, 
         prepare, 
         [BuildPath, Archive]),
@@ -126,18 +125,20 @@ process_archive(BuildPath, Archive, UnpackState) ->
 
 
 prepare(BuildPath, Archive) ->
+    error_logger:info_msg("preparing archive: ~p~n", [Archive]),
     TempName = io_lib:format(
         "~s-~s~s",
         [Archive#archive.name, Archive#archive.branch, Archive#archive.tag]
     ),
-    TempArch = BuildPath ++ "/temp/" ++ TempName ++ ".tar",
-    Fd = file:open(TempArch, [read, write]),
+    TempArch = filename:join([BuildPath, "temp", TempName]) ++ ".tar",
+    filelib:ensure_dir(TempArch),
+    {ok, Fd} = file:open(TempArch, [read, write]),
     ArchiveWithFd = Archive#archive{fd=Fd},
-    Msg = {get_arhive, ArchiveWithFd},
-    {ok, ArchiveWithFd} = caterpillar_event:sync_event(Msg),
-    Cwd = BuildPath ++ "/temp/" ++ TempName,
-    erl_tar:extract(Fd, [{cwd, Cwd}]),
-    PkgRecord = ?CPU:get_pkg_record(Cwd),
+    Msg = {get_archive, ArchiveWithFd},
+    ok = caterpillar_event:sync_event(Msg),
+    Cwd = filename:join([BuildPath, "temp", TempName]) ++ "/",
+    ok = erl_tar:extract(TempArch, [{cwd, Cwd}, compressed]),
+    PkgRecord = ?CPU:get_pkg_config(Archive, Cwd),
     RevDef = ?CPU:pack_rev_def(Archive, PkgRecord),
     gen_server:call(caterpillar, {newref, RevDef}).
     
@@ -148,7 +149,8 @@ prepare(BuildPath, Archive) ->
 -spec try_build(State :: #state{}) -> {ok, NewState :: #state{}}.
 try_build(State) ->
     case number_free_workers(State) of
-        Int when Int > 0 ->
+        {ok, Int} when Int > 0 ->
+            error_logger:info_msg("Free workers now: ~B", [Int]),
             job_free_worker(State);
         _Other ->
             {ok, State}
@@ -159,14 +161,16 @@ job_free_worker(State) ->
     error_logger:info_msg("job to do: ~p~n", [State#state.next_to_build]),
     NewWorkers = job_free_worker(
         State#state.workers, State#state.next_to_build),
-    {ok, State#state{workers=NewWorkers}}.
+    {ok, State#state{workers=NewWorkers, next_to_build=none}}.
 
 job_free_worker(Workers, none) ->
     Workers;
 job_free_worker([{Pid, none}|Other], ToBuild) ->
+    error_logger:info_msg("occupied new worker: ~p~n", [ToBuild]),
     gen_server:cast(Pid, {build, ToBuild}),
     [{Pid, ToBuild}|Other];
 job_free_worker([{Pid, SomeRef}|Other], ToBuild) ->
+    error_logger:info_msg("couldn't occupy new worker: ~p~n", [ToBuild]),
     job_free_worker(Other, ToBuild, [{Pid, SomeRef}]).
 
 job_free_worker([{Pid, none}|Other], ToBuild, OldW) ->
@@ -206,6 +210,14 @@ number_free_workers(State) ->
                     Cnt
             end, 0, State#state.workers)}.
 
+release_worker(Worker, Workers) ->
+    lists:map(
+        fun({W, _V}) when W==Worker ->
+            {Worker, none};
+        (Other) ->
+            Other
+        end, Workers).
+
 
 %% Scheduling
 %% ------------------------------------------------------------------
@@ -217,10 +229,12 @@ schedule_poller(Timeout) ->
 
 -spec schedule_build(State :: #state{}) -> {ok, NewState :: #state{}}.
 schedule_build(State) when State#state.next_to_build == none ->
+    error_logger:info_msg("scheduling: ~p~n", [State]),
     {ok, NewState} = get_build_candidate(State),
     schedule_poller(State#state.poll_time),
     try_build(NewState);
 schedule_build(State) ->
+    error_logger:info_msg("scheduling: ~p~n", [State]),
     schedule_poller(State#state.poll_time),
     try_build(State).
 
@@ -303,3 +317,20 @@ check_build_deps(Candidate, State) ->
         Other ->
             {error, Other}
     end.
+
+%% Utils
+
+get_work_id(File) ->
+    case file:consult(File) of
+        {ok, [Id]} when is_integer(Id) ->
+            Id;
+        _Other ->
+            update_work_id(File, 0)
+    end.
+
+update_work_id(File, Id) when is_integer(Id) ->
+    BStrId = list_to_binary(io_lib:format("~B.", [Id])),
+    {ok, Fd} = file:open(File, [write]),
+    file:write(Fd, BStrId),
+    file:close(Fd),
+    Id.

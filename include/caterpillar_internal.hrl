@@ -2,6 +2,7 @@
 -define(DEFAULT_BUILD_PATH, "/srv/caterpillar").
 -define(DEFAULT_BUCKETS_DETS, "/var/lib/smprc/caterpillar/buckets").
 -define(DEFAULT_DEPENDENCIES_DETS, "/var/lib/smprc/caterpillar/deps").
+-define(DEFAULT_WORK_ID_FILE, "/var/lib/smprc/caterpillar/work_id").
 
 -record(pkg_config, {
     name                :: string(),
