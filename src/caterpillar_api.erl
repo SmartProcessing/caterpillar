@@ -12,7 +12,7 @@
 
 start_link(Args) ->
     ensure_started(cowboy),
-    Ets = ets=ets:new(?MODULE, [public]),
+    Ets = ets:new(?MODULE, [public]),
     State = #state{ets=Ets},
     Dispatch = [
         {'_', [{'_', ?MODULE, State}]}
