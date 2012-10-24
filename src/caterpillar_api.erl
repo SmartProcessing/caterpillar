@@ -45,6 +45,7 @@ handle(#http_req{path=[Cmd, Package, Branch]}=Req, #state{ets=Ets}=State)
             true -> ok;
             _ -> exit(in_process)
         end,
+        error_logger:info_msg("~p/~p to ~p ~n", [Package, Branch, Cmd]),
         AtomCmd = binary_to_atom(<<Cmd/binary, "_package">>, latin1),
         Msg = {AtomCmd, {binary_to_list(Package), binary_to_list(Branch)}},
         case catch caterpillar_event:sync_event(Msg) of

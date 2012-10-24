@@ -330,16 +330,16 @@ events_test_() ->
             fun() ->
                 spawn(fun() ->
                     caterpillar_event:register_worker(worker1, work_id),
-                    timer:sleep(5)
+                    timer:sleep(10)
                 end)
             end,
             fun() ->
-                timer:sleep(2),
+                timer:sleep(5),
                 ?assertEqual(
                     [{worker, worker1}],
                     caterpillar_event:get_info()
                 ),
-                timer:sleep(8),
+                timer:sleep(10),
                 ?assertEqual(
                     [],
                     caterpillar_event:get_info()
