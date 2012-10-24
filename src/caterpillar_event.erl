@@ -203,20 +203,15 @@ select_workers_pids(Ets) ->
 
 push_archives_to_new_worker(#state{ets=Ets}, WorkId, WorkerPid) ->
     spawn(fun() ->
-        case select_service(Ets, repository) of
-            {ok, RepPid} ->
-                case gen_server:call(RepPid, {get_archives, WorkId}, infinity) of
-                    {ok, {changes, _WorkId, Archives}=Event} ->
-                        case Archives of
-                            [] -> ok;
-                            _ -> gen_server:cast(WorkerPid, Event)
-                        end;
-                    Err ->
-                        error_logger:info_msg("push_archives_to_new_worker error: ~p~n", [Err]),
-                        ok
-                end;
-            _ -> ok
-        end
+        Result = (catch begin
+            {ok, RepPid } = select_service(Ets, repository),
+            {ok, {changes, _, Archives}=Event} = gen_server:call(RepPid, {get_archives, WorkId}, infinity),
+            case Archives of
+                [] -> ok;
+                _ -> gen_server:cast(WorkerPid, Event)
+            end
+        end),
+        error_logger:info_msg("push_archives_to_new_worker result: ~p~n", [Result])
     end).
             
 
