@@ -41,8 +41,8 @@ handle(#http_req{path=[Cmd, Package, Branch]}=Req, #state{ets=Ets}=State)
   when Cmd == <<"rescan">>; Cmd == <<"rebuild">>
 ->
     Response = (catch begin
-        case ets:lookup(Ets, {Package, Branch}) of
-            [] -> ets:insert(Ets, {{Package, Branch}, self()});
+        case ets:insert_new(Ets, {Package, Branch}) of
+            true -> ok;
             _ -> exit(in_process)
         end,
         AtomCmd = binary_to_atom(<<Cmd/binary, "_package">>, latin1),
@@ -57,7 +57,7 @@ handle(#http_req{path=[Cmd, Package, Branch]}=Req, #state{ets=Ets}=State)
                 {ok, Req2}
         end
     end),
-    ets:delete(Ets, {Package, Branch}),
+    ets:delete(Ets, Package),
     {ok, _Res} = case Response of
         {ok, _} -> Response;
         Err->
