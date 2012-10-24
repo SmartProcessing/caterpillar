@@ -34,7 +34,7 @@ stop_node([Node]) ->
 restart_node([Node]) ->
     case net_adm:ping(Node) of
         pong ->
-            rpc:call(Node, init, restart, []),
+            rpc:call(Node, init, reboot, []),
             error_logger:info_msg("restaring node~n");
         pang ->
             io:format("down or unknown~n")
