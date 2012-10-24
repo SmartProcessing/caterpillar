@@ -36,19 +36,15 @@ start()
 {
     echo "starting"
     $START_STOP -env $ERL_LIBS $OPTS -config $CONFIG \
-        -noshell -noinput -detached -boot start_sasl -s caterpillar_app
+        -noshell -noinput -detached -shutdown_time 500 -boot start_sasl -s caterpillar_app
 }
 
 
 restart()
 {
-    echo "restarting"
-    erl -env $ERL_LIBS \
-        -setcookie $(caterpillar.escript $CONFIG cookie) \
-        -noshell -noinput \
-        -name ctl_caterpillar_$$@127.0.0.1 \
-        -s caterpillar_app restart_node $(caterpillar.escript $CONFIG self) \
-        -s init stop
+    stop
+    sleep 1
+    start
 }
 
 
