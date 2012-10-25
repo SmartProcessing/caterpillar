@@ -25,11 +25,10 @@
 }).
 
 -record(build_info, {
-    state           :: success|error|none,
+    state           :: packed|tested|none,
     fd              :: file:io_device(),
     pkg_name        :: list(),
-    description     :: list(),
-    test_info       :: list()
+    description     :: list()
 }).
 
 -type version() :: 
