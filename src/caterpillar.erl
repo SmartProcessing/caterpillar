@@ -55,6 +55,7 @@ init(Settings) ->
     }.
 
 handle_call({newref, RevDef}, _From, State) ->
+    caterpillar_dependencies:update_dependencies(State#state.deps, RevDef, new),
     error_logger:info_msg("received new revision: ~p~n", [RevDef]),
     Queue = queue:in(RevDef, State#state.main_queue),
     QueuedState = State#state{main_queue=Queue},
@@ -66,12 +67,13 @@ handle_call({newref, RevDef}, _From, State) ->
     end,
     {reply, ok, NewState};
 handle_call({built, Worker, RevDef, _BuildInfo}, _From, State) ->
-    caterpillar_dependencies:update(State#state.deps, RevDef),
+    caterpillar_dependencies:update_dependencies(State#state.deps, RevDef, built),
     NewWorkers = release_worker(Worker, State#state.workers),
     {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
     {ok, NewState} = try_build(ScheduledState),
     {reply, ok, NewState};
-handle_call({err_built, Worker, _RevDef, _BuildInfo}, _From, State) ->
+handle_call({err_built, Worker, RevDef, _BuildInfo}, _From, State) ->
+    caterpillar_dependencies:update_dependencies(State#state.deps, RevDef, error),
     NewWorkers = release_worker(Worker, State#state.workers),
     {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
     {ok, NewState} = try_build(ScheduledState),

@@ -22,8 +22,6 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
--export([get_new_bucket/1]). %% for test compile now
-
 start_link() ->
     gen_server:start_link(?MODULE, [], []).
 
@@ -79,6 +77,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 -spec build_rev(#rev_def{}, #state{}) -> {ok, term()}.  
 build_rev(ToBuild, State) -> 
+    error_logger:info_msg("received build request: ~p", [ToBuild]),
     PlatformPlugins = State#state.platform_plugins,
     BuildPlugins = State#state.build_plugins,
     BuildPath = State#state.build_path,
@@ -101,7 +100,8 @@ build_rev(ToBuild, State) ->
         {error, Info} ->
             ok = gen_server:call(caterpillar, 
                 {err_built, self(), ToBuild, Info});
-        _Other ->
+        Other ->
+            logging:info_msg("build pipe failed with reason: ~p~n", [Other]),
             Info = unknown_error,
             ok = gen_server:call(caterpillar,
                 {
@@ -116,21 +116,26 @@ build_rev(ToBuild, State) ->
 
 unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
     Package = ?VERSION(Rev),
+    error_logger:info_msg("unpacking revision ~p~n", [Package]),
     Deps = ?CPU:get_dep_list(Rev#rev_def.pkg_config),
-    case find_bucket(Buckets, Package, Deps) of
+    Res = case find_bucket(Buckets, Package, Deps) of
         [Bucket|_] ->
             update_package_buckets(Buckets, DepsDets, Bucket, BuildPath, Rev),
             arm_build_bucket(Buckets, DepsDets, Bucket, BuildPath, Deps),
             {ok, {Rev, Bucket}};
         [] ->
+            error_logger:info_msg("no bucket for ~p~n", [Package]),
             {ok, Bucket} = create_bucket(
-                Buckets, DepsDets, Package, BuildPath),
+                Buckets, DepsDets, Rev, BuildPath),
             arm_build_bucket(Buckets, DepsDets, Bucket, BuildPath, Deps),
             {ok, {Rev, Bucket}};
         _Other ->
             error_logger:error_msg("failed to find or create a bucket for ~p~n", [Rev]),
             {error, failed_to_create_bucket}
-    end.
+    end,
+    error_logger:info_msg("unpacked revision ~p with result: ~p~n", [Package, Res]),
+    Res.
+    
 
 platform_get_env({Rev, {_, BPath, _}}, Plugins) ->
     {Name, _B, _T} = ?VERSION(Rev),
@@ -225,8 +230,9 @@ informer(State, Msg, Env) ->
 % @doc Creates a directory pool for building some packages
 create_bucket(BucketsDets, DepsDets, Package, BuildPath) ->
     BucketId = get_new_bucket(BucketsDets),
-    Bucket = {list_to_binary(BucketId), BuildPath ++ "/" ++ BucketId ++ "/", []},
-    update_package_buckets(BucketsDets, DepsDets, Bucket, BuildPath, Package).
+    Bucket = {list_to_binary(BucketId), BucketId, []},
+    update_package_buckets(BucketsDets, DepsDets, Bucket, BuildPath, Package),
+    {ok, Bucket}.
 
 
 -spec find_bucket(reference(), version(), list()) ->
@@ -240,7 +246,9 @@ find_bucket(BucketDets, Package, Deps) ->
                     {done, Bucket};
                 false ->
                     continue
-            end
+            end;
+        (_Other) ->
+            continue
         end).
 
 validate_bucket(Entries, Deps) ->
@@ -265,7 +273,7 @@ get_new_bucket(Dets) ->
             ok = dets:insert(Dets, {last_bucket, Num+1}),
             io_lib:format("~4..0B", [Num + 1]);
         [] ->
-            ok = dets:insert(Dets, 0),
+            ok = dets:insert(Dets, {last_bucket, 0}),
             io_lib:format("~4..0B", [0])
     end.
 
@@ -290,6 +298,7 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
     arm_build_bucket(BucketsDets, Deps, Current, BuildPath, O).
 
 update_package_buckets(BucketsTable, DepsTable, Bucket, BuildPath, Rev) ->
+    error_logger:info_msg("updating package bucket: ~p~n", [Bucket]),
     Package = ?VERSION(Rev),
     [{Package, {State, DepBucketIds}, DepOn, HasInDep}|_] = dets:lookup(DepsTable, Package),
     DepBuckets = lists:map(
@@ -312,6 +321,7 @@ update_buckets(BucketsTable, BuildPath, Rev, [Bucket|O], Acc) ->
     Path = filename:join([BuildPath, BPath, binary_to_list(Name)]) ++ "/",
     ?CU:del_dir(Path),
     filelib:ensure_dir(Path),
+    error_logger:info_msg("trying to copy ~s to ~s~n", [get_temp_path(BuildPath, Rev), Path]),
     ok = ?CU:recursive_copy(get_temp_path(BuildPath, Rev), Path),
     ok = dets:insert(BucketsTable, {BName, BPath, lists:usort([Package|BContain])}),
     update_buckets(BucketsTable, BuildPath, Rev, O, [BName|Acc]).

@@ -32,7 +32,7 @@ get_version_by_revdef(RevDef) ->
 build_pipe(Funs, Init) ->
     lists:foldl(
         fun({Function, Opts}, Acc) ->
-            {ok, Res} = erlang:apply(Function, [Opts, Acc]),
+            {ok, Res} = erlang:apply(Function, [Acc, Opts]),
             Res
         end, Init, Funs).
 

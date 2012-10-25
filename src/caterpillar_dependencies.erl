@@ -1,7 +1,7 @@
 -module(caterpillar_dependencies).
 -include_lib("caterpillar_internal.hrl").
 -export([check_intersection/2, list_unresolved_dependencies/2]).
--export([update_dependencies/2]).
+-export([update_dependencies/3]).
 
 -spec list_unresolved_dependencies(reference(), #rev_def{}) ->
     {ok, Unresolved :: [version()]}.
@@ -53,20 +53,19 @@ fetch_dependencies(DepTree, Version) ->
     end.
 
 
--spec update_dependencies(reference(), #rev_def{}) -> 
+-spec update_dependencies(reference(), #rev_def{}, atom()) -> 
     {ok, done}|{error, Reason :: atom()}.
-update_dependencies(DepTree, Rev) ->
+update_dependencies(DepTree, Rev, Status) ->
     Version = ?VERSION(Rev),
     DepObject = Rev#rev_def.dep_object, 
     update_subjects(DepTree, DepObject, Version),
-    DepSubject = case dets:lookup(DepTree, Version) of
-        [{Version, _, _, Subj}|_] ->
-            Subj;
-        _Other ->
-            []
+    NewObj = case dets:lookup(DepTree, Version) of
+        [{V, {_, Buckets}, _, Subj}|_] when V == Version ->
+            {Version, {Status, Buckets}, DepObject, Subj};
+        [] ->
+            {Version, {Status, []}, DepObject, []}
     end,
-    dets:insert(DepTree,
-        {Version, built, DepObject, DepSubject}),
+    dets:insert(DepTree, NewObj),
     {ok, done}.
 
 
