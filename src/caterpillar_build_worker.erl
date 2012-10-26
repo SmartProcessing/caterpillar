@@ -130,8 +130,9 @@ build_rev(ToBuild, State) ->
 unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
     Package = ?VERSION(Rev),
     error_logger:info_msg("unpacking revision ~p~n", [Package]),
-    Deps = ?CPU:get_dep_list(Rev#rev_def.pkg_config),
-    case find_bucket(Buckets, Package, Deps) of
+    Deps = Rev#rev_def.dep_object,
+    dets:safe_fixtable(Buckets, true),
+    Res = case find_bucket(Buckets, Package, Deps) of
         [Bucket|_] ->
             error_logger:info_msg("found a bucket for ~p: ~p~n", [Rev, Bucket]),
             update_package_buckets(Buckets, DepsDets, Bucket, BuildPath, Rev),
@@ -146,7 +147,9 @@ unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
         _Other ->
             error_logger:error_msg("failed to find or create a bucket for ~p~n", [Rev]),
             {error, "failed to find a place to build, sorry"}
-    end.
+    end,
+    dets:safe_fixtable(Buckets, false),
+    Res.
     
 
 platform_get_env({Rev, {_, BPath, _}, BuildPath}, Plugins) ->
@@ -244,10 +247,12 @@ validate_bucket([], _Deps, Prev) ->
 validate_bucket([E|O], Deps, Prev) ->
     {Name, Branch, Tag} = E,
     Res = case [{B, T} || {N, B, T} <- Deps, N == Name] of
-        [{Branch, Tag}|_] ->
+        [{B, T}|_] when B==Branch, T==Tag ->
             true;
         [] ->
             true;
+        [{B, T}|_] when B/=Branch; T/=Tag ->
+            false;
         _Other ->
             false
     end,
@@ -268,18 +273,20 @@ arm_build_bucket(_Buckets, _Deps, _Current, _BuildPath, []) ->
     {ok, done};
 arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
     {BName, BPath, BPackages} = Current,
+    error_logger:info_msg("looking for dependencie ~p for bucket ~p~n", [Dep, Current]),
     case lists:member(Dep, BPackages) of
         true ->
             pass;
         false ->
             {Name, _B, _T} = Dep,
-            [{Dep, {built, DepBuckets}, DepOn, HasInDep}|_] = dets:lookup(Deps, Dep),
+            [{Dep, {State, DepBuckets}, DepOn, HasInDep}|_] = dets:lookup(Deps, Dep),
+            error_logger:info_msg("found buckets with dep ~p in: ~p~n", [Dep, DepBuckets]),
             [AnyBucket|_] = DepBuckets,
-            [{AnyBucket, Path, _Packages}] = dets:lookup(BucketsDets, AnyBucket),
+            [{AnyBucket, Path, Packages}] = dets:lookup(BucketsDets, AnyBucket),
             DepPath = filename:join([BuildPath, Path, binary_to_list(Name)]),
             ?CU:recursive_copy(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)])),
-            dets:insert(BucketsDets, {BName, BPath, [BPackages|BPath]}),
-            dets:insert(Deps, {Dep, {built, [DepBuckets|Current]}, DepOn, HasInDep})
+            dets:insert(BucketsDets, {BName, BPath, [Dep|Packages]}),
+            dets:insert(Deps, {Dep, {State, [BName|DepBuckets]}, DepOn, HasInDep})
     end,
     arm_build_bucket(BucketsDets, Deps, Current, BuildPath, O).
 
