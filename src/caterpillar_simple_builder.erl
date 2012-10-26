@@ -8,10 +8,7 @@
 -export([init_worker/2, changes/3, get_work_id/1, terminate_worker/1]).
 
 
-
-
-
-init_worker(Ident, Args) ->
+init_worker(Ident, Args) when is_atom(Ident) ->
     WorkIdFile = ?GVOD(work_id_file, Args),
     [ArchiveRoot, RepositoryRoot, DeployRoot] = [
         caterpillar_utils:ensure_dir(?GVOD(Root, Args)) ||
@@ -25,7 +22,10 @@ init_worker(Ident, Args) ->
         repository_root = RepositoryRoot,
         deploy_root=DeployRoot
     },
-    {ok, State}.
+    {ok, State};
+init_worker(BadIdent, _Args) ->
+    error_logger:error_msg("bad ident: ~p~n", [BadIdent]),
+    {error, bad_ident}.
 
 
 terminate_worker(_State) -> ok.
@@ -127,7 +127,7 @@ make_packages([ #package{name=Name, branch=Branch}=Package|T ], Accum, #state{ne
     UnArchivePath = filename:join([State#state.repository_root, Name, Branch]),
     ControlFile = filename:join(UnArchivePath, "control"),
     case filelib:is_regular(ControlFile) of
-        true -> catch modify_control(ControlFile, Branch, WorkId);
+        true -> catch modify_control(ControlFile, Branch, WorkId, State#state.ident);
         _ -> ok
     end,
     DistDir = filename:join(UnArchivePath, "dist"),
@@ -270,7 +270,7 @@ post_deploy(#deploy{packages=Packages}, State) ->
 
 
 
-modify_control(ControlFile, Branch, Revision) ->
+modify_control(ControlFile, Branch, Revision, Ident) ->
     {ok, Data} = file:read_file(ControlFile),
     NewData = lists:map(
         fun(Bin) ->
@@ -279,11 +279,18 @@ modify_control(ControlFile, Branch, Revision) ->
                     RawVersion = pick_out_version(string:strip(binary_to_list(Version), right, $ ), []),
                     NewVersion = list_to_binary(RawVersion++"-"++Branch++"."++integer_to_list(Revision)),
                     <<"Version:", NewVersion/binary>>;
-                ["Section", Section] ->
+                [<<"Section">>, Section] ->
                     RawSection = string:strip(binary_to_list(Section), right, $ ),
                     NewSection = list_to_binary(RawSection++"-"++Branch),
                     <<"Section:", NewSection/binary>>;
+                [<<"Architecture">>, Arch] ->
+                    NewArch = case string:strip(binary_to_list(Arch), both, $ ) of
+                        "all" -> <<"all">>;
+                        _ -> atom_to_binary(Ident, latin1)
+                    end,
+                    <<"Architecture: ", NewArch/binary>>;
                 _ -> Bin
+
             end,
             <<NewBin/binary, "\n">>
         end,
