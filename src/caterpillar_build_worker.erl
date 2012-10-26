@@ -192,7 +192,7 @@ build_submit(Env, Plugins) ->
     case State of
         ok ->
             {_Fd, _Name} = Msg,
-            Msg;
+            {ok, Msg};
         error ->
             {error, Msg};
         Other ->

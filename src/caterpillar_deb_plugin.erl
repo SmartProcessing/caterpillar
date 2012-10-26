@@ -23,8 +23,8 @@ find_deb_file(Dir) ->
     case filelib:wildcard(filename:join(Dir, "*.deb")) of
         [Deb] ->
             Name = lists:last(filename:split(Deb)),
-            Fd = file:open(Deb, [read]),
-            {Fd, Name};
+            {ok, Fd} = file:open(Deb, [read]),
+            {ok, {Fd, Name}};
         Other ->
             error_logger:error_msg("cant find deb package, ~p~n", [Other]),
             {error, "couldn't find *.deb package"}

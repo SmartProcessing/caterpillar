@@ -65,12 +65,15 @@ pack_rev_def(Archive, PkgRecord) ->
 
 
 get_pkg_config_list(Path) ->
+    error_logger:info_msg("PKG_CONFIG PATH: ~p~n", [filename:join(Path, "pkg.config")]),
+    error_logger:info_msg("PKG_CONFIG DIR_LIST: ~p~n", [file:list_dir(Path)]),
+    error_logger:info_msg("PKG_CONFIG FILE: ~p~n", [catch file:consult(filename:join(Path, "pkg.config"))]),
     case [
             catch file:consult(filename:join(Path, "pkg.config")),
             filelib:is_file(Path ++ "control") ] of
         [{ok, [Term]}|_] ->
             {config, Term};
-        [_, true] ->
+        [{error, _}, true] ->
             {control, parse_control(Path)};
         _Other ->
             {empty, []}
