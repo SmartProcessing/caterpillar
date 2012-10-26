@@ -55,7 +55,6 @@ init(Settings) ->
     }.
 
 handle_call({newref, RevDef}, _From, State) ->
-    caterpillar_dependencies:update_dependencies(State#state.deps, RevDef, new),
     error_logger:info_msg("received new revision: ~p~n", [RevDef]),
     Queue = queue:in(RevDef, State#state.main_queue),
     QueuedState = State#state{main_queue=Queue},
@@ -72,8 +71,10 @@ handle_call({built, Worker, RevDef, _BuildInfo}, _From, State) ->
     {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
     {ok, NewState} = try_build(ScheduledState),
     {reply, ok, NewState};
-handle_call({err_built, Worker, RevDef, _BuildInfo}, _From, State) ->
-    caterpillar_dependencies:update_dependencies(State#state.deps, RevDef, error),
+handle_call({err_built, Worker, RevDef, BuildInfo}, _From, State) ->
+    error_logger:info_msg("error built: ~p~n", [BuildInfo]),
+    BuildState = BuildInfo#build_info.state,
+    caterpillar_dependencies:update_dependencies(State#state.deps, RevDef, BuildState),
     NewWorkers = release_worker(Worker, State#state.workers),
     {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
     {ok, NewState} = try_build(ScheduledState),
@@ -259,6 +260,7 @@ get_build_candidate(main_queue, State) ->
     {{value, Candidate}, MainQueue} = queue:out(State#state.main_queue),
     case check_build_deps(Candidate, State) of
         independent ->
+            caterpillar_dependencies:update_dependencies(State#state.deps, Candidate, new),
             {ok, State#state{main_queue=MainQueue, next_to_build=Candidate}};
         dependent ->
             WaitQueue = queue:in(Candidate, State#state.wait_queue),
@@ -271,10 +273,11 @@ get_build_candidate(wait_queue, State) ->
     {{value, Candidate}, WaitQueue} = queue:out(State#state.wait_queue),
     case check_build_deps(Candidate, State) of
         independent ->
+            caterpillar_dependencies:update_dependencies(State#state.deps, Candidate, new),
             {ok, State#state{wait_queue=WaitQueue, next_to_build=Candidate}};
         dependent ->
-            WaitQueue = queue:in(Candidate, State#state.wait_queue),
-            {ok, State#state{wait_queue=WaitQueue}};
+            RolledWaitQueue = queue:in(Candidate, WaitQueue),
+            {ok, State#state{wait_queue=RolledWaitQueue}};
         Other ->
             Subject = io_lib:format("Build for ~p", [Candidate]),
             Body = io_lib:format("Error while processing dependencies: ~n~p~n", [Other]),
@@ -284,12 +287,13 @@ get_build_candidate(wait_queue, State) ->
 get_build_candidate(both, State) ->
     {{value, Candidate}, WaitQueue} = queue:out(State#state.wait_queue),
     case check_build_deps(Candidate, State) of
-        independent -> %% independent
+        independent ->
+            caterpillar_dependencies:update_dependencies(State#state.deps, Candidate, new),
             {ok, State#state{wait_queue=WaitQueue, next_to_build=Candidate}};
         dependent ->
-            WaitQueue = queue:in(Candidate, State#state.wait_queue),
+            RolledWaitQueue = queue:in(Candidate, WaitQueue),
             get_build_candidate(main_queue,
-                State#state{wait_queue=WaitQueue});
+                State#state{wait_queue=RolledWaitQueue});
         _Other ->
             {error, broken_deps}
     end.

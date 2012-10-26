@@ -20,16 +20,17 @@ get_pkg_config_record(Archive, {control, Data}) ->
         deps=?GV("Depends", Data, [])
     };
 get_pkg_config_record(Archive, {config, Data}) ->
+    error_logger:info_msg("BUILD DEPS! ~p~n", [?GV(build_deps, Data)]),
     #pkg_config{
-        name=?GV("name", Data, Archive#archive.name),
-        version=?GV("version", Data, "0.0.0"),
-        section=?GV("section", Data, "smprc"),
-        package_t=?GV("package_t", Data, ["deb"]),
-        arch=?GV("architecture", Data, "all"),
-        maintainers=?GV("maintainers", Data, ["example@example.org"]),
-        platform=?GV("platform", Data, "default"),
-        deps=?GV("deps", Data, []),
-        build_deps=?GV("build_deps", Data, [])
+        name=?GV(name, Data, Archive#archive.name),
+        version=?GV(version, Data, "0.0.0"),
+        section=?GV(section, Data, "smprc"),
+        package_t=?GV(package_t, Data, ["deb"]),
+        arch=?GV(architecture, Data, "all"),
+        maintainers=?GV(maintainers, Data, ["example@example.org"]),
+        platform=?GV(platform, Data, "default"),
+        deps=?GV(deps, Data, []),
+        build_deps=?GV(build_deps, Data, [])
     };
 get_pkg_config_record(Archive, {empty, Data}) ->
     #pkg_config{
@@ -64,12 +65,15 @@ pack_rev_def(Archive, PkgRecord) ->
 
 
 get_pkg_config_list(Path) ->
+    error_logger:info_msg("PKG_CONFIG PATH: ~p~n", [filename:join(Path, "pkg.config")]),
+    error_logger:info_msg("PKG_CONFIG DIR_LIST: ~p~n", [file:list_dir(Path)]),
+    error_logger:info_msg("PKG_CONFIG FILE: ~p~n", [catch file:consult(filename:join(Path, "pkg.config"))]),
     case [
-            catch file:consult(filename:join(Path, "/pkg.config")),
+            catch file:consult(filename:join(Path, "pkg.config")),
             filelib:is_file(Path ++ "control") ] of
-        [{ok, Term}|_] ->
+        [{ok, [Term]}|_] ->
             {config, Term};
-        [_, true] ->
+        [{error, _}, true] ->
             {control, parse_control(Path)};
         _Other ->
             {empty, []}
@@ -77,7 +81,9 @@ get_pkg_config_list(Path) ->
 
 
 get_pkg_config(Arch, Path) ->
-    get_pkg_config_record(Arch, get_pkg_config_list(Path)).
+    Res = get_pkg_config_record(Arch, get_pkg_config_list(Path)),
+    logging:info_msg("got package config record: ~p~n", [Res]),
+    Res.
 
 
 get_dir_name(Rev) ->
@@ -90,11 +96,11 @@ get_dir_name(Rev) ->
 parse_control(Path) ->
     case catch file:read_file(filename:join([Path, "control"])) of
         {ok, Content} ->
-            {control, lists:map(
+            lists:map(
                 fun(Entry) ->
                     parse_control_entry(string:tokens(Entry, ":"))
                 end,
-                string:tokens(?BTL(Content), "\n"))};
+                string:tokens(?BTL(Content), "\n"));
         {error, Reason} ->
             error_logger:error_msg("no control file: ~p~n", [Reason]),
             [];

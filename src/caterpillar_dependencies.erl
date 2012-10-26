@@ -11,7 +11,7 @@ list_unresolved_dependencies(DepTree, Candidate) ->
         fun(X) ->
             case fetch_dependencies(DepTree, X) of
                 {ok, {_VersionSpec, {State, _B}, _Obj, _Subj}} ->
-                    State /= built;
+                    (State /= built) and (State /= tested);
                 _Other ->
                     true
             end
@@ -56,6 +56,7 @@ fetch_dependencies(DepTree, Version) ->
 -spec update_dependencies(reference(), #rev_def{}, atom()) -> 
     {ok, done}|{error, Reason :: atom()}.
 update_dependencies(DepTree, Rev, Status) ->
+    error_logger:info_msg("updating dependencies: Rev: ~p Status: ~p~n", [Rev, Status]),
     Version = ?VERSION(Rev),
     DepObject = Rev#rev_def.dep_object, 
     update_subjects(DepTree, DepObject, Version),
@@ -71,12 +72,12 @@ update_dependencies(DepTree, Rev, Status) ->
 
 update_subjects(_, [], _) ->
     {ok, done};
-update_subjects(DepTree, [Version|Other], NewRef) ->
-    [{Version, BuildInfo, Object, Subject}|_] = dets:lookup(DepTree, Version),
-    case lists:member(NewRef, Object) of
+update_subjects(Deps, [Version|Other], NewRef) ->
+    [{Version, BuildInfo, Object, Subject}|_] = dets:lookup(Deps, Version),
+    case lists:member(NewRef, Subject) of
         true ->
             ok;
         false ->
-            dets:insert(DepTree, {Version, BuildInfo, Object, Subject})
+            dets:insert(Deps, {Version, BuildInfo, Object, [NewRef|Subject]})
     end,
-    update_subjects(DepTree, Other, NewRef).
+    update_subjects(Deps, Other, NewRef).

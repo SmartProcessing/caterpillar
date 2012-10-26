@@ -29,12 +29,20 @@ get_version_by_revdef(RevDef) ->
     {Name, Branch, Tag}.
 
 -spec build_pipe([function_spec()], term()) -> {ok, term()} | {error, term()}.
-build_pipe(Funs, Init) ->
-    lists:foldl(
-        fun({Function, Opts}, Acc) ->
-            {ok, Res} = erlang:apply(Function, [Acc, Opts]),
-            Res
-        end, Init, Funs).
+build_pipe([], Value) ->
+    {ok, Value};
+build_pipe([Fun|O], {Phase, Value}) ->
+    {Function, Opts} = Fun,
+    case erlang:apply(Function, [Value, Opts]) of
+        {ok, Res} ->
+            build_pipe(O, Res);
+        {error, Msg} ->
+            error_logger:info_msg("build pipe failed:~p~n", [Msg]),
+            {error, Phase, Msg};
+        Other ->
+            error_logger:info_msg("build pipe failed:~p~n", [Other]),
+            {error, Phase, io_lib:format("~p", [Other])}
+    end.
 
 
 pipe([], PrevResult, _State) -> {ok, PrevResult};
@@ -202,7 +210,7 @@ rec_copy(From, To, File) ->
     NewTo   = filename:join(To, File),
     case filelib:is_dir(NewFrom) of
         true  ->
-            ok = filelib:ensure_dir(NewTo),
+            ok = filelib:ensure_dir(NewTo++"/"),
             recursive_copy(NewFrom, NewTo);
         false ->
             case filelib:is_file(NewFrom) of                

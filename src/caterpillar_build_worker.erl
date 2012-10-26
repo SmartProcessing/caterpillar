@@ -93,24 +93,37 @@ build_rev(ToBuild, State) ->
         {fun build_check/2, BuildPlugins},
         {fun build_submit/2, BuildPlugins}
     ],
-    case catch caterpillar_utils:build_pipe(Funs, ToBuild) of
-        {ok, Info} ->
+    case catch caterpillar_utils:build_pipe(Funs, {none, ToBuild}) of
+        {ok, {Fd, Name}} ->
             ok = gen_server:call(caterpillar, 
-                {built, self(), ToBuild, Info});
-        {error, Info} ->
+                {built, self(), ToBuild, #build_info{
+                        state=built,
+                        fd=Fd,
+                        pkg_name=Name,
+                        description="ok"
+                    }});
+        {error, Value, Msg} ->
             ok = gen_server:call(caterpillar, 
-                {err_built, self(), ToBuild, Info});
+                {err_built, self(), ToBuild, #build_info{
+                        state=Value,
+                        fd=none,
+                        pkg_name=none,
+                        description=Msg
+                    }});
         Other ->
             logging:info_msg("build pipe failed with reason: ~p~n", [Other]),
-            Info = unknown_error,
             ok = gen_server:call(caterpillar,
                 {
                     err_built, 
                     self(), 
-                    ToBuild, #build_info{}
+                    ToBuild, #build_info{
+                        state=none,
+                        fd=none,
+                        pkg_name=none,
+                        description="unknown error"
+                    }
                 })
-    end,
-    {ok, Info}.
+    end.
 
 %% {{{1 Pipe functions
 
@@ -118,110 +131,83 @@ unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
     Package = ?VERSION(Rev),
     error_logger:info_msg("unpacking revision ~p~n", [Package]),
     Deps = ?CPU:get_dep_list(Rev#rev_def.pkg_config),
-    Res = case find_bucket(Buckets, Package, Deps) of
+    case find_bucket(Buckets, Package, Deps) of
         [Bucket|_] ->
+            error_logger:info_msg("found a bucket for ~p: ~p~n", [Rev, Bucket]),
             update_package_buckets(Buckets, DepsDets, Bucket, BuildPath, Rev),
             arm_build_bucket(Buckets, DepsDets, Bucket, BuildPath, Deps),
-            {ok, {Rev, Bucket}};
+            {ok, {none, {Rev, Bucket, BuildPath}}};
         [] ->
             error_logger:info_msg("no bucket for ~p~n", [Package]),
             {ok, Bucket} = create_bucket(
                 Buckets, DepsDets, Rev, BuildPath),
             arm_build_bucket(Buckets, DepsDets, Bucket, BuildPath, Deps),
-            {ok, {Rev, Bucket}};
+            {ok, {none, {Rev, Bucket, BuildPath}}};
         _Other ->
             error_logger:error_msg("failed to find or create a bucket for ~p~n", [Rev]),
-            {error, failed_to_create_bucket}
-    end,
-    error_logger:info_msg("unpacked revision ~p with result: ~p~n", [Package, Res]),
-    Res.
+            {error, "failed to find a place to build, sorry"}
+    end.
     
 
-platform_get_env({Rev, {_, BPath, _}}, Plugins) ->
+platform_get_env({Rev, {_, BPath, _}, BuildPath}, Plugins) ->
     {Name, _B, _T} = ?VERSION(Rev),
     PkgConfig = Rev#rev_def.pkg_config,
     Platform = PkgConfig#pkg_config.platform,
     Plugin = ?GV(Platform, Plugins, caterpillar_default_builder),
-    Path = BPath ++ "/" ++ Name,
+    Path = filename:join([BuildPath, BPath, binary_to_list(Name)]),
     {ok, Plugin, Path}.
 
-package_get_env({Rev, {_, BPath, _}}, Plugins) ->
+package_get_env({Rev, {_, BPath, _}, BuildPath}, Plugins) ->
     {Name, _B, _T} = ?VERSION(Rev),
     PkgConfig = Rev#rev_def.pkg_config,
     PackageT = PkgConfig#pkg_config.package_t,
     Plugin = ?GV(PackageT, Plugins, caterpillar_deb_plugin),
-    Path = BPath ++ "/" ++ Name,
+    Path = filename:join([BuildPath, BPath, binary_to_list(Name)]),
     {ok, Plugin, Path}.
 
 platform_clean(Env, Plugins) ->
     {ok, Plugin, Path} = platform_get_env(Env, Plugins),
-    {State, Msg} = Plugin:clean(Path),
-    informer(State, Msg, Env).
+    informer(none, Plugin:clean(Path), Env).
 
 platform_test(Env, Plugins) ->
     {ok, Plugin, Path} = platform_get_env(Env, Plugins),
-    {State, Msg} = Plugin:test(Path),
-    informer(State, Msg, Env).
+    informer(tested, Plugin:test(Path), Env).
+
 
 platform_prebuild(Env, Plugins) ->
     {ok, Plugin, Path} = platform_get_env(Env, Plugins),
-    {State, Msg} = Plugin:prebuild(Path),
-    informer(State, Msg, Env).
+    informer(tested, Plugin:prebuild(Path), Env).
 
 build_prepare(Env, Plugins) ->
     {ok, Plugin, Path} = package_get_env(Env, Plugins),
-    {State, Msg} = Plugin:prepare(Path),
-    informer(State, Msg, Env).
+    informer(tested, Plugin:prepare(Path), Env).
 
 build_check(Env, Plugins) ->
     {ok, Plugin, Path} = package_get_env(Env, Plugins),
-    {State, Msg} = Plugin:check(Path),
-    informer(State, Msg, Env).
+    informer(tested, Plugin:check(Path), Env).
 
 build_submit(Env, Plugins) ->
     {ok, Plugin, Path} = package_get_env(Env, Plugins),
     {State, Msg} = Plugin:submit(Path),
     case State of
         ok ->
-            {Fd, Name, Info} = Msg,
-            #build_info{
-                state=success,
-                fd=Fd,
-                pkg_name=Name,
-                description="ok",
-                test_info=Info
-            };
-        error ->
-            #build_info{
-                state=error,
-                fd=none,
-                pkg_name=none,
-                description=Msg,
-                test_info=""
-            };
-        Other ->
-            error_logger:error_msg("failed to submit package: ~p~n", [Other]),
-            #build_info{
-                state=error,
-                fd=none,
-                pkg_name=none,
-                description="package submit failed",
-                test_info=""
-            }
-    end.
-
-
-
-informer(State, Msg, Env) ->
-    case State of
-        ok ->
-            {ok, Env};
+            {_Fd, _Name} = Msg,
+            {ok, Msg};
         error ->
             {error, Msg};
         Other ->
-            error_logger:error_msg("build: something went wrong: ~p ~p~n", [Other, Msg]),
+            error_logger:error_msg("failed to submit package: ~p~n", [Other]),
+            {error, "unknown error while submitting package"}
+    end.
+
+informer(Phase, {State, Msg}, Env) ->
+    case State of
+        ok ->
+            {ok, {Phase, Env}};
+        error ->
             {error, Msg}
     end.
+
 
 %% 1}}}
 
@@ -300,6 +286,7 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
 update_package_buckets(BucketsTable, DepsTable, Bucket, BuildPath, Rev) ->
     error_logger:info_msg("updating package bucket: ~p~n", [Bucket]),
     Package = ?VERSION(Rev),
+    error_logger:info_msg("looking for package in Dets: ~p~n", [dets:lookup(DepsTable, Package)]),
     [{Package, {State, DepBucketIds}, DepOn, HasInDep}|_] = dets:lookup(DepsTable, Package),
     DepBuckets = lists:map(
         fun(Id) -> 
