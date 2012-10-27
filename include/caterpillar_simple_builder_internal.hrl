@@ -15,6 +15,7 @@
 -record(package, {
     name :: string(),
     branch :: string(),
+    tag :: term(),
     package :: file:name(),
     build_status :: ok | error | ignored,
     log = <<>> :: binary()

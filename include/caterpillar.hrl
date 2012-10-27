@@ -11,7 +11,7 @@
 
 -record(notify, {
     subject = <<>> :: binary,
-    body = <<>> :: binary
+    body = <<>>    :: binary
 }).
 
 
@@ -26,6 +26,7 @@
 -record(deploy, {
     ident :: term(),
     work_id :: term(),
+    tag :: term(),
     packages = [] :: [#deploy_package{}],
     pre_deploy_actions = [],
     post_deploy_actions = []

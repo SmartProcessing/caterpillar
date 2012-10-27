@@ -115,8 +115,8 @@ clean_deploy_root(Archives, #state{deploy_root=DR}) ->
 make_packages(Archives, State) ->
     error_logger:info_msg("making packages ~n"),
     Packages = [
-        #package{name=Name, branch=Branch} || 
-        #archive{name=Name, branch=Branch} <- Archives
+        #package{name=Name, branch=Branch, tag=Tag} || 
+        #archive{name=Name, branch=Branch, tag=Tag} <- Archives
     ],
     make_packages(Packages, [], State).
 
