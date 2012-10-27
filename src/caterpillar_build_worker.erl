@@ -287,7 +287,7 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
             [{Dep, {State, DepBuckets}, DepOn, HasInDep}|_] = dets:lookup(Deps, Dep),
             error_logger:info_msg("found buckets with dep ~p in: ~p~n", [Dep, DepBuckets]),
             [AnyBucket|_] = DepBuckets,
-            [{AnyBucket, Path, Packages}] = dets:lookup(BucketsDets, AnyBucket),
+            [{AnyBucket, Path, _Packages}] = dets:lookup(BucketsDets, AnyBucket),
             DepPath = filename:join([BuildPath, Path, binary_to_list(Name)]),
             ?CU:recursive_copy(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)])),
             dets:insert(BucketsDets, {BName, BPath, [Dep|BPackages]}),

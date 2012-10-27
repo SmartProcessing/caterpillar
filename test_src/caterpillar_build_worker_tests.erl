@@ -194,13 +194,12 @@ update_package_buckets_test_() ->
                 dep_object = [], 
                 pkg_config=#pkg_config{name = "name"}
             },
-            ?CBW:update_package_buckets('buckets', 'deps', {<<"0001">>, "0001", []}, "./test_src", Rev),
+            ?CBW:update_package_bucket('buckets', 'deps', {<<"0001">>, "0001", []}, "./test_src", Rev),
             ?assertEqual(file:consult("./test_src/0001/newpkg/sample"), {ok, [{test, 1}]}),
-            ?assertEqual(file:consult("./test_src/0003/newpkg/sample"), {ok, [{test, 1}]}),
             ResB = dets:lookup('buckets', <<"0001">>),
             ?assertEqual([{<<"0001">>, "0001", [{<<"newpkg">>, <<"trunk">>, <<"1.0.1">>}]}], ResB),
             [ResD] = dets:lookup('deps', {<<"newpkg">>, <<"trunk">>, <<"1.0.1">>}),
-            ?assertMatch({_, {in_process, [<<"0003">>, <<"0001">>]}, _, _}, ResD)
+            ?assertMatch({_, {in_process, [<<"0001">>, <<"0003">>]}, _, _}, ResD)
         end
     }.
 
