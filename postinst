@@ -11,6 +11,10 @@ if [ "$1" = configure ]; then
             --disabled-password --disabled-login caterpillar &&
         echo "Added user 'caterpillar'"
 
+    mkdir -p /srv/deploy
+    mkdir -p /srv/packages
+    chown caterpillar:caterpillar /srv/delpoy
+    chown caterpillar:caterpillar /src/packages
     chown -R caterpillar:caterpillar /var/lib/caterpillar
     chown -R caterpillar:caterpillar /var/log/caterpillar
     chmod 777 /var/log/caterpillar/*
