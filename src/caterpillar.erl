@@ -185,8 +185,9 @@ job_free_worker([{Pid, SomeRef}|Other], ToBuild, OldW) ->
 -spec create_workers(WorkerNumber :: non_neg_integer()) -> 
     {ok, [{Pid :: pid(), none}]}.
 create_workers(WorkerNumber) ->
-    error_logger:info_msg("starting ~B build workers and worker supervisor: ~p ~n", 
+    error_logger:info_msg("starting ~B build workers, worker supervisor and lock storage: ~p ~n", 
         [WorkerNumber, caterpillar_build_worker_sup:start_link()]),
+    caterpillar_lock_sup:start_link(),
     create_workers(WorkerNumber, []).
 create_workers(0, Acc) ->
     {ok, Acc};

@@ -66,8 +66,8 @@ pack_rev_def(Archive, PkgRecord) ->
 
 get_pkg_config_list(Path) ->
     case [
-            catch file:consult(filename:join(Path, "pkg.config")),
-            filelib:is_file(Path ++ "control") ] of
+            catch file:consult(filename:join([Path, "pkg.config"])),
+            filelib:is_file(filename:join([Path, "control"]))] of
         [{ok, [Term]}|_] ->
             {config, Term};
         [{error, _}, true] ->
