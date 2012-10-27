@@ -137,7 +137,13 @@ unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
     Res = case find_bucket(Buckets, Package, Deps) of
         [Bucket|_] ->
             error_logger:info_msg("found a bucket for ~p: ~p~n", [Rev, Bucket]),
-            update_package_bucket(Buckets, DepsDets, Bucket, BuildPath, Rev),
+            update_package_buckets(
+                Buckets,
+                DepsDets, 
+                [Bucket], 
+                BuildPath, 
+                get_temp_path(BuildPath, Rev),
+                Rev),
             arm_build_bucket(Buckets, DepsDets, Bucket, BuildPath, Deps),
             {ok, {none, {Rev, Bucket, BuildPath}}};
         [] ->
@@ -223,7 +229,13 @@ create_bucket(BucketsDets, DepsDets, Rev, BuildPath) ->
     Package = ?VERSION(Rev),
     BucketId = get_new_bucket(BucketsDets),
     Bucket = {list_to_binary(BucketId), BucketId, [Package]},
-    update_package_bucket(BucketsDets, DepsDets, Bucket, BuildPath, Rev),
+    update_package_buckets(
+        BucketsDets, 
+        DepsDets, 
+        [Bucket], 
+        BuildPath, 
+        get_temp_path(BuildPath, Rev),
+        Rev),
     {ok, Bucket}.
 
 
@@ -295,27 +307,29 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
     end,
     arm_build_bucket(BucketsDets, Deps, {BName, BPath, [Dep|BPackages]}, BuildPath, O).
 
-update_package_bucket(BucketsTable, DepsTable, Bucket, BuildPath, Rev) ->
+update_package_buckets(BucketsTable, DepsTable, Buckets, BuildPath, Source, Rev) ->
     Package = ?VERSION(Rev),
     [{Package, {State, BucketList}, DepObj, DepSubj}|_] = dets:lookup(DepsTable, Package),
-    error_logger:info_msg("updating package bucket: ~p~n", [Bucket]),
-    {ok, SuccessB} = update_buckets(BucketsTable, BuildPath, Rev, [Bucket], []),
-    dets:insert(DepsTable, {Package, {State, SuccessB ++ BucketList}, DepObj, DepSubj}),
-    ?CU:del_dir(get_temp_path(BuildPath, Rev)).
+    error_logger:info_msg("updating package buckets: ~p~n", [Buckets]),
+    {ok, SuccessB} = update_buckets(BucketsTable, BuildPath, Source, Rev, Buckets, []),
+    dets:insert(DepsTable, {Package, {State, lists:usort(SuccessB ++ BucketList)}, DepObj, DepSubj}),
+    ?CU:del_dir(Source),
+    {ok, SuccessB}.
 
-update_buckets(_, _, _, [], Acc) ->
+update_buckets(_, _, _, _, [], Acc) ->
     {ok, Acc};
-update_buckets(BucketsTable, BuildPath, Rev, [Bucket|O], Acc) ->
+update_buckets(BucketsTable, BuildPath, Source, Rev, [Bucket|O], Acc) ->
     Package = ?VERSION(Rev),
     {BName, BPath, BContain} = Bucket,
     {Name, _B, _T} = Package,
     Path = filename:join([BuildPath, BPath, binary_to_list(Name)]) ++ "/",
     ?CU:del_dir(Path),
     filelib:ensure_dir(Path),
-    error_logger:info_msg("trying to copy ~s to ~s~n", [get_temp_path(BuildPath, Rev), Path]),
-    ok = ?CU:recursive_copy(get_temp_path(BuildPath, Rev), Path),
+    % error_logger:info_msg("trying to copy ~s to ~s~n", [get_temp_path(BuildPath, Rev), Path]),
+    % ok = ?CU:recursive_copy(get_temp_path(BuildPath, Rev), Path),
+    ok = ?CU:recursive_copy(Source, Path),
     ok = dets:insert(BucketsTable, {BName, BPath, lists:usort([Package|BContain])}),
-    update_buckets(BucketsTable, BuildPath, Rev, O, [BName|Acc]).
+    update_buckets(BucketsTable, BuildPath, Source, Rev, O, [BName|Acc]).
 
 get_temp_path(BuildPath, Rev) ->
     filename:join([BuildPath, "temp", ?CPU:get_dir_name(Rev)]).
