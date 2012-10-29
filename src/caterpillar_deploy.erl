@@ -157,7 +157,10 @@ find_deploy_paths(#deploy{ident=Ident}=Deploy, #state{ets=Ets}) ->
 
 
 copy_packages({Paths, #deploy{packages=Packages, ident=Ident}=Deploy}, #state{dets=Dets}) ->
-    DefaultPathValue = caterpillar_utils:get_value_or_die({Ident, default}, Paths),
+    DefaultPathValue = case proplists:get_value({Ident, default}, Paths, '$none$') of
+        '$none$' -> caterpillar_utils:get_value_or_die({default, default}, Paths);
+        DefaultPath -> DefaultPath
+    end,
     Fun = fun(#deploy_package{package=Package, name=Name, branch=Branch, fd=FD}) ->
         Path = proplists:get_value({Ident, Branch}, Paths, DefaultPathValue),
         AbsPackage = filename:join(Path, Package),

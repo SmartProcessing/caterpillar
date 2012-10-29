@@ -141,12 +141,14 @@ find_deploy_paths_test_() ->
 copy_packages_test_() ->
 {foreachx,
     fun({Paths, #deploy{}}) -> 
+        tty_on(),
         caterpillar_utils:ensure_dir("__test_packages"),
         [caterpillar_utils:ensure_dir(Path) || {_, Path} <- Paths],
         {ok, D} = dets:open_file("__test_dets.deploy", [{access, read_write}]),
         #state{dets = D}
     end,
     fun({Paths, #deploy{packages=Packages}}, #state{dets=D}) ->
+        tty_off(),
         dets:close(D),
         file:delete(D),
         [file:close(FD) || #deploy_package{fd=FD} <- Packages],
@@ -156,18 +158,43 @@ copy_packages_test_() ->
 [
     {{Paths, Deploy}, fun(_, State) ->
         {Message, fun() ->
-            ?assertMatch(
-                {ok, #deploy{}},
-                catch caterpillar_deploy:copy_packages({Paths, Deploy}, State)
-            ),
-            Check(State)
+            Result = (catch caterpillar_deploy:copy_packages({Paths, Deploy}, State)),
+            Check(Result, State)
         end}
     end} || {Message, Paths, Deploy, Check} <- [
+        {
+            "no default path for test, but default/default exists",
+            [{{default, default}, "__test"}],
+            #deploy{packages=[], ident=test},
+            fun(Result, _) ->
+                ?assertMatch(
+                    {ok, #deploy{}},
+                    Result
+                )
+            end
+        },
+        {
+            "no default path for test, no default/default exists",
+            [],
+            #deploy{packages=[], ident=test},
+            fun(Result, _) ->
+                ?assertEqual(
+                    {'EXIT', {no_value, {default, default}}},
+                    Result
+                )
+            end
+            
+        },
         {
             "nothing to copy",
             [{{test, default}, "__test"}], 
             #deploy{packages=[], ident=test},
-            fun(_) -> ok end
+            fun(Result, _) ->
+                ?assertMatch(
+                    {ok, #deploy{}},
+                    Result
+                )
+            end
         },
         {
             "some packages copied",
@@ -192,7 +219,11 @@ copy_packages_test_() ->
                 ],
                 ident = test
             },
-            fun(#state{dets=D}) ->
+            fun(Result, #state{dets=D}) ->
+                ?assertMatch(
+                    {ok, #deploy{}},
+                    Result
+                ),
                 ?assertEqual(
                     [
                         {test, "__test_default/package3", "name3", trunk},
