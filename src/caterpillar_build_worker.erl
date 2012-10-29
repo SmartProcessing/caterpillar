@@ -139,13 +139,13 @@ build_rev(ToBuild, State) ->
 %% {{{{2 Pipe functions
 
 unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
+    ?LOCK(1),
     Package = ?VERSION(Rev),
     error_logger:info_msg("unpacking revision ~p~n", [Package]),
     Deps = Rev#rev_def.dep_object,
     Res = case find_bucket(Buckets, Package, Deps) of
         [Bucket|_] ->
             error_logger:info_msg("found a bucket for ~p: ~p~n", [Rev, Bucket]),
-            ?LOCK(Bucket),
             update_package_buckets(
                 Buckets,
                 DepsDets, 
@@ -154,7 +154,6 @@ unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
                 get_temp_path(BuildPath, Rev),
                 Rev),
             arm_build_bucket(Buckets, DepsDets, Bucket, BuildPath, Deps),
-            ?UNLOCK(Bucket),
             {ok, 
                 {none, {Rev, Bucket, BuildPath}}
             };
@@ -162,9 +161,7 @@ unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
             error_logger:info_msg("no bucket for ~p~n", [Package]),
             {ok, Bucket} = create_bucket(
                 Buckets, DepsDets, Rev, BuildPath),
-            ?LOCK(Bucket),
             arm_build_bucket(Buckets, DepsDets, Bucket, BuildPath, Deps),
-            ?UNLOCK(Bucket),
             {ok, 
                 {none, {Rev, Bucket, BuildPath}}
             };
@@ -172,6 +169,7 @@ unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
             error_logger:error_msg("failed to find or create a bucket for ~p~n", [Rev]),
             {error, "failed to find a place to build, sorry"}
     end,
+    ?UNLOCK(1),
     Res.
     
 
@@ -244,7 +242,6 @@ create_bucket(BucketsDets, DepsDets, Rev, BuildPath) ->
     Package = ?VERSION(Rev),
     BucketId = get_new_bucket(BucketsDets),
     Bucket = {list_to_binary(BucketId), BucketId, [Package]},
-    ?LOCK(Bucket),
     update_package_buckets(
         BucketsDets, 
         DepsDets, 
@@ -252,7 +249,6 @@ create_bucket(BucketsDets, DepsDets, Rev, BuildPath) ->
         BuildPath, 
         get_temp_path(BuildPath, Rev),
         Rev),
-    ?UNLOCK(Bucket),
     {ok, Bucket}.
 
 
