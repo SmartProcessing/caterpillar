@@ -2,6 +2,7 @@
 
 -include_lib("caterpillar.hrl").
 -include_lib("caterpillar_internal.hrl").
+-include_lib("kernel/include/file.hrl").
 
 -export([get_version_by_revdef/1, build_pipe/2]).
 -export([pipe/3]).
@@ -211,17 +212,17 @@ rec_copy(_From, _To, [$. | _T]) ->
 rec_copy(From, To, File) ->
     NewFrom = filename:join(From, File),
     NewTo   = filename:join(To, File),
-    case filelib:is_dir(NewFrom) of
-        true  ->
+    {ok, FI} = file:read_link_info(NewFrom),
+    Type = FI#file_info.type,
+    case Type of
+        directory  ->
             ok = filelib:ensure_dir(NewTo++"/"),
             recursive_copy(NewFrom, NewTo);
-        false ->
-            case filelib:is_file(NewFrom) of                
-                true  ->
-                    ok = filelib:ensure_dir(NewTo),
-                    {ok, _} = file:copy(NewFrom, NewTo),
-                    ok;
-                false ->
-                    ok            
-            end
+        regular ->
+            ok = filelib:ensure_dir(NewTo),
+            {ok, _} = file:copy(NewFrom, NewTo),
+            ok;
+        symlink ->
+            {ok, SymPath} = file:read_link(NewFrom),
+            file:make_symlink(SymPath, NewTo)
     end.
