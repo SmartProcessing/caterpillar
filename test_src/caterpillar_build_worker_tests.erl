@@ -172,7 +172,7 @@ update_bucket_test_() ->
                 dep_object = [], 
                 pkg_config=#pkg_config{name = "name"}
             },
-            ?CBW:update_buckets('buckets', "./test_src", Rev, [
+            ?CBW:update_buckets('buckets', "./test_src", "./test_src/temp/newpkg-trunk1.0.1", Rev, [
                     {<<"0001">>, "0001", []}, 
                     {<<"0002">>, "0002", []}, 
                     {<<"0003">>, "0003", []}], []),
@@ -194,7 +194,7 @@ update_package_buckets_test_() ->
                 dep_object = [], 
                 pkg_config=#pkg_config{name = "name"}
             },
-            ?CBW:update_package_bucket('buckets', 'deps', {<<"0001">>, "0001", []}, "./test_src", Rev),
+            ?CBW:update_package_buckets('buckets', 'deps', [{<<"0001">>, "0001", []}], "./test_src", "./test_src/temp/newpkg-trunk1.0.1",  Rev),
             ?assertEqual(file:consult("./test_src/0001/newpkg/sample"), {ok, [{test, 1}]}),
             ResB = dets:lookup('buckets', <<"0001">>),
             ?assertEqual([{<<"0001">>, "0001", [{<<"newpkg">>, <<"trunk">>, <<"1.0.1">>}]}], ResB),

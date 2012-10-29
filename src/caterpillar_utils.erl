@@ -39,6 +39,9 @@ build_pipe([Fun|O], {Phase, Value}) ->
         {error, Msg} ->
             error_logger:info_msg("build pipe failed:~p~n", [Msg]),
             {error, Phase, Msg};
+        {error, Msg, Env} ->
+            error_logger:info_msg("build pipe failed:~p~n", [Msg]),
+            {error, Phase, Msg, Env};
         Other ->
             error_logger:info_msg("build pipe failed:~p~n", [Other]),
             {error, Phase, io_lib:format("~p", [Other])}

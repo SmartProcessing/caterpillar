@@ -20,6 +20,7 @@
     name            :: binary(), 
     branch          :: binary(),
     tag             :: binary(),
+    work_id         :: integer(),
     dep_object      :: [version()],
     pkg_config      :: #pkg_config{}
 }).
