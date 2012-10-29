@@ -1,4 +1,5 @@
-include ../../devel-tools/trunk/Makefile.mk
+PATH_MK = ../../devel-tools/trunk/Makefile.mk
+include $(PATH_MK)
 
 LIB_PATH = var/lib/caterpillar
 LOG_PATH = var/log/caterpillar
