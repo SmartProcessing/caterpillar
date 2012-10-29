@@ -8,6 +8,7 @@
          terminate/2, code_change/3, prepare/2]).
 
 -define(CPU, caterpillar_pkg_utils).
+-define(CU, caterpillar_utils).
 
 -record(state, {
         deps,
@@ -141,6 +142,7 @@ prepare(BuildPath, Archive) ->
     ok = caterpillar_event:sync_event(Msg),
     Cwd = filename:join([BuildPath, "temp", TempName]) ++ "/",
     ok = erl_tar:extract(TempArch, [{cwd, Cwd}, compressed]),
+    file:delete(TempArch),
     PkgRecord = ?CPU:get_pkg_config(Archive, Cwd),
     RevDef = ?CPU:pack_rev_def(Archive, PkgRecord),
     gen_server:call(caterpillar, {newref, RevDef}).
