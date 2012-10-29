@@ -36,7 +36,11 @@ clean:
 
 compile:
 	@echo $(PWD)
+ifeq ($(PATH_MK), ../../devel-tools/trunk/Makefile.mk)
 	$(REBAR) compile
+else
+	$(REBAR) -C new.rebar.config compile
+endif
 
 
 
