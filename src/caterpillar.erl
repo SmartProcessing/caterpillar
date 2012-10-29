@@ -5,7 +5,7 @@
 
 -export([start_link/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-         terminate/2, code_change/3, prepare/2]).
+         terminate/2, code_change/3, prepare/3]).
 
 -define(CPU, caterpillar_pkg_utils).
 -define(CU, caterpillar_utils).
@@ -20,7 +20,8 @@
         build_path,
         poll_time,
         prebuild=[],
-        work_id
+        work_id,
+        ident
     }).
 
 
@@ -41,6 +42,7 @@ init(Settings) ->
     WorkIdFile = ?GV(work_id, Settings, ?DEFAULT_WORK_ID_FILE),
     WorkId = get_work_id(WorkIdFile),
     caterpillar_event:register_worker(caterpillar, WorkId),
+    Ident = ?GV(ident, Settings, "unknown"),
     schedule_poller(PollTime),
     {ok, #state{
             deps=Deps,
@@ -51,7 +53,8 @@ init(Settings) ->
             unpack_state=UnpackState,
             build_path=BuildPath,
             poll_time=PollTime,
-            work_id=WorkIdFile
+            work_id=WorkIdFile,
+            ident=Ident
         }
     }.
 
@@ -66,8 +69,20 @@ handle_call({newref, RevDef}, _From, State) ->
             {ok, NewState} = try_build(QueuedState)
     end,
     {reply, ok, NewState};
-handle_call({built, Worker, RevDef, _BuildInfo}, _From, State) ->
+handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
     caterpillar_dependencies:update_dependencies(State#state.deps, RevDef, built),
+    DeployPkg = #deploy_package{
+        name = binary_to_list(RevDef#rev_def.name),
+        branch = binary_to_list(RevDef#rev_def.branch),
+        package = BuildInfo#build_info.pkg_name,
+        fd = BuildInfo#build_info.fd
+    },
+    Deploy = #deploy{
+        ident=State#state.ident,
+        work_id=RevDef#rev_def.work_id,
+        packages=[DeployPkg]
+    },
+    caterpillar_event:sync_event({deploy, Deploy}),
     NewWorkers = release_worker(Worker, State#state.workers),
     {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
     {ok, NewState} = try_build(ScheduledState),
@@ -88,7 +103,7 @@ handle_call(_Request, _From, State) ->
 handle_cast({changes, WorkId, Archives}, State) ->
     update_work_id(State#state.work_id, WorkId),
     ToPreprocess = lists:usort(Archives++State#state.prebuild),
-    {ok, NewState} = process_archives(ToPreprocess, State),
+    {ok, NewState} = process_archives(ToPreprocess, State, WorkId),
     {noreply, NewState};
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -112,23 +127,23 @@ code_change(_OldVsn, State, _Extra) ->
 
 
 %% Preprocessing
-process_archives([], State) ->
+process_archives([], State, _WorkId) ->
     {ok, State};
-process_archives([A|O], State) ->
+process_archives([A|O], State, WorkId) ->
     UnpackState = State#state.unpack_state,
     BuildPath = State#state.build_path,
-    process_archive(BuildPath, A, UnpackState),
-    process_archives(O, State).
+    process_archive(BuildPath, A, UnpackState, WorkId),
+    process_archives(O, State, WorkId).
 
-process_archive(BuildPath, Archive, UnpackState) ->
+process_archive(BuildPath, Archive, UnpackState, WorkId) ->
     {_Pid, Monitor} = erlang:spawn_monitor(
         ?MODULE, 
         prepare, 
-        [BuildPath, Archive]),
+        [BuildPath, Archive, WorkId]),
     ets:insert(UnpackState, {Monitor, Archive}).
 
 
-prepare(BuildPath, Archive) ->
+prepare(BuildPath, Archive, WorkId) ->
     error_logger:info_msg("preparing archive: ~p~n", [Archive]),
     TempName = io_lib:format(
         "~s-~s~s",
@@ -144,7 +159,7 @@ prepare(BuildPath, Archive) ->
     ok = erl_tar:extract(TempArch, [{cwd, Cwd}, compressed]),
     file:delete(TempArch),
     PkgRecord = ?CPU:get_pkg_config(Archive, Cwd),
-    RevDef = ?CPU:pack_rev_def(Archive, PkgRecord),
+    RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId),
     gen_server:call(caterpillar, {newref, RevDef}).
     
 

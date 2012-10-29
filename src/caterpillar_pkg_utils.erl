@@ -4,7 +4,7 @@
 -export([get_pkg_config/2]).
 -export([get_pkg_config_record/2]).
 -export([get_dep_list/1]).
--export([pack_rev_def/2, get_dir_name/1]).
+-export([pack_rev_def/3, get_dir_name/1]).
 -define(LTB, list_to_binary).
 -define(BTL, binary_to_list).
 
@@ -53,12 +53,13 @@ get_valid_versions(L) ->
     [{?LTB(N), ?LTB(B), ?LTB(T)} || {N, B, T} <- L].
 
 
-pack_rev_def(Archive, PkgRecord) ->
+pack_rev_def(Archive, PkgRecord, WorkId) ->
     Deps = get_dep_list(PkgRecord),
     #rev_def{
         name=?LTB(Archive#archive.name),
         branch=?LTB(Archive#archive.branch),
         tag=?LTB(Archive#archive.tag),
+        work_id=WorkId,
         pkg_config = PkgRecord,
         dep_object=Deps
     }.

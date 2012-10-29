@@ -95,7 +95,7 @@ build_rev(ToBuild, State) ->
         {fun build_submit/2, BuildPlugins}
     ],
     case catch caterpillar_utils:build_pipe(Funs, {none, ToBuild}) of
-        {ok, {Fd, Name}, Env} ->
+        {ok, {{Fd, Name}, Env}} ->
             ok = gen_server:call(caterpillar, 
                 {built, self(), ToBuild, #build_info{
                         state=built,
@@ -216,7 +216,7 @@ build_submit(Env, Plugins) ->
     case State of
         ok ->
             {_Fd, _Name} = Msg,
-            {ok, Msg, Env};
+            {ok, {Msg, Env}};
         error ->
             {error, Msg, Env};
         Other ->
