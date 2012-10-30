@@ -11,7 +11,7 @@ prepare(_Dir) ->
     {ok, ""}.
 
 submit(Dir) ->
-    case ?CMD("make package PATH_MOD=../* PATH_MK=../devel-tools/Makefile.mk", Dir) of
+    case ?CMD("make package PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk", Dir) of
         {0, _Msg} ->
             find_deb_file(filename:join([Dir, "dist"]));
         {Code, Msg} when is_integer(Code) ->

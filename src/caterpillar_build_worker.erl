@@ -7,8 +7,8 @@
 
 -define(CU, caterpillar_utils).
 -define(CPU, caterpillar_pkg_utils).
--define(LOCK, gen_server:call(caterpillar_lock, {lock, 1}, infinity)).
--define(UNLOCK, gen_server:call(caterpillar_lock, {unlock, 1})).
+-define(LOCK(X), gen_server:call(caterpillar_lock, {lock, X}, infinity)).
+-define(UNLOCK(X), gen_server:call(caterpillar_lock, {unlock, X})).
 
 
 -record(state, {
@@ -139,10 +139,10 @@ build_rev(ToBuild, State) ->
 %% {{{{2 Pipe functions
 
 unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
+    ?LOCK(1),
     Package = ?VERSION(Rev),
     error_logger:info_msg("unpacking revision ~p~n", [Package]),
     Deps = Rev#rev_def.dep_object,
-    ?LOCK,
     Res = case find_bucket(Buckets, Package, Deps) of
         [Bucket|_] ->
             error_logger:info_msg("found a bucket for ~p: ~p~n", [Rev, Bucket]),
@@ -169,7 +169,7 @@ unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
             error_logger:error_msg("failed to find or create a bucket for ~p~n", [Rev]),
             {error, "failed to find a place to build, sorry"}
     end,
-    ?UNLOCK,
+    ?UNLOCK(1),
     Res.
     
 

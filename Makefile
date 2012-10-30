@@ -1,4 +1,5 @@
-include ../../devel-tools/trunk/Makefile.mk
+PATH_MK = ../../devel-tools/trunk/Makefile.mk
+include $(PATH_MK)
 
 LIB_PATH = var/lib/caterpillar
 LOG_PATH = var/log/caterpillar
@@ -35,7 +36,11 @@ clean:
 
 compile:
 	@echo $(PWD)
+ifeq ($(PATH_MK), ../../devel-tools/trunk/Makefile.mk)
 	$(REBAR) compile
+else
+	$(REBAR) -C new.rebar.config compile
+endif
 
 
 
