@@ -360,13 +360,13 @@ scan_pipe(Packages, State) ->
 register_scan_pipe(PrevRes, _State) ->
     Self = self(),
     case catch register(scan_pipe_caterpillar_repository, Self) of
-        true -> ok;
+        true ->
+            error_logger:info_msg("scan pipe started at ~p~n", [Self]),
+            {ok, PrevRes};
         _Err ->
             error_logger:error_msg("scan_pipe already in process~n"),
-            exit(normal)
-    end,
-    error_logger:info_msg("scan pipe started at ~p~n", [Self]),
-    {ok, PrevRes}.
+            {error, already_in_process}
+    end.
     
 
 

@@ -271,7 +271,7 @@ register_scan_pipe_test_() ->
                 ),
                 timer:sleep(1)
             end,
-            {'EXIT', normal}
+            {error, already_in_process}
         }
     ]
 ]}.
