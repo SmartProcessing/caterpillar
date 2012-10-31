@@ -170,7 +170,6 @@ prepare(BuildPath, Archive, WorkId) ->
 try_build(State) ->
     case number_free_workers(State) of
         {ok, Int} when Int > 0 ->
-            error_logger:info_msg("Free workers now: ~B", [Int]),
             job_free_worker(State);
         _Other ->
             {ok, State}
@@ -178,7 +177,6 @@ try_build(State) ->
 
 -spec job_free_worker(State :: #state{}) -> {ok, NewState :: #state{}}.
 job_free_worker(State) ->
-    error_logger:info_msg("job to do: ~p~n", [State#state.next_to_build]),
     NewWorkers = job_free_worker(
         State#state.workers, State#state.next_to_build),
     {ok, State#state{workers=NewWorkers, next_to_build=none}}.
@@ -190,7 +188,6 @@ job_free_worker([{Pid, none}|Other], ToBuild) ->
     gen_server:cast(Pid, {build, ToBuild}),
     [{Pid, ToBuild}|Other];
 job_free_worker([{Pid, SomeRef}|Other], ToBuild) ->
-    error_logger:info_msg("couldn't occupy new worker: ~p~n", [ToBuild]),
     job_free_worker(Other, ToBuild, [{Pid, SomeRef}]).
 
 job_free_worker([{Pid, none}|Other], ToBuild, OldW) ->
@@ -250,12 +247,10 @@ schedule_poller(Timeout) ->
 
 -spec schedule_build(State :: #state{}) -> {ok, NewState :: #state{}}.
 schedule_build(State) when State#state.next_to_build == none ->
-    error_logger:info_msg("scheduling: ~p~n", [State]),
     {ok, NewState} = get_build_candidate(State),
     schedule_poller(State#state.poll_time),
     try_build(NewState);
 schedule_build(State) ->
-    error_logger:info_msg("scheduling: ~p~n", [State]),
     schedule_poller(State#state.poll_time),
     try_build(State).
 

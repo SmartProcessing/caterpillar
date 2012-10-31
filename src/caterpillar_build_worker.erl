@@ -7,7 +7,7 @@
 
 -define(CU, caterpillar_utils).
 -define(CPU, caterpillar_pkg_utils).
--define(LOCK(X), gen_server:call(caterpillar_lock, {lock, X}, infinity)).
+-define(LOCK(X, Y), gen_server:call(caterpillar_lock, {lock, X, Y}, infinity)).
 -define(UNLOCK(X), gen_server:call(caterpillar_lock, {unlock, X})).
 
 
@@ -139,7 +139,7 @@ build_rev(ToBuild, State) ->
 %% {{{{2 Pipe functions
 
 unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
-    ?LOCK(1),
+    ?LOCK(1, 20000),
     Package = ?VERSION(Rev),
     error_logger:info_msg("unpacking revision ~p~n", [Package]),
     Deps = Rev#rev_def.dep_object,
@@ -314,6 +314,7 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
             [AnyBucket|_] = DepBuckets,
             [{AnyBucket, Path, _Packages}] = dets:lookup(BucketsDets, AnyBucket),
             DepPath = filename:join([BuildPath, Path, binary_to_list(Name)]),
+            error_logger:info_msg("copying ~s to ~s~n", [filename:join([BuildPath, BPath, Name]), DepPath]),
             ?CU:recursive_copy(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)])),
             dets:insert(BucketsDets, {BName, BPath, [Dep|BPackages]}),
             dets:insert(Deps, {Dep, {State, [BName|DepBuckets]}, DepOn, HasInDep})

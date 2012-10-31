@@ -11,6 +11,7 @@ prepare(_Dir) ->
     {ok, ""}.
 
 submit(Dir) ->
+    error_logger:info_msg("executing make package in ~s:~n", [Dir]),
     case ?CMD("make package PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk", Dir) of
         {0, _Msg} ->
             find_deb_file(filename:join([Dir, "dist"]));
