@@ -76,7 +76,7 @@ unlock_ref(Ident, From, State) ->
                     gen_server:reply(Client, ok);
                 true ->
                     ets:insert(State#state.storage, {Ident, false, none, Q})
-            end.
+            end;
         false ->
             {error, prohibited}
     end.
