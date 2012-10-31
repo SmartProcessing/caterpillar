@@ -214,15 +214,7 @@ rec_copy(From, To, File) ->
     NewTo   = filename:join(To, File),
     {ok, FI} = file:read_link_info(NewFrom),
     Type = FI#file_info.type,
-    case catch copy_by_type(Type, NewFrom, NewTo) of
-        {'EXIT', Reason} ->
-            error_logger:info_msg("failed to copy ~s to ~s: ~p~n", [NewFrom, NewTo, Reason]);
-        {error, Reason} ->
-            error_logger:info_msg("failed to copy ~s to ~s: ~p~n", [NewFrom, NewTo, Reason]);
-        Reason ->
-            error_logger:info_msg("copy_success ~s to ~s: ~p~n", [NewFrom, NewTo, Reason]),
-            ok
-    end.
+    copy_by_type(Type, NewFrom, NewTo).
 
 copy_by_type(Type, NewFrom, NewTo) ->
     case Type of
