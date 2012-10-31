@@ -65,13 +65,18 @@ code_change(_OldVsn, State, _Extra) ->
 
 
 unlock_ref(Ident, From, State) ->
-    [{Ident, _, _, Q}] = ets:lookup(State#state.storage, Ident),
-    case queue:is_empty(Q) of
-        false ->
-            {{value, {Client, Timeout}}, NewQ} = queue:out(Q),
-            ets:insert(State#state.storage, {Ident, true, Client, NewQ}),
-            erlang:send_after(Timeout, self(), {unlock, Ident, Client}),
-            gen_server:reply(Client, ok);
+    [{Ident, _, Source, Q}] = ets:lookup(State#state.storage, Ident),
+    case Source == From of
         true ->
-            ets:insert(State#state.storage, {Ident, false, none, Q})
+            case queue:is_empty(Q) of
+                false ->
+                    {{value, {Client, Timeout}}, NewQ} = queue:out(Q),
+                    ets:insert(State#state.storage, {Ident, true, Client, NewQ}),
+                    erlang:send_after(Timeout, self(), {unlock, Ident, Client}),
+                    gen_server:reply(Client, ok);
+                true ->
+                    ets:insert(State#state.storage, {Ident, false, none, Q})
+            end.
+        false ->
+            {error, prohibited}
     end.
