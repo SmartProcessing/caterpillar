@@ -214,15 +214,26 @@ rec_copy(From, To, File) ->
     NewTo   = filename:join(To, File),
     {ok, FI} = file:read_link_info(NewFrom),
     Type = FI#file_info.type,
+    case catch copy_by_type(Type, NewFrom, NewTo) of
+        {'EXIT', Reason} ->
+            error_logger:info_msg("failed to copy ~s to ~s: ~p~n", [NewFrom, NewTo, Reason]);
+        {error, Reason} ->
+            error_logger:info_msg("failed to copy ~s to ~s: ~p~n", [NewFrom, NewTo, Reason]);
+        Reason ->
+            error_logger:info_msg("copy_success ~s to ~s: ~p~n", [NewFrom, NewTo, Reason]),
+            ok
+    end.
+
+copy_by_type(Type, NewFrom, NewTo) ->
     case Type of
         directory  ->
-            catch filelib:ensure_dir(NewTo++"/"),
+            filelib:ensure_dir(NewTo++"/"),
             recursive_copy(NewFrom, NewTo);
         regular ->
             filelib:ensure_dir(NewTo),
-            catch file:copy(NewFrom, NewTo),
+            file:copy(NewFrom, NewTo),
             ok;
         symlink ->
             {ok, SymPath} = file:read_link(NewFrom),
-            catch file:make_symlink(SymPath, NewTo)
+            file:make_symlink(SymPath, NewTo)
     end.
