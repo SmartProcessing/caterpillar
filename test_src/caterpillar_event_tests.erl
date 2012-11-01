@@ -479,6 +479,30 @@ events_test_() ->
             end
         }, 
         {
+            "sync event repository custom command",
+                        fun() -> 
+                spawn(fun() ->
+                    caterpillar_event:register_service(repository),
+                    receive {_, From, {repository_custom_command, command, args}} ->
+                        gen_server:reply(From, ok)
+                    after 10 ->
+                        timeout
+                    end
+                end)
+            end,
+            fun() ->
+                timer:sleep(1),
+                ?assertEqual(
+                    [{service, repository}],
+                    caterpillar_event:get_info()
+                ),
+                ?assertEqual(
+                    ok,
+                    caterpillar_event:sync_event({repository_custom_command, command, args})
+                )
+            end
+        },
+        {
             "event 'changes', few workers registered",
             fun() ->
                 [caterpillar_event:register_worker(W, work_id) || W <- [w1, w2]]

@@ -1,6 +1,7 @@
 -module(caterpillar_git_plugin).
 
 -behaviour(caterpillar_repository_plugin).
+-include_lib("caterpillar_repository_internal.hrl").
 
 -export([init_plugin/1, terminate_plugin/1]).
 -export([get_diff/5, get_changelog/5, get_revno/3]).
@@ -126,8 +127,9 @@ get_tag(_State, Package, _Branch, NewRevno) ->
     end.
 
 
-init_repository(_State, Package) ->
-    InitRepo = format("GIT_DIR=~s git init --shared --bare", [Package]),
+init_repository(#state{repository_root=RR}, Package) ->
+    AbsPackage = filename:join(RR, Package),
+    InitRepo = format("GIT_DIR=~s git init --shared --bare", [AbsPackage]),
     {ok, os:cmd(InitRepo)}. 
 
 

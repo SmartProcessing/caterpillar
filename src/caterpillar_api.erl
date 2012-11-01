@@ -91,11 +91,20 @@ handle(#http_req{path=[Cmd, Package, Branch]}=Req, State)
             {ok, Req2} = cowboy_http_req:reply(200, [], <<"already in process">>, Req),
             Req2;
         Error -> 
-            Res = list_to_binary(io_lib:format("~p~n", [Error])),
+            Res = format("~p~n", [Error]),
             {ok, Req2} = cowboy_http_req:reply(500, [], Res, Req),
             Req2
     end,
     {ok, Response, State};
+
+handle(#http_req{path=[<<"init_repository">>, Path]}=Req, State) ->
+    {ok, Req2} = case caterpillar_event:sync_event({repository_custom_command, init_repository, [Path]}) of
+        {ok, Response} ->
+            cowboy_http_req:reply(200, [], Response, Req);
+        Error ->
+            cowboy_http_req:reply(500, [], format("~p~n", [Error]), Req)
+    end,
+    {ok, Req2, State};
 
 handle(Req, State) ->
     {ok, Req2} = cowboy_http_req:reply(400, [], <<"bad request">>, Req),
@@ -108,3 +117,8 @@ ensure_started(App) ->
         ok -> ok;
         {error, {already_started, _}} -> ok
     end.
+
+
+
+format(Template, Args) ->
+    list_to_binary(io_lib:format(Template, Args)).
