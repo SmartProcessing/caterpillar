@@ -45,16 +45,16 @@
             {email_from, "email_from"}
         ]},
 
-%        {caterpillar_worker, [
-%            {ident, amd64},
-%            {worker_plugin, caterpillar_simple_builder},
-%            {worker_plugin_init, [
-%                {work_id_file, "./test/test_simple_builder/work_id"},
-%                {archive_root, "./test/test_simple_builder/archive_root"},
-%                {repository_root, "./test/test_simple_builder/repository_root"},
-%                {deploy_root, "./test/test_simple_builder/deploy_root"}
-%            ]}
-%        ]},
+         {caterpillar_worker, [
+             {ident, amd64},
+             {worker_plugin, caterpillar_simple_builder},
+             {worker_plugin_init, [
+                 {work_id_file, "./test/test_simple_builder/work_id"},
+                 {archive_root, "./test/test_simple_builder/archive_root"},
+                 {repository_root, "./test/test_simple_builder/repository_root"},
+                 {deploy_root, "./test/test_simple_builder/deploy_root"}
+             ]}
+         ]},
 
         {caterpillar_deploy, [
             {rotate, 1},

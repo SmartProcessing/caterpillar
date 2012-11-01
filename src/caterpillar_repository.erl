@@ -641,7 +641,7 @@ get_tag([Package|O], Accum, #state{vcs_plugin=VcsP, vcs_state=VcsS}=State) ->
         {ok, T} -> 
             get_tag(O, [Package#package{tag=T}|Accum], State);
         Error ->
-            error_logger:error_msg("failed to get tag at ~p/~p with ~p~n", [Name, Package, Error]),
+            error_logger:error_msg("failed to get tag at ~s/~s with ~p~n", [Name, Package, Error]),
             get_tag(O, [Package|Accum], State)
     end.
 
