@@ -6,6 +6,8 @@
 -export([export/5, get_branches/2]).
 -export([get_changelog/5, get_diff/5, get_revno/3, get_tag/4]).
 -export([is_branch/3, is_repository/2]).
+-export([custom_command/1]).
+-export([custom_command/2]).
 
 
 -type vcs_state()::term().
@@ -75,3 +77,11 @@ is_repository(_State, "__test/package2") -> true;
 is_repository(_State, "__test/exit") -> exit(some_reason);
 is_repository(_State, "__test/throw") -> throw(some_reason);
 is_repository(_State, _Package) -> false.
+
+
+custom_command(State) ->
+    {'custom_command/1', State}.
+
+
+custom_command(State, Arg) ->
+    {'custom_command/2', State, Arg}.

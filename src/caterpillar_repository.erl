@@ -91,6 +91,19 @@ handle_cast({clean_packages, Notify, PackageName}, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
+
+handle_call({repository_custom_command, Command, Args}, From, #state{vcs_plugin=VCP}=State) ->
+    spawn(
+        fun() -> 
+            Response = (catch begin
+                NewArgs = [State] ++ Args,
+                apply(VCP, Command, NewArgs)
+            end),
+            gen_server:reply(From, Response)
+        end
+    ),
+    {noreply, State};
+
 handle_call(rescan_repository, _From, State) ->
     scan_repository(0),
     {reply, ok, State};
@@ -106,9 +119,6 @@ handle_call({rebuild_package, {Package, Branch}}, _From, State) ->
         rebuild_package(Package, Branch, State)
     end),
     {reply, {ok, Pid}, State};
-
-
-
 
 %copying archive to remote fd
 handle_call({get_archive, #archive{name=Name, branch=Branch, fd=Fd}}, From, State) ->

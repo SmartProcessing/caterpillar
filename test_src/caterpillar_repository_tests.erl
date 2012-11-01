@@ -1480,6 +1480,60 @@ handle_call_rescan_n_rebuild_package_test_() ->
 ]}.
 
 
+handle_call_repository_custom_command_test_() ->
+{foreach,
+    fun() -> ok end,
+[
+    {Message, fun() ->
+        Msg = {repository_custom_command, Command, Args},
+        ?assertEqual(
+            {noreply, State},
+            caterpillar_repository:handle_call(Msg, {self(), r}, State)
+        ),
+        Check()
+    end} || {Message, Command, Args, State, Check} <- [
+        {
+            "custom_command/1 to test_vcs_plugin with no args",
+            custom_command,
+            [],
+            #state{vcs_plugin=test_vcs_plugin},
+            fun() ->
+                ?assertEqual(
+                    {'custom_command/1', #state{vcs_plugin=test_vcs_plugin}},
+                    receive {_, M} -> M after 50 -> timeout end
+                )
+            end
+        },
+        {
+            "some command to undefined plugin with no args",
+            some_command,
+            [],
+            #state{},
+            fun() ->
+                ?assertMatch(
+                    {'EXIT', _},
+                    receive {_, M} -> M after 50 -> timeout end
+                )
+            end
+        },
+        {
+            "custom_command/1 to test_vcs_plugin with no args",
+            custom_command,
+            [some_arg],
+            #state{vcs_plugin=test_vcs_plugin},
+            fun() ->
+                ?assertEqual(
+                    {'custom_command/2', #state{vcs_plugin=test_vcs_plugin}, some_arg},
+                    receive {_, M} -> M after 50 -> timeout end
+                )
+            end
+        }
+    ]
+]}.
+
+
+
+
 %---------
 
 

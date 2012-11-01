@@ -8,6 +8,7 @@
 -export([get_branches/2]).
 -export([export/5]).
 -export([get_tag/4]).
+-export([init_repository/2]).
 
 
 
@@ -123,6 +124,11 @@ get_tag(_State, Package, _Branch, NewRevno) ->
         [] -> {ok, none};
         Tag -> {ok, string:strip(Tag, right, $\n)}
     end.
+
+
+init_repository(_State, Package) ->
+    InitRepo = format("GIT_DIR=~s git init --shared --bare", [Package]),
+    {ok, os:cmd(InitRepo)}. 
 
 
 format(Command, Args) ->
