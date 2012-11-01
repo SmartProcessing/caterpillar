@@ -22,7 +22,8 @@ cleanup(_Ign) ->
     application:stop(caterpillar).
 
 caterpillar_init_test() ->
-    {ok, [Settings]} = file:consult("test.config"),
+    %FIXME:
+    {ok, [Settings]} = file:consult("test.config_template"),
     CaterpillarSettings = proplists:get_value(caterpillar, Settings),
     _HandlerSettings = proplists:get_value(handler, CaterpillarSettings).
 
