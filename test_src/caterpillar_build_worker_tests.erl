@@ -7,8 +7,11 @@
 -define(CBW, caterpillar_build_worker).
 -define(CU, caterpillar_utils).
 
--on_load(tty_off/0).
+-on_load(tty_on/0).
 
+
+tty_on() ->
+    error_logger:tty(true).
 
 tty_off() -> 
     error_logger:tty(false).
@@ -16,6 +19,7 @@ tty_off() ->
 setup() ->
     dets:open_file('deps', [{file, "deps.dets"}]),
     dets:open_file('buckets', [{file, "buckets.dets"}]),
+    ?debugFmt("starting lock: ~p~n", [catch caterpillar_lock_sup:start_link()]),
     BucketObj = [
         {<<"0001">>, "0001", 
             [
@@ -102,6 +106,7 @@ setup() ->
     dets:insert('buckets', BucketObj).
 
 cleanup(_Ign) ->
+    gen_server:call(caterpillar_lock, stop),
     dets:close('buckets'),
     dets:close('deps'),
     ?CU:del_dir("./test_src/temp"),
