@@ -90,6 +90,7 @@ setup() ->
             [{<<"newpkg">>, <<"trunk">>, <<"1.0.1">>}]
         }
     ],
+    %FIXME: why use temp under inside test_src dir?
     filelib:ensure_dir("./test_src/temp/newpkg-trunk1.0.1/"),
     {ok, File} = file:open("./test_src/temp/newpkg-trunk1.0.1/sample", [write]),
     file:write(File, <<"{test, 1}.">>),
