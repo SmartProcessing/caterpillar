@@ -13,13 +13,15 @@
 tty_on() ->
     error_logger:tty(true).
 
+
 tty_off() -> 
     error_logger:tty(false).
+
 
 setup() ->
     dets:open_file('deps', [{file, "deps.dets"}]),
     dets:open_file('buckets', [{file, "buckets.dets"}]),
-    ?debugFmt("starting lock: ~p~n", [catch caterpillar_lock_sup:start_link()]),
+    catch caterpillar_lock_sup:start_link(),
     BucketObj = [
         {<<"0001">>, "0001", 
             [
