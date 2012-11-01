@@ -7,7 +7,7 @@
 -define(CBW, caterpillar_build_worker).
 -define(CU, caterpillar_utils).
 
--on_load(tty_on/0).
+-on_load(tty_off/0).
 
 
 tty_on() ->
