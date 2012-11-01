@@ -6,7 +6,7 @@
 
 clean(Dir) ->
     error_logger:info_msg("executing make clean in ~s:~n", [Dir]),
-    case ?CMD("make clean PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk", Dir) of
+    case ?CMD("make clean PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk PATH_PY_MK=../smprc.setup/Makefile.mk", Dir) of
         {0, _Msg} ->
             {ok, ""};
         {110, Msg} ->
@@ -19,7 +19,7 @@ clean(Dir) ->
 
 test(Dir) ->
     error_logger:info_msg("executing make test in ~s:~n", [Dir]),
-    case ?CMD("make test PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk", Dir) of
+    case ?CMD("make test PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk PATH_PY_MK=../smprc.setup/Makefile.mk", Dir) of
         {0, _Msg} ->
             {ok, ""};
         {Code, Msg} when is_integer(Code) ->
