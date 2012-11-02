@@ -24,27 +24,27 @@ terminate_plugin(_State) ->
 
 export(_State, Package, Branch, _Revno, ExportPath) ->
     ExportBranch = format(
-        "GIT_DIR=~s git archive heads/~s |tar -x -C ~s",
-        [Package, Branch, ExportPath]
+        "git archive heads/~s |tar -x -C ~s",
+        [Branch, ExportPath]
     ),
-    case command(ExportBranch) of
-        [] -> ok;
+    case command(ExportBranch, [{cd, Package}]) of
+        {ok, <<>>} -> ok;
         Error -> {error, Error}
     end.
 
 
 
 get_revno(_State, Package, Branch) ->
-    GetRevno = format("GIT_DIR=~s git rev-parse heads/~s", [Package, Branch]),
-    case command(GetRevno) of
+    GetRevno = format("git rev-parse heads/~s", [Branch]),
+    case command(GetRevno, [{cd, Package}]) of
         {error, Error} -> {error, Error};
         {ok, Revno} -> {ok, binary:replace(Revno, <<"\n">>, <<>>)}
     end.
 
 
 is_repository(_State, Package) ->
-    IsRepo = format("GIT_DIR=~s git rev-parse", [Package]),
-    case command(IsRepo) of
+    IsRepo = "git rev-parse",
+    case command(IsRepo, [{cd, Package}]) of
         {ok, <<>>} -> true;
         {error, _} -> 
             error_logger:info_msg("~s is not repository~n", [Package]),
@@ -53,8 +53,8 @@ is_repository(_State, Package) ->
 
 
 is_branch(_State, Package, Branch) ->
-    IsBranch = format("GIT_DIR=~s git rev-parse heads/~s 1> /dev/null", [Package, Branch]),
-    case command(IsBranch) of
+    IsBranch = format("git rev-parse heads/~s 1> /dev/null", [Branch]),
+    case command(IsBranch, [{cd, Package}]) of
         {ok, <<>>} -> true;
         {error, Error} ->
             error_logger:info_msg("not a branch: ~s~n", [Error]),
@@ -63,20 +63,27 @@ is_branch(_State, Package, Branch) ->
 
 
 get_branches(_State, Package) ->
-    GetBranches = format("GIT_DIR=~s git branch", [Package]),
-    case command(GetBranches) of
+    GetBranches = "git branch",
+    case command(GetBranches, [{cd, Package}]) of
         {error, _}=Error -> Error;
         {ok, <<>>} -> {ok, []};
         {ok, Result} -> 
-            {ok, [Branch || Branch <- binary:split(Result, <<"\n">>, [global]), Branch /= <<>>]}
+            Branches = [
+                string:strip(binary_to_list(Branch), both, $ ) ||
+                Branch <- binary:split(Result, <<"\n">>, [global]), Branch /= <<>>
+            ],
+            {ok, Branches}
     end.
 
 
 get_diff(_State, Package, _Branch, Revno, NewRevno) when Revno == none; Revno == error ->
-    Revisions = command(format("GIT_DIR=~s git rev-list --all", [Package])),
-    First = lists:last(string:tokens(Revisions, "\n")),
-    DiffCmd = format("GIT_DIR=~s git diff ~s ~s", [Package, First, NewRevno]),
-    case command(DiffCmd) of
+    Revisions = case command("git rev-list --all", [{cd, Package}]) of
+        {ok, Data} -> Data;
+        {error, Err} ->  error_logger:error_msg("get_diff error: ~p~n", [Err]), <<>>
+    end,
+    First = lists:last([Rev || Rev <- binary:split(Revisions, <<"\n">>, [global]), Rev /= <<>>]),
+    DiffCmd = format("git diff ~s ~s", [First, NewRevno]),
+    case command(DiffCmd, [{cd, Package}]) of
         {error, _} = Error -> Error; 
         {ok, Diff} ->
             Size = size(Diff),
@@ -88,8 +95,8 @@ get_diff(_State, Package, _Branch, Revno, NewRevno) when Revno == none; Revno ==
 
 
 get_diff(_State, Package, _Branch, OldRevno, NewRevno) ->
-    DiffCmd = format("GIT_DIR=~s git diff ~s ~s", [Package, OldRevno, NewRevno]),
-    case command(DiffCmd) of 
+    DiffCmd = format("git diff ~s ~s", [OldRevno, NewRevno]),
+    case command(DiffCmd, [{cd, Package}]) of 
         {error, _} = Error -> Error;
         {ok, Diff} ->
             Size = size(Diff),
@@ -101,8 +108,8 @@ get_diff(_State, Package, _Branch, OldRevno, NewRevno) ->
 
 
 get_changelog(_State, Package, _Branch, Revno, NewRevno) when Revno == none; Revno == error ->
-    LogCmd = format("GIT_DIR=~s git log ~s", [Package, NewRevno]),
-    case command(LogCmd) of
+    LogCmd = format("git log ~s", [NewRevno]),
+    case command(LogCmd, [{cd, Package}]) of
         {error, _} = Error -> Error;
         {ok, Log} ->
             Size = size(Log),
@@ -113,8 +120,8 @@ get_changelog(_State, Package, _Branch, Revno, NewRevno) when Revno == none; Rev
     end;
 
 get_changelog(_State, Package, _Branch, OldRevno, NewRevno) ->
-    LogCmd = format("GIT_DIR=~s git log ~s..~s", [Package, OldRevno, NewRevno]),
-    case command(LogCmd) of
+    LogCmd = format("git log ~s..~s", [OldRevno, NewRevno]),
+    case command(LogCmd, [{cd, Package}]) of
         {error, _} = Error -> Error;
         {ok, Log} ->
             Size = size(Log),
@@ -126,17 +133,19 @@ get_changelog(_State, Package, _Branch, OldRevno, NewRevno) ->
 
 
 get_tag(_State, Package, _Branch, NewRevno) ->
-    TagCmd = format("GIT_DIR=~s git describe --exact-match ~s 2> /dev/null", [Package, NewRevno]),
-    case command(TagCmd) of
-        [] -> {ok, none};
-        Tag -> {ok, string:strip(Tag, right, $\n)}
+    TagCmd = format("git describe --exact-match ~s 2> /dev/null", [NewRevno]),
+    case command(TagCmd, [{cd, Package}]) of
+        {ok, <<>>} -> {ok, none};
+        {ok, Tag} -> {ok, binary:replace(Tag, <<"\n">>, <<>>, [global])};
+        {error, _} -> {ok, none}
     end.
 
 
 init_repository(#state{repository_root=RR}, Package) ->
     AbsPackage = filename:join(RR, Package),
-    InitRepo = format("GIT_DIR=~s git init --shared --bare", [AbsPackage]),
-    {ok, command(InitRepo)}. 
+    InitRepo = format("git init --shared --bare", [AbsPackage]),
+    caterpillar_utils:ensure_dir(AbsPackage),
+    {ok, command(InitRepo, [{cd, AbsPackage}])}. 
 
 
 format(Command, Args) ->
@@ -145,13 +154,11 @@ format(Command, Args) ->
 
 
 
-command(Command) ->
-    Opts = [binary, use_stdio, exit_status, stderr_to_stdout],
+command(Command, AdditionalOpts) ->
+    Opts = [binary, use_stdio, exit_status, stderr_to_stdout] ++ AdditionalOpts,
     Port = erlang:open_port({spawn, Command}, Opts),
-    error_logger:info_msg("Command: ~n~p~n", [Command]),
     Data = (catch recv()),
-    error_logger:info_msg("Data: ~n~p~n", [Data]),
-    erlang:port_close(Port),
+    catch erlang:port_close(Port),
     Data.
 
 
@@ -164,5 +171,6 @@ recv(Result) ->
     receive
         {_, {data, Data}} -> recv(<<Result/binary, Data/binary>>);
         {_, {exit_status, 0}} -> {ok, Result};
-        {_, {exit_status, N}} -> {error, Result}
+        {_, {exit_status, N}} -> {error, Result};
+        Error -> exit(Error)
     end.
