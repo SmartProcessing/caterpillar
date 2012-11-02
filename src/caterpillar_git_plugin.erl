@@ -171,6 +171,6 @@ recv(Result) ->
     receive
         {_, {data, Data}} -> recv(<<Result/binary, Data/binary>>);
         {_, {exit_status, 0}} -> {ok, Result};
-        {_, {exit_status, N}} -> {error, Result};
+        {_, {exit_status, _}} -> {error, Result};
         Error -> exit(Error)
     end.
