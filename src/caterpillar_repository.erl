@@ -338,10 +338,7 @@ notify(#state{notify_root=NR}, #notify{}=Notify) ->
 
 
 scan_pipe(State) ->
-    case scan_pipe([], State) of
-        {ok, _} -> ok;
-        Error -> error_logger:info_msg("scan pipe exited with ~p~n", [Error])
-    end.
+    scan_pipe([], State).
 
 
 scan_pipe({Package, Branch}, State) ->
