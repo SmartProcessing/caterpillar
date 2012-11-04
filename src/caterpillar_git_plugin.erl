@@ -141,11 +141,26 @@ get_tag(_State, Package, _Branch, NewRevno) ->
     end.
 
 
-init_repository(#state{repository_root=RR}, Package) ->
+
+%----------- custom commands
+
+
+init_repository(#state{repository_root=RR, vcs_state=VCState}, RawPackage) ->
+    Package = case is_binary(RawPackage) of
+        true -> binary_to_list(RawPackage);
+        false -> RawPackage
+    end,
     AbsPackage = filename:join(RR, Package),
-    InitRepo = format("git init --shared --bare", [AbsPackage]),
-    caterpillar_utils:ensure_dir(AbsPackage),
-    {ok, command(InitRepo, [{cd, AbsPackage}])}. 
+    case is_repository(VCState, AbsPackage) of
+        true -> {error, <<"already initialied">>};
+        false ->
+            InitRepo = "git init --shared --bare",
+            caterpillar_utils:ensure_dir(AbsPackage),
+            command(InitRepo, [{cd, AbsPackage}])
+    end.
+
+
+%------------ auxiliary functions
 
 
 format(Command, Args) ->
