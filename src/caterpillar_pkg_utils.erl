@@ -3,7 +3,7 @@
 -include("caterpillar_internal.hrl").
 -export([get_pkg_config/2]).
 -export([get_pkg_config_record/2]).
--export([get_dep_list/1]).
+-export([get_dep_list/2]).
 -export([pack_rev_def/3, get_dir_name/1]).
 -define(LTB, list_to_binary).
 -define(BTL, binary_to_list).
@@ -45,16 +45,24 @@ get_pkg_config_record(Archive, {empty, Data}) ->
         build_deps=?GV("build_deps", Data, [])
     }.
 
-get_dep_list(Pkg) ->
-    get_valid_versions(Pkg#pkg_config.deps) ++ 
-        get_valid_versions(Pkg#pkg_config.build_deps).
+get_dep_list(Pkg, Archive) ->
+    get_valid_versions(Pkg#pkg_config.deps, Archive) ++ 
+        get_valid_versions(Pkg#pkg_config.build_deps, Archive).
 
-get_valid_versions(L) ->
-    [{?LTB(N), ?LTB(B), ?LTB(T)} || {N, B, T} <- L].
+get_valid_versions(L, Archive) ->
+    Res = [{?LTB(N), ?LTB(B), ?LTB(T)} || {N, B, T} <- L],
+    lists:map(fun({N, B, T}) ->
+        case B of
+            <<"*">> ->
+                {N, ?LTB(Archive#archive.branch), T};
+            RealBranch ->
+                {N, RealBranch, T}
+        end
+    end, Res).
 
 
 pack_rev_def(Archive, PkgRecord, WorkId) ->
-    Deps = get_dep_list(PkgRecord),
+    Deps = get_dep_list(PkgRecord, Archive),
     #rev_def{
         name=?LTB(Archive#archive.name),
         branch=?LTB(Archive#archive.branch),
