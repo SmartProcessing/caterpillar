@@ -140,22 +140,19 @@ build_rev(ToBuild, State) ->
 
 unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
     Package = ?VERSION(Rev),
-    error_logger:info_msg("unpacking revision ~p~n", [Package]),
     Deps = Rev#rev_def.dep_object,
+    error_logger:info_msg("unpacking revision ~p~n", [Package]),
     Res = case find_bucket(Buckets, Package, Deps) of
         [Bucket] = [{BName, _, _}] ->
             ?LOCK(BName),
             error_logger:info_msg("found a bucket for ~p: ~p~n", [Rev, Bucket]),
-            {ok, [NewBucket]} = update_package_buckets(
-                Buckets,
-                DepsDets, 
-                [Bucket], 
-                BuildPath, 
-                get_temp_path(BuildPath, Rev),
-                Rev),
-            ?CU:del_dir(get_temp_path(BuildPath, Rev)),
-            error_logger:info_msg("arming bucket ~p with deps: ~p~n", [Bucket, Deps]),
-            arm_build_bucket(Buckets, DepsDets, NewBucket, BuildPath, Deps),
+            try
+                create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev)
+            catch
+                exit:Reason ->
+                    ?UNLOCK(BName),
+                    throw(Reason)
+            end,
             ?UNLOCK(BName),
             {ok, 
                 {none, {Rev, Bucket, BuildPath}}
@@ -164,16 +161,7 @@ unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
             error_logger:info_msg("no bucket for ~p, creating new~n", [Package]),
             {ok, Bucket={BName, _, _}} = create_bucket(Buckets, Rev),
             ?LOCK(BName),
-            {ok, [NewBucket]} = update_package_buckets(
-                Buckets, 
-                DepsDets, 
-                [Bucket], 
-                BuildPath, 
-                get_temp_path(BuildPath, Rev),
-                Rev),
-            ?CU:del_dir(get_temp_path(BuildPath, Rev)),
-            error_logger:info_msg("arming bucket ~p with deps: ~p~n", [Bucket, Deps]),
-            arm_build_bucket(Buckets, DepsDets, NewBucket, BuildPath, Deps),
+            catch create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev),
             ?UNLOCK(BName),
             {ok, 
                 {none, {Rev, Bucket, BuildPath}}
@@ -333,7 +321,7 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
             {Name, _B, _T} = Dep,
             [{Dep, {State, DepBuckets}, DepOn, HasInDep}|_] = dets:lookup(Deps, Dep),
             error_logger:info_msg("found buckets with dep ~p in: ~p~n", [Dep, DepBuckets]),
-            [AnyBucket|_] = DepBuckets,
+            [AnyBucket|_] = [X || X <- DepBuckets, X /= BName],
             ?LOCK(AnyBucket),
             [{AnyBucket, Path, _Packages}] = dets:lookup(BucketsDets, AnyBucket),
             ?UNLOCK(AnyBucket),
@@ -394,3 +382,16 @@ make_complete_actions(
                 Res end, UpdateInBuckets),
     Source = filename:join([BuildPath, BPath, binary_to_list(Rev#rev_def.name)]),
     update_buckets(BucketsDets, BuildPath, Source, Rev, Buckets, []).
+
+create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev) ->
+    Deps = Rev#rev_def.dep_object,
+    {ok, [NewBucket]} = update_package_buckets(
+        Buckets,
+        DepsDets, 
+        [Bucket], 
+        BuildPath, 
+        get_temp_path(BuildPath, Rev),
+        Rev),
+    ?CU:del_dir(get_temp_path(BuildPath, Rev)),
+    error_logger:info_msg("arming bucket ~p with deps: ~p~n", [Bucket, Deps]),
+    arm_build_bucket(Buckets, DepsDets, NewBucket, BuildPath, Deps).

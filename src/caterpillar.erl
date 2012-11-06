@@ -83,12 +83,26 @@ handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
         packages=[DeployPkg]
     },
     caterpillar_event:sync_event({deploy, Deploy}),
+    Subj = io_lib:format("#~B success: ~s/~s/~s", [
+            RevDef#rev_def.work_id,
+            binary_to_list(RevDef#rev_def.name),
+            binary_to_list(RevDef#rev_def.branch),
+            binary_to_list(RevDef#rev_def.tag)
+        ]),
+    notify(Subj, "ok"),
     NewWorkers = release_worker(Worker, State#state.workers),
     {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
     {ok, NewState} = try_build(ScheduledState),
     {reply, ok, NewState};
 handle_call({err_built, Worker, RevDef, BuildInfo}, _From, State) ->
     error_logger:info_msg("error built: ~p~n", [BuildInfo]),
+    Subj = io_lib:format("#~B error: ~s/~s/~s", [
+            RevDef#rev_def.work_id,
+            binary_to_list(RevDef#rev_def.name),
+            binary_to_list(RevDef#rev_def.branch),
+            binary_to_list(RevDef#rev_def.tag)
+        ]),
+    notify(Subj, BuildInfo#build_info.description),
     BuildState = BuildInfo#build_info.state,
     caterpillar_dependencies:update_dependencies(State#state.deps, RevDef, BuildState),
     NewWorkers = release_worker(Worker, State#state.workers),
@@ -316,8 +330,10 @@ get_build_candidate(both, State) ->
 %% ------------------------------------------------------------------
 -spec notify(list(), list()) -> ok.
 notify(Subject, Body) ->
-    Msg = {notify, {list_to_binary(Subject), list_to_binary(Body)}},
-    {ok, _} = caterpillar_event:sync_event(Msg).
+    Msg = {notify, #notify{
+            subject=list_to_binary(Subject), 
+            body=list_to_binary(Body)}},
+    caterpillar_event:sync_event(Msg).
 
 -spec check_build_deps(Candidate :: #rev_def{}, State :: #state{}) -> true|false.
 check_build_deps(Candidate, State) ->
