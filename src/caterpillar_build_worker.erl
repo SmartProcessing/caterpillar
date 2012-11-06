@@ -162,10 +162,12 @@ unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
             {ok, Bucket={BName, _, _}} = create_bucket(Buckets, Rev),
             ?LOCK(BName),
             try
-                create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev),
-            catch exit:Reason ->
-                ?UNLOCK(BName),
-                throw(Reason)
+                create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev)
+            catch 
+                exit:Reason ->
+                    ?UNLOCK(BName),
+                    throw(Reason)
+            end,
             ?UNLOCK(BName),
             {ok, 
                 {none, {Rev, Bucket, BuildPath}}
