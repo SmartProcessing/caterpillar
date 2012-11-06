@@ -161,7 +161,11 @@ unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
             error_logger:info_msg("no bucket for ~p, creating new~n", [Package]),
             {ok, Bucket={BName, _, _}} = create_bucket(Buckets, Rev),
             ?LOCK(BName),
-            catch create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev),
+            try
+                create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev),
+            catch exit:Reason ->
+                ?UNLOCK(BName),
+                throw(Reason)
             ?UNLOCK(BName),
             {ok, 
                 {none, {Rev, Bucket, BuildPath}}
