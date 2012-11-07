@@ -143,7 +143,7 @@ unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
     Deps = Rev#rev_def.dep_object,
     error_logger:info_msg("unpacking revision ~p~n", [Package]),
     Res = case find_bucket(Buckets, Package, Deps) of
-        [Bucket] = [{BName, _, _}] ->
+        [Bucket] ->
             error_logger:info_msg("found a bucket for ~p: ~p~n", [Rev, Bucket]),
             create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev),
             {ok, 
@@ -151,7 +151,7 @@ unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
             };
         [] ->
             error_logger:info_msg("no bucket for ~p, creating new~n", [Package]),
-            {ok, Bucket={BName, _, _}} = create_bucket(Buckets, Rev),
+            {ok, Bucket} = create_bucket(Buckets, Rev),
             create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev),
             {ok, 
                 {none, {Rev, Bucket, BuildPath}}
