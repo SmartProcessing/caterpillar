@@ -207,8 +207,6 @@ recursive_copy(From, To) ->
     ok.
  
 -spec rec_copy(list(), list(), list()) -> ok.                            
-rec_copy(_From, _To, [$. | _T]) ->
-    ok; 
 rec_copy(From, To, File) ->
     NewFrom = filename:join(From, File),
     NewTo   = filename:join(To, File),

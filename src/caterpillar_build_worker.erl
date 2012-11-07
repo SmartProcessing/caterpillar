@@ -79,7 +79,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 -spec build_rev(#rev_def{}, #state{}) -> {ok, term()}.  
 build_rev(ToBuild, State) -> 
-    error_logger:info_msg("received build request: ~p", [ToBuild]),
+    error_logger:info_msg("received build request: ~p~n", [ToBuild]),
     PlatformPlugins = State#state.platform_plugins,
     BuildPlugins = State#state.build_plugins,
     BuildPath = State#state.build_path,
@@ -144,31 +144,15 @@ unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
     error_logger:info_msg("unpacking revision ~p~n", [Package]),
     Res = case find_bucket(Buckets, Package, Deps) of
         [Bucket] = [{BName, _, _}] ->
-            ?LOCK(BName),
             error_logger:info_msg("found a bucket for ~p: ~p~n", [Rev, Bucket]),
-            try
-                create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev)
-            catch
-                exit:Reason ->
-                    ?UNLOCK(BName),
-                    throw(Reason)
-            end,
-            ?UNLOCK(BName),
+            create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev),
             {ok, 
                 {none, {Rev, Bucket, BuildPath}}
             };
         [] ->
             error_logger:info_msg("no bucket for ~p, creating new~n", [Package]),
             {ok, Bucket={BName, _, _}} = create_bucket(Buckets, Rev),
-            ?LOCK(BName),
-            try
-                create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev)
-            catch 
-                exit:Reason ->
-                    ?UNLOCK(BName),
-                    throw(Reason)
-            end,
-            ?UNLOCK(BName),
+            create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev),
             {ok, 
                 {none, {Rev, Bucket, BuildPath}}
             };
@@ -387,17 +371,30 @@ make_complete_actions(
                 ?UNLOCK(X),
                 Res end, UpdateInBuckets),
     Source = filename:join([BuildPath, BPath, binary_to_list(Rev#rev_def.name)]),
-    update_buckets(BucketsDets, BuildPath, Source, Rev, Buckets, []).
+    lists:map(fun(X) -> ?LOCK(X) end, Buckets),
+    update_buckets(BucketsDets, BuildPath, Source, Rev, Buckets, []),
+    lists:map(fun(X) -> ?UNLOCK(X) end, Buckets).
 
 create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev) ->
-    Deps = Rev#rev_def.dep_object,
-    {ok, [NewBucket]} = update_package_buckets(
-        Buckets,
-        DepsDets, 
-        [Bucket], 
-        BuildPath, 
-        get_temp_path(BuildPath, Rev),
-        Rev),
-    ?CU:del_dir(get_temp_path(BuildPath, Rev)),
-    error_logger:info_msg("arming bucket ~p with deps: ~p~n", [Bucket, Deps]),
-    arm_build_bucket(Buckets, DepsDets, NewBucket, BuildPath, Deps).
+    {BName, _, _} = Bucket,
+    ?LOCK(BName),
+    try
+        Deps = Rev#rev_def.dep_object,
+        {ok, [NewBucket]} = update_package_buckets(
+            Buckets,
+            DepsDets, 
+            [Bucket], 
+            BuildPath, 
+            get_temp_path(BuildPath, Rev),
+            Rev),
+        ?CU:del_dir(get_temp_path(BuildPath, Rev)),
+        error_logger:info_msg("arming bucket ~p with deps: ~p~n", [Bucket, Deps]),
+        arm_build_bucket(Buckets, DepsDets, NewBucket, BuildPath, Deps),
+        ?UNLOCK(BName)
+    catch
+        _:Reason ->
+            ?UNLOCK(BName),
+            error_logger:error_msg("failed to unpack revision ~p to bucket ~p: ~p~n", 
+                [Rev, Bucket, erlang:get_stacktrace()]),
+            throw(Reason)
+    end.
