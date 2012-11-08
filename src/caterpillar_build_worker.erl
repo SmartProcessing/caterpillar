@@ -328,13 +328,19 @@ update_package_buckets(BucketsTable, DepsTable, Buckets, BuildPath, Source, Rev)
     ?LOCK(Package),
     [{Package, {State, BucketList}, DepObj, DepSubj}|_] = dets:lookup(DepsTable, Package),
     error_logger:info_msg("updating package buckets: ~p~n", [Buckets]),
-    {ok, UpdatedBuckets} = update_buckets(BucketsTable, BuildPath, Source, Rev, Buckets, []),
-    SuccessB = [X || {X, _, _} <- UpdatedBuckets],
-    error_logger:info_msg("updated buckets: ~p~n", [SuccessB]),
-    error_logger:info_msg("writing for pkg: ~p ~p~n", [Package, SuccessB ++ BucketList]),
-    ok = dets:insert(DepsTable, {Package, {State, lists:usort(SuccessB ++ BucketList)}, DepObj, DepSubj}),
-    ?UNLOCK(Package),
-    {ok, UpdatedBuckets}.
+    case catch update_buckets(BucketsTable, BuildPath, Source, Rev, Buckets, []) of
+        {ok, UpdatedBuckets} ->
+            SuccessB = [X || {X, _, _} <- UpdatedBuckets],
+            error_logger:info_msg("updated buckets: ~p~n", [SuccessB]),
+            error_logger:info_msg("writing for pkg: ~p ~p~n", [Package, SuccessB ++ BucketList]),
+            ok = dets:insert(DepsTable, {Package, {State, lists:usort(SuccessB ++ BucketList)}, DepObj, DepSubj}),
+            ?UNLOCK(Package),
+            {ok, UpdatedBuckets};
+        Other ->
+            error_logger:error_msg("failed to update package buckets for ~p: ~p", [Rev, Other]),
+            ?UNLOCK(Package),
+            throw(Other)
+    end.
 
 update_buckets(_, _, _, _, [], Acc) ->
     {ok, Acc};
