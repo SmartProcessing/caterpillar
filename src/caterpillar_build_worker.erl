@@ -311,14 +311,18 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
             {Name, _B, _T} = Dep,
             [{Dep, {State, DepBuckets}, DepOn, HasInDep}|_] = dets:lookup(Deps, Dep),
             error_logger:info_msg("found buckets with dep ~p in: ~p~n", [Dep, DepBuckets]),
-            [AnyBucket|_] = [X || X <- DepBuckets, X /= BName],
-            ?LOCK(AnyBucket),
-            [{AnyBucket, Path, _Packages}] = dets:lookup(BucketsDets, AnyBucket),
-            ?UNLOCK(AnyBucket),
-            ok = dets:insert(BucketsDets, {BName, BPath, [Dep|BPackages]}),
-            ok = dets:insert(Deps, {Dep, {State, [BName|DepBuckets]}, DepOn, HasInDep}),
-            DepPath = filename:join([BuildPath, Path, binary_to_list(Name)]),
-            ?CU:recursive_copy(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)])),
+            case [X || X <- DepBuckets, X /= BName] of
+                [AnyBucket|_] ->
+                    ?LOCK(AnyBucket),
+                    [{AnyBucket, Path, _Packages}] = dets:lookup(BucketsDets, AnyBucket),
+                    ?UNLOCK(AnyBucket),
+                    ok = dets:insert(BucketsDets, {BName, BPath, [Dep|BPackages]}),
+                    ok = dets:insert(Deps, {Dep, {State, [BName|DepBuckets]}, DepOn, HasInDep}),
+                    DepPath = filename:join([BuildPath, Path, binary_to_list(Name)]),
+                    ?CU:recursive_copy(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)]));
+                [] ->
+                    ok
+            end,
             ?UNLOCK(Dep)
     end,
     arm_build_bucket(BucketsDets, Deps, {BName, BPath, [Dep|BPackages]}, BuildPath, O).
