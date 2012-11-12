@@ -381,9 +381,9 @@ make_complete_actions(
                 ?UNLOCK(X),
                 Res end, UpdateInBuckets),
     Source = filename:join([BuildPath, BPath, binary_to_list(Rev#rev_def.name)]),
-    lists:map(fun(X) -> ?LOCK(X) end, Buckets),
+    lists:map(fun({BName, _, _}) -> ?LOCK(BName) end, Buckets),
     update_buckets(BucketsDets, BuildPath, Source, Rev, Buckets, []),
-    lists:map(fun(X) -> ?UNLOCK(X) end, Buckets).
+    lists:map(fun({BName, _, _}) -> ?UNLOCK(BName) end, Buckets).
 
 create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev) ->
     {BName, _, _} = Bucket,

@@ -212,16 +212,19 @@ rec_copy(From, To, File) ->
     NewTo   = filename:join(To, File),
     {ok, FI} = file:read_link_info(NewFrom),
     Type = FI#file_info.type,
-    copy_by_type(Type, NewFrom, NewTo).
+    Mode = FI#file_info.mode,
+    copy_by_type(Type, NewFrom, NewTo, Mode).
 
-copy_by_type(Type, NewFrom, NewTo) ->
+copy_by_type(Type, NewFrom, NewTo, Mode) ->
     case Type of
         directory  ->
             filelib:ensure_dir(NewTo++"/"),
+            file:change_mode(NewTo, Mode),
             recursive_copy(NewFrom, NewTo);
         regular ->
             filelib:ensure_dir(NewTo),
             file:copy(NewFrom, NewTo),
+            file:change_mode(NewTo, Mode),
             ok;
         symlink ->
             {ok, SymPath} = file:read_link(NewFrom),
