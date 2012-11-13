@@ -310,7 +310,7 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
             ?LOCK(Dep),
             {Name, _B, _T} = Dep,
             [{Dep, {State, DepBuckets}, DepOn, HasInDep}|_] = dets:lookup(Deps, Dep),
-            ?UNLOCK(Dep)
+            ?UNLOCK(Dep),
             error_logger:info_msg("found buckets with dep ~p in: ~p~n", [Dep, DepBuckets]),
             case [X || X <- DepBuckets, X /= BName] of
                 [AnyBucket|_] ->
@@ -318,14 +318,15 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
                     [{AnyBucket, Path, _Packages}] = dets:lookup(BucketsDets, AnyBucket),
                     ?UNLOCK(AnyBucket),
                     ok = dets:insert(BucketsDets, {BName, BPath, [Dep|BPackages]}),
-                    ?LOCK(Dep)
-                    ok = dets:insert(Deps, {Dep, {State, [BName|DepBuckets]}, DepOn, HasInDep}),
+                    ?LOCK(Dep),
+                    [{Dep, {NewState, NewDepBuckets}, NewDepOn, NewHasInDep}|_] = dets:lookup(Deps, Dep),
+                    ok = dets:insert(Deps, {Dep, {NewState, lists:usort([BName|DepBuckets])}, NewDepOn, NewHasInDep}),
+                    ?UNLOCK(Dep),
                     DepPath = filename:join([BuildPath, Path, binary_to_list(Name)]),
-                    ?CU:recursive_copy(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)])),
-                    ?UNLOCK(Dep);
+                    ?CU:recursive_copy(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)]));
                 [] ->
                     ok
-            end,
+            end
     end,
     arm_build_bucket(BucketsDets, Deps, {BName, BPath, [Dep|BPackages]}, BuildPath, O).
 
@@ -333,13 +334,17 @@ update_package_buckets(BucketsTable, DepsTable, Buckets, BuildPath, Source, Rev)
     Package = ?VERSION(Rev),
     ?LOCK(Package),
     [{Package, {State, BucketList}, DepObj, DepSubj}|_] = dets:lookup(DepsTable, Package),
+    ?UNLOCK(Package),
     error_logger:info_msg("updating package buckets: ~p~n", [Buckets]),
     case catch update_buckets(BucketsTable, BuildPath, Source, Rev, Buckets, []) of
         {ok, UpdatedBuckets} ->
             SuccessB = [X || {X, _, _} <- UpdatedBuckets],
             error_logger:info_msg("updated buckets: ~p~n", [SuccessB]),
             error_logger:info_msg("writing for pkg: ~p ~p~n", [Package, SuccessB ++ BucketList]),
-            ok = dets:insert(DepsTable, {Package, {State, lists:usort(SuccessB ++ BucketList)}, DepObj, DepSubj}),
+            ?LOCK(Package),
+            [{Package, {NewState, NewBucketList}, NewDepObj, NewDepSubj}|_] = dets:lookup(DepsTable, Package),
+            ok = dets:insert(DepsTable, 
+                {Package, {NewState, lists:usort(SuccessB ++ NewBucketList)}, NewDepObj, NewDepSubj}),
             ?UNLOCK(Package),
             {ok, UpdatedBuckets};
         Other ->
