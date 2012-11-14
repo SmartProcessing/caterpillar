@@ -309,7 +309,7 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
         false ->
             ?LOCK(Dep),
             {Name, _B, _T} = Dep,
-            [{Dep, {State, DepBuckets}, DepOn, HasInDep}|_] = dets:lookup(Deps, Dep),
+            [{Dep, {_, DepBuckets}, _, _}|_] = dets:lookup(Deps, Dep),
             ?UNLOCK(Dep),
             error_logger:info_msg("found buckets with dep ~p in: ~p~n", [Dep, DepBuckets]),
             case [X || X <- DepBuckets, X /= BName] of
@@ -332,20 +332,17 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
 
 update_package_buckets(BucketsTable, DepsTable, Buckets, BuildPath, Source, Rev) ->
     Package = ?VERSION(Rev),
-    ?LOCK(Package),
-    [{Package, {State, BucketList}, DepObj, DepSubj}|_] = dets:lookup(DepsTable, Package),
-    ?UNLOCK(Package),
     error_logger:info_msg("updating package buckets: ~p~n", [Buckets]),
     case catch update_buckets(BucketsTable, BuildPath, Source, Rev, Buckets, []) of
         {ok, UpdatedBuckets} ->
             SuccessB = [X || {X, _, _} <- UpdatedBuckets],
             error_logger:info_msg("updated buckets: ~p~n", [SuccessB]),
-            error_logger:info_msg("writing for pkg: ~p ~p~n", [Package, SuccessB ++ BucketList]),
             ?LOCK(Package),
             [{Package, {NewState, NewBucketList}, NewDepObj, NewDepSubj}|_] = dets:lookup(DepsTable, Package),
             ok = dets:insert(DepsTable, 
                 {Package, {NewState, lists:usort(SuccessB ++ NewBucketList)}, NewDepObj, NewDepSubj}),
             ?UNLOCK(Package),
+            error_logger:info_msg("writing for pkg: ~p ~p~n", [Package, SuccessB ++ NewBucketList]),
             {ok, UpdatedBuckets};
         Other ->
             error_logger:error_msg("failed to update package buckets for ~p: ~p", [Rev, Other]),
