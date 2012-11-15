@@ -223,9 +223,13 @@ copy_by_type(Type, NewFrom, NewTo, Mode) ->
             recursive_copy(NewFrom, NewTo);
         regular ->
             filelib:ensure_dir(NewTo),
+            % {ok, Source} = file:open(NewFrom, [read]),
+            % {ok, Dest} = file:open(NewTo, [write]),
+            % file:copy(Source, Dest),
+            % file:close(Source),
+            % file:close(Dest),
             file:copy(NewFrom, NewTo),
-            file:change_mode(NewTo, Mode),
-            ok;
+            file:change_mode(NewTo, Mode);
         symlink ->
             {ok, SymPath} = file:read_link(NewFrom),
             file:make_symlink(SymPath, NewTo)

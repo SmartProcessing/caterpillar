@@ -204,8 +204,9 @@ update_package_buckets_test_() ->
             },
             ?CBW:update_package_buckets('buckets', 'deps', [{<<"0001">>, "0001", []}], "./test_src", "./test_src/temp/newpkg-trunk1.0.1",  Rev),
             ?assertEqual(file:consult("./test_src/0001/newpkg/sample"), {ok, [{test, 1}]}),
-            ResB = dets:lookup('buckets', <<"0001">>),
-            ?assertEqual([{<<"0001">>, "0001", [{<<"newpkg">>, <<"trunk">>, <<"1.0.1">>}]}], ResB),
+            [{BName, BPath, BContain}] = dets:lookup('buckets', <<"0001">>),
+            ?assertEqual(<<"0001">>, BName),
+            ?assertEqual(lists:member({<<"newpkg">>, <<"trunk">>, <<"1.0.1">>}, BContain), true),
             [ResD] = dets:lookup('deps', {<<"newpkg">>, <<"trunk">>, <<"1.0.1">>}),
             ?assertMatch({_, {in_process, [<<"0001">>, <<"0003">>]}, _, _}, ResD)
         end
