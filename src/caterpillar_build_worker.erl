@@ -320,7 +320,7 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
                     ok = dets:insert(BucketsDets, {BName, BPath, [Dep|BPackages]}),
                     ?LOCK(Dep),
                     [{Dep, {NewState, NewDepBuckets}, NewDepOn, NewHasInDep}|_] = dets:lookup(Deps, Dep),
-                    ok = dets:insert(Deps, {Dep, {NewState, lists:usort([BName|DepBuckets])}, NewDepOn, NewHasInDep}),
+                    ok = dets:insert(Deps, {Dep, {NewState, lists:usort([BName|NewDepBuckets])}, NewDepOn, NewHasInDep}),
                     ?UNLOCK(Dep),
                     DepPath = filename:join([BuildPath, Path, binary_to_list(Name)]),
                     ?CU:recursive_copy(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)]));
