@@ -300,15 +300,18 @@ get_new_bucket(Dets) ->
 arm_build_bucket(_Buckets, _Deps, _Current, _BuildPath, []) ->
     {ok, done};
 arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
-    {BName, BPath, BPackages} = Current,
-    case lists:member(Dep, BPackages) of
+    {BName, _, _} = Current,
+    {Name, _, _} = Dep,
+    ?LOCK(BName),
+    [{BName, BPath, BPackages}] = dets:lookup(BucketsDets, BName),
+    ?UNLOCK(BName),
+    ?LOCK(Dep),
+    [{Dep, {_, DepBuckets}, _, _}|_] = dets:lookup(Deps, Dep),
+    ?UNLOCK(Dep),
+    case lists:member(BName, DepBuckets) of
         true ->
             pass;
         false ->
-            ?LOCK(Dep),
-            {Name, _B, _T} = Dep,
-            [{Dep, {_, DepBuckets}, _, _}|_] = dets:lookup(Deps, Dep),
-            ?UNLOCK(Dep),
             error_logger:info_msg("found buckets with dep ~p in: ~p~n", [Dep, DepBuckets]),
             case [X || X <- DepBuckets, X /= BName] of
                 [AnyBucket|_] ->
@@ -353,6 +356,7 @@ update_buckets(_, _, _, _, [], Acc) ->
 update_buckets(BucketsTable, BuildPath, Source, Rev, [Bucket|O], Acc) ->
     Package = ?VERSION(Rev),
     {BName, TempPath, TempContain} = Bucket,
+    Deps = Rev#rev_def.dep_object,
     ?LOCK(BName),
     [{BName, BPath, BContain}] = case dets:lookup(BucketsTable, BName) of
         [] -> 
@@ -362,7 +366,7 @@ update_buckets(BucketsTable, BuildPath, Source, Rev, [Bucket|O], Acc) ->
     end,
     {Name, _B, _T} = Package,
     Path = filename:join([BuildPath, BPath, binary_to_list(Name)]) ++ "/",
-    NewContain = lists:usort([Package|BContain]),
+    NewContain = lists:usort([Package|BContain] ++ Deps),
     try
         copy_package_to_bucket(Source, Path),
         ok = dets:insert(BucketsTable, {BName, BPath, lists:usort(NewContain)}),
