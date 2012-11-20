@@ -20,6 +20,7 @@
         build_path,
         poll_time,
         prebuild=[],
+        queued=[],
         work_id,
         ident
     }).
@@ -125,17 +126,19 @@ handle_cast(_Msg, State) ->
 handle_info({'DOWN', Reference, _, _, Reason}, State) ->
     case Reason of
         normal ->
+            Preparing = State#state.queued,
             ok;
         _Other ->
             [{Reference, Archive}|_] = ets:lookup(State#state.unpack_state, Reference),
             error_logger:error_msg("preprocess on ~p failed: ~p~n", [Archive, Reason]),
+            Preparing = lists:delete(Archive, State#state.queued),
             Subj = io_lib:format("#~B error", [State#state.work_id
                 ]),
             Body = io_lib:format("Failed to receive archive ~p: ~p~n", [Archive, Reason]),
             notify(Subj, Body)
     end,
     ets:delete(State#state.unpack_state, Reference),
-    {noreply, State};
+    {noreply, State#state{queued=Preparing}};
 handle_info(schedule, State) ->
     {ok, NewState} = schedule_build(State),
     {noreply, NewState};
@@ -155,8 +158,9 @@ process_archives([], State, _WorkId) ->
 process_archives([A|O], State, WorkId) ->
     UnpackState = State#state.unpack_state,
     BuildPath = State#state.build_path,
+    Preparing = [?CPU:get_archive_version(A)|State#state.queued],
     process_archive(BuildPath, A, UnpackState, WorkId),
-    process_archives(O, State, WorkId).
+    process_archives(O, State#state{queued=Preparing}, WorkId).
 
 process_archive(BuildPath, Archive, UnpackState, WorkId) ->
     {_Pid, Monitor} = erlang:spawn_monitor(
@@ -167,7 +171,7 @@ process_archive(BuildPath, Archive, UnpackState, WorkId) ->
 
 
 prepare(BuildPath, Archive, WorkId) ->
-    error_logger:info_msg("preparing archive: ~p~n", [Archive]),
+    error_logger:info_msg("queued archive: ~p~n", [Archive]),
     TempName = io_lib:format(
         "~s-~s~s",
         [Archive#archive.name, Archive#archive.branch, Archive#archive.tag]
@@ -296,12 +300,20 @@ get_build_candidate(main_queue, State) ->
     case check_build_deps(Candidate, State) of
         independent ->
             caterpillar_dependencies:update_dependencies(State#state.deps, Candidate, new),
-            {ok, State#state{main_queue=MainQueue, next_to_build=Candidate}};
+            {ok, State#state{
+                    main_queue=MainQueue, 
+                    next_to_build=Candidate,
+                    queued=lists:delete(?VERSION(Candidate), State#state.queued)
+                }};
+
         dependent ->
             WaitQueue = queue:in(Candidate, State#state.wait_queue),
             {ok, State#state{main_queue=MainQueue, wait_queue=WaitQueue}};
         missing ->
-            {ok, State#state{main_queue=MainQueue}};
+            {ok, State#state{
+                    main_queue=MainQueue,
+                    queued=lists:delete(?VERSION(Candidate), State#state.queued)
+                }};
         _Other ->
             RolledMainQueue = queue:in(Candidate, MainQueue),
             {ok, State#state{main_queue=RolledMainQueue}}
@@ -311,12 +323,17 @@ get_build_candidate(wait_queue, State) ->
     case check_build_deps(Candidate, State) of
         independent ->
             caterpillar_dependencies:update_dependencies(State#state.deps, Candidate, new),
-            {ok, State#state{wait_queue=WaitQueue, next_to_build=Candidate}};
+            {ok, State#state{
+                    wait_queue=WaitQueue, 
+                    queued=lists:delete(?VERSION(Candidate), State#state.queued),
+                    next_to_build=Candidate}};
         dependent ->
             RolledWaitQueue = queue:in(Candidate, WaitQueue),
             {ok, State#state{wait_queue=RolledWaitQueue}};
         missing ->
-            {ok, State#state{wait_queue=WaitQueue}};
+            {ok, State#state{
+                    queued=lists:delete(?VERSION(Candidate), State#state.queued),
+                    wait_queue=WaitQueue}};
         Other ->
             Subject = io_lib:format("Build for ~p", [Candidate]),
             Body = io_lib:format("Error while processing dependencies: ~n~p~n", [Other]),
@@ -328,13 +345,19 @@ get_build_candidate(both, State) ->
     case check_build_deps(Candidate, State) of
         independent ->
             caterpillar_dependencies:update_dependencies(State#state.deps, Candidate, new),
-            {ok, State#state{wait_queue=WaitQueue, next_to_build=Candidate}};
+            {ok, State#state{
+                    queued=lists:delete(?VERSION(Candidate), State#state.queued),
+                    wait_queue=WaitQueue, 
+                    next_to_build=Candidate}};
         dependent ->
             RolledWaitQueue = queue:in(Candidate, WaitQueue),
             get_build_candidate(main_queue,
                 State#state{wait_queue=RolledWaitQueue});
         missing ->
-            {ok, State#state{wait_queue=WaitQueue}};
+            {ok, State#state{
+                    wait_queue=WaitQueue,
+                    queued=lists:delete(?VERSION(Candidate), State#state.queued)
+                }};
         _Other ->
             {error, broken_deps}
     end.
@@ -352,7 +375,7 @@ notify(Subject, Body) ->
 -spec check_build_deps(Candidate :: #rev_def{}, State :: #state{}) -> 
     independent|dependent|missing|{error, term()}.
 check_build_deps(Candidate, State) ->
-    Preparing = [X || [X] <- ets:match_object(State#state.unpack_state, {'_', '$1'})],
+    Preparing = State#state.queued,
     case caterpillar_dependencies:list_unresolved_dependencies(
             State#state.deps, Candidate, Preparing) of
         {ok, [], []} ->

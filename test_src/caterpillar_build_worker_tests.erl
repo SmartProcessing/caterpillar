@@ -135,24 +135,57 @@ validate_bucket_test() ->
     ?assertEqual(?CBW:validate_bucket([{<<"1">>, <<"1">>, <<"1">>}, {<<"2">>, <<"2">>, <<"2">>}], [{<<"1">>, <<"1">>, <<"1">>}]), true),
     ?assertEqual(?CBW:validate_bucket([{<<"1">>, <<"1">>, <<"1">>}, {<<"2">>, <<"4">>, <<"2">>}], [{<<"1">>, <<"1">>, <<"1">>}, {<<"2">>, <<"2">>, <<"2">>}]), false).
 
-find_bucket_test_() ->
+find_bucket1_test_() ->
     {setup,
         fun setup/0,
         fun cleanup/1,
         fun() ->
             Bucket1 = dets:lookup('buckets', <<"0001">>),
+            ?assertEqual(?CBW:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, [{<<"caterpillar">>, <<"trunk">>, <<>>}]), Bucket1)
+        end
+    }.
+
+find_bucket2_test_() ->
+    {setup,
+        fun setup/0,
+        fun cleanup/1,
+        fun() ->
             Bucket2 = dets:lookup('buckets', <<"0002">>),
+            ?assertEqual(?CBW:find_bucket('buckets', {<<"caterpillar">>, <<"test">>, <<>>}, []), Bucket2)
+        end
+    }.
+
+find_bucket3_test_() ->
+    {setup,
+        fun setup/0,
+        fun cleanup/1,
+        fun() ->
             Bucket3 = dets:lookup('buckets', <<"0003">>),
-            ?assertEqual(?CBW:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, [{<<"caterpillar">>, <<"trunk">>, <<>>}]), Bucket1),
-            ?assertEqual(?CBW:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, [{<<"smprc-test">>, <<"stable">>, <<"1.2">>}]), Bucket3),
-            ?assertEqual(?CBW:find_bucket('buckets', {<<"caterpillar">>, <<"test">>, <<>>}, []), Bucket2),
-            ?assertMatch([_Buck], ?CBW:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, [])),
+            ?assertEqual(?CBW:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, [{<<"smprc-test">>, <<"stable">>, <<"1.2">>}]), Bucket3)
+        end
+    }.
+
+find_bucket4_test_() ->
+    {setup,
+        fun setup/0,
+        fun cleanup/1,
+        fun() ->
+            Bucket1 = dets:lookup('buckets', <<"0001">>),
             ?assertEqual(?CBW:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, 
                     [
                         {<<"smprc-test">>, <<"trunk">>, <<>>},
                         {<<"caterpillar">>, <<"trunk">>, <<>>}
                     ])
                     , Bucket1)
+        end
+    }.
+
+find_bucket5_test_() ->
+    {setup,
+        fun setup/0,
+        fun cleanup/1,
+        fun() ->
+            ?assertMatch([_Buck], ?CBW:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, []))
         end
     }.
 

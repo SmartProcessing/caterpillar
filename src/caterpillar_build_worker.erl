@@ -250,17 +250,20 @@ iter_dets(_BucketDets, _Package, _Deps, '$end_of_table') ->
 iter_dets(BucketDets, Package, Deps, BucketId) ->
     ?LOCK(BucketId),
     B = dets:lookup(BucketDets, BucketId),
-    ?UNLOCK(BucketId),
     case B of
-        [{_Id, _Path, Entries}] = [Bucket] ->
+        [{Id, Path, Entries}] = [Bucket] ->
             error_logger:info_msg("validating bucket: ~p with deps: ~p~n", [Bucket, [Package|Deps]]),
             case validate_bucket(Entries, [Package|Deps]) of
                 true ->
+                    dets:insert(BucketDets, {Id, Path, lists:usort([Package|Entries] ++ Deps)}),
+                    ?UNLOCK(BucketId),
                     [Bucket];
                 false ->
+                    ?UNLOCK(BucketId),
                     iter_dets(BucketDets, Package, Deps, dets:next(BucketDets, BucketId))
             end;
         _Other ->
+            ?UNLOCK(BucketId),
             iter_dets(BucketDets, Package, Deps, dets:next(BucketDets, BucketId))
     end.
 
