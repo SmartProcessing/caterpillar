@@ -11,6 +11,7 @@ tty_off() ->
 
 setup() ->
     dets:open_file('test', [{file, "test.dets"}]),
+    catch caterpillar_lock_sup:start_link(),
     DepObj = [
         {
             {<<"smprc-test">>, <<"trunk">>, <<>>},
@@ -29,13 +30,13 @@ setup() ->
         },
         {
             {<<"pequen">>, <<"trunk">>, <<>>},
-            {error, [<<"0001">>]},
+            {none, [<<"0001">>]},
             [{<<"smprc-test">>, <<"trunk">>, <<>>}],
             [{<<"destiny">>, <<"trunk">>, <<>>}]
         },
         {
             {<<"destiny">>, <<"trunk">>, <<>>},
-            {error, [<<"0001">>]},
+            {none, [<<"0001">>]},
             [
                 {<<"smprc-test">>, <<"trunk">>, <<>>},
                 {<<"pequen">>, <<"trunk">>, <<>>}
@@ -46,6 +47,7 @@ setup() ->
     dets:insert('test', DepObj).
 
 cleanup(_Ign) ->
+    gen_server:call(caterpillar_lock, stop),
     dets:close('test'),
     os:cmd("rm test.dets").
 
@@ -63,8 +65,10 @@ list_unresolved_dependencies_test_() ->
                         pkg_config={},
                         dep_object = [{<<"smprc-test">>, <<"trunk">>, <<"">>},
                         {<<"caterpillar">>, <<"trunk">>, <<"">>}]
-                    }),
-                {ok, []}),
+                    },
+                    []
+                ),
+                {ok, [], []}),
             ?assertEqual(
                 caterpillar_dependencies:list_unresolved_dependencies('test',
                     #rev_def{
@@ -73,8 +77,10 @@ list_unresolved_dependencies_test_() ->
                         tag = <<"">>,
                         pkg_config={},
                         dep_object = [{<<"pequen">>, <<"trunk">>, <<"">>}]
-                    }),
-                {ok, [{<<"pequen">>, <<"trunk">>, <<"">>}]})
+                    },
+                    []
+                ),
+                {ok, [{<<"pequen">>, <<"trunk">>, <<"">>}], []})
         end
     }.
 

@@ -1,21 +1,38 @@
 -module(caterpillar_dependencies).
 -include_lib("caterpillar_internal.hrl").
--export([check_intersection/2, list_unresolved_dependencies/2]).
+-export([check_intersection/2, list_unresolved_dependencies/3]).
 -export([update_dependencies/3]).
 
--spec list_unresolved_dependencies(reference(), #rev_def{}) ->
+-spec list_unresolved_dependencies(reference(), #rev_def{}, [version()]) ->
     {ok, Unresolved :: [version()]}.
-list_unresolved_dependencies(DepTree, Candidate) ->
+list_unresolved_dependencies(DepTree, Candidate, Preparing) ->
     Deps = Candidate#rev_def.dep_object,
-    {ok, lists:filter(
-        fun(X) ->
-            case fetch_dependencies(DepTree, X) of
-                {ok, {_VersionSpec, {State, _B}, _Obj, _Subj}} ->
-                    (State /= built) and (State /= tested);
-                _Other ->
-                    true
-            end
-        end, Deps)}.
+    list_none_new_dependencies(DepTree, Deps, Preparing).
+
+list_none_new_dependencies(DepTree, Deps, Preparing) ->
+    list_none_new_dependencies(DepTree, Deps, Preparing, {[], []}).
+
+list_none_new_dependencies(_DepTree, [], _Preparing, {NoneDeps, NewDeps}) ->
+    {ok, NoneDeps, NewDeps};
+list_none_new_dependencies(DepTree, [Dep|O], Preparing, {NoneDeps, NewDeps}) ->
+    case fetch_dependencies(DepTree, Dep) of
+        {ok, {_VersionSpec, {none, _B}, _Obj, _Subj}} ->
+            list_none_new_dependencies(DepTree, O, Preparing, {[Dep|NoneDeps], NewDeps});
+        {ok, {_VersionSpec, {new, _B}, _Obj, _Subj}} ->
+            list_none_new_dependencies(DepTree, O, Preparing, {NoneDeps, [Dep|NewDeps]});
+        {ok, {_VersionSpec, {Success, _B}, _Obj, _Subj}} when Success == built; Success == tested ->
+            list_none_new_dependencies(DepTree, O, Preparing, {NoneDeps, NewDeps});
+        {ok, []} ->
+            case lists:member(Dep, Preparing) of
+                true ->
+                    list_none_new_dependencies(DepTree, O, Preparing, {NoneDeps, [Dep|NewDeps]});
+                false ->
+                    list_none_new_dependencies(DepTree, O, Preparing, {[Dep|NoneDeps], NewDeps})
+            end;
+        _Other ->
+            list_none_new_dependencies(DepTree, O, Preparing, {[Dep|NoneDeps], NewDeps})
+    end.
+
 
 -spec check_intersection(#rev_def{}, [#rev_def{}]) -> 
     {ok, independent|dependent}.
@@ -43,14 +60,15 @@ check_intersection(Candidate, CheckList) ->
 -spec fetch_dependencies(DepTree :: reference(), Version :: version()) ->
     {ok, dependencie_record()} | {error, Reason :: atom()}.
 fetch_dependencies(DepTree, Version) ->
-    case catch dets:lookup(DepTree, Version) of
+    Res = case catch dets:lookup(DepTree, Version) of
         [{BuildVersion, State, Object, Subject}|_] ->
             {ok, {BuildVersion, State, Object, Subject}};
         [] ->
             {ok, []};
         _Other ->
             {error, dets_error}
-    end.
+    end,
+    Res.
 
 
 -spec update_dependencies(reference(), #rev_def{}, atom()) -> 

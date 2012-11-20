@@ -122,10 +122,19 @@ handle_cast({changes, WorkId, Archives}, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
-handle_info({'DOWN', Reference, _, _, Reason}, State) when Reason /= normal ->
-    [{Reference, Archive}|_] = ets:lookup(State#state.unpack_state, Reference),
-    error_logger:error_msg("preprocess on ~p failed: ~p", [Archive, Reason]),
-    %%TODO repeat some actions with archive, smth failed
+handle_info({'DOWN', Reference, _, _, Reason}, State) ->
+    case Reason of
+        normal ->
+            ok;
+        _Other ->
+            [{Reference, Archive}|_] = ets:lookup(State#state.unpack_state, Reference),
+            error_logger:error_msg("preprocess on ~p failed: ~p~n", [Archive, Reason]),
+            Subj = io_lib:format("#~B error", [State#state.work_id
+                ]),
+            Body = io_lib:format("Failed to receive archive ~p: ~p~n", [Archive, Reason]),
+            notify(Subj, Body)
+    end,
+    ets:delete(State#state.unpack_state, Reference),
     {noreply, State};
 handle_info(schedule, State) ->
     {ok, NewState} = schedule_build(State),
@@ -154,7 +163,7 @@ process_archive(BuildPath, Archive, UnpackState, WorkId) ->
         ?MODULE, 
         prepare, 
         [BuildPath, Archive, WorkId]),
-    ets:insert(UnpackState, {Monitor, Archive}).
+    ets:insert(UnpackState, {Monitor, ?CPU:get_archive_version(Archive)}).
 
 
 prepare(BuildPath, Archive, WorkId) ->
@@ -198,7 +207,6 @@ job_free_worker(State) ->
 job_free_worker(Workers, none) ->
     Workers;
 job_free_worker([{Pid, none}|Other], ToBuild) ->
-    error_logger:info_msg("occupied new worker: ~p~n", [ToBuild]),
     gen_server:cast(Pid, {build, ToBuild}),
     [{Pid, ToBuild}|Other];
 job_free_worker([{Pid, SomeRef}|Other], ToBuild) ->
@@ -292,6 +300,8 @@ get_build_candidate(main_queue, State) ->
         dependent ->
             WaitQueue = queue:in(Candidate, State#state.wait_queue),
             {ok, State#state{main_queue=MainQueue, wait_queue=WaitQueue}};
+        missing ->
+            {ok, State#state{main_queue=MainQueue}};
         _Other ->
             RolledMainQueue = queue:in(Candidate, MainQueue),
             {ok, State#state{main_queue=RolledMainQueue}}
@@ -305,6 +315,8 @@ get_build_candidate(wait_queue, State) ->
         dependent ->
             RolledWaitQueue = queue:in(Candidate, WaitQueue),
             {ok, State#state{wait_queue=RolledWaitQueue}};
+        missing ->
+            {ok, State#state{wait_queue=WaitQueue}};
         Other ->
             Subject = io_lib:format("Build for ~p", [Candidate]),
             Body = io_lib:format("Error while processing dependencies: ~n~p~n", [Other]),
@@ -321,6 +333,8 @@ get_build_candidate(both, State) ->
             RolledWaitQueue = queue:in(Candidate, WaitQueue),
             get_build_candidate(main_queue,
                 State#state{wait_queue=RolledWaitQueue});
+        missing ->
+            {ok, State#state{wait_queue=WaitQueue}};
         _Other ->
             {error, broken_deps}
     end.
@@ -335,18 +349,30 @@ notify(Subject, Body) ->
             body=list_to_binary(Body)}},
     caterpillar_event:sync_event(Msg).
 
--spec check_build_deps(Candidate :: #rev_def{}, State :: #state{}) -> true|false.
+-spec check_build_deps(Candidate :: #rev_def{}, State :: #state{}) -> 
+    independent|dependent|missing|{error, term()}.
 check_build_deps(Candidate, State) ->
+    Preparing = [X || [X] <- ets:match_object(State#state.unpack_state, {'_', '$1'})],
     case caterpillar_dependencies:list_unresolved_dependencies(
-            State#state.deps, Candidate) of
-        {ok, []} ->
+            State#state.deps, Candidate, Preparing) of
+        {ok, [], []} ->
             {ok, NowBuilding} = list_building_revs(State),
             {ok, Res} = caterpillar_dependencies:check_intersection(
                 Candidate,
                 NowBuilding),
             Res;
-        {ok, Dependencies} when is_list(Dependencies) ->
+        {ok, [], _Deps} ->
             dependent;
+        {ok, Dependencies, _} when is_list(Dependencies) ->
+            Subj = io_lib:format("#~B error: ~s/~s/~s", [
+                    Candidate#rev_def.work_id,
+                    binary_to_list(Candidate#rev_def.name),
+                    binary_to_list(Candidate#rev_def.branch),
+                    binary_to_list(Candidate#rev_def.tag)
+                ]),
+            Body = io_lib:format("Missing dependencies: ~p~n", [Dependencies]),
+            notify(Subj, Body),
+            missing;
         {error, Res} ->
             {error, Res};
         Other ->
