@@ -117,7 +117,7 @@ handle_call(_Request, _From, State) ->
 
 handle_cast({changes, WorkId, Archives}, State) ->
     update_work_id(State#state.work_id, WorkId),
-    ToPreprocess = lists:usort(Archives++State#state.prebuild),
+    ToPreprocess = lists:usort(Archives),
     {ok, NewState} = process_archives(ToPreprocess, State, WorkId),
     {noreply, NewState};
 handle_cast(_Msg, State) ->
@@ -140,7 +140,13 @@ handle_info({'DOWN', Reference, _, _, Reason}, State) ->
     ets:delete(State#state.unpack_state, Reference),
     {noreply, State#state{queued=Preparing}};
 handle_info(schedule, State) ->
-    {ok, NewState} = schedule_build(State),
+    {ok, ScheduledState} = schedule_build(State),
+    case State#state.prebuild of
+        [{Archive, WorkId}|Rest] ->
+            {ok, NewState} = process_archives([Archive], ScheduledState#state{prebuild=Rest}, WorkId);
+        [] ->
+            NewState = ScheduledState
+    end,
     {noreply, NewState};
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -158,9 +164,16 @@ process_archives([], State, _WorkId) ->
 process_archives([A|O], State, WorkId) ->
     UnpackState = State#state.unpack_state,
     BuildPath = State#state.build_path,
-    Preparing = [?CPU:get_archive_version(A)|State#state.queued],
-    process_archive(BuildPath, A, UnpackState, WorkId),
-    process_archives(O, State#state{queued=Preparing}, WorkId).
+    case can_prepare(A, State) of
+        true ->
+            Preparing = [?CPU:get_archive_version(A)|State#state.queued],
+            Prebuild = State#state.prebuild,
+            process_archive(BuildPath, A, UnpackState, WorkId);
+        false ->
+            Preparing = State#state.queued,
+            Prebuild = [{A, WorkId}|State#state.prebuild]
+    end,
+    process_archives(O, State#state{queued=Preparing, prebuild=Prebuild}, WorkId).
 
 process_archive(BuildPath, Archive, UnpackState, WorkId) ->
     {_Pid, Monitor} = erlang:spawn_monitor(
@@ -188,6 +201,15 @@ prepare(BuildPath, Archive, WorkId) ->
     PkgRecord = ?CPU:get_pkg_config(Archive, Cwd),
     RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId),
     gen_server:call(caterpillar, {newref, RevDef}).
+
+
+can_prepare(Archive, State) ->
+    Version = ?CPU:get_archive_version(Archive),
+    Next = State#state.next_to_build,
+    {ok, BuildRevs} = list_building_revs(State),
+    BuildVsns = [?VERSION(Rev) || Rev <- [Next|BuildRevs], Rev /= none],
+    InQueues = State#state.queued,
+    not(lists:member(Version, InQueues ++ BuildVsns)).
     
 
 %% Build
