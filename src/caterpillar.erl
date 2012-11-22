@@ -9,6 +9,7 @@
 
 -define(CPU, caterpillar_pkg_utils).
 -define(CU, caterpillar_utils).
+-define(UNPACK_RETRY_LIMIT, 15).
 
 -record(state, {
         deps,
@@ -171,7 +172,7 @@ process_archives([A|O], State, WorkId) ->
             process_archive(BuildPath, A, UnpackState, WorkId);
         false ->
             Preparing = State#state.queued,
-            Prebuild = [{A, WorkId}|State#state.prebuild]
+            Prebuild = lists:ukeysort(1, [{A, WorkId}|State#state.prebuild])
     end,
     process_archives(O, State#state{queued=Preparing, prebuild=Prebuild}, WorkId).
 
@@ -210,7 +211,7 @@ can_prepare(Archive, State) ->
     BuildVsns = [?VERSION(Rev) || Rev <- [Next|BuildRevs], Rev /= none],
     InQueues = State#state.queued,
     not(lists:member(Version, InQueues ++ BuildVsns)).
-    
+
 
 %% Build
 %% ------------------------------------------------------------------
