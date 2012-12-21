@@ -9,6 +9,7 @@
 
 -define(CPU, caterpillar_pkg_utils).
 -define(CU, caterpillar_utils).
+-define(CDEP, caterpillar_dependencies).
 -define(UNPACK_RETRY_LIMIT, 15).
 
 -record(state, {
@@ -20,6 +21,7 @@
         unpack_state,
         build_path,
         poll_time,
+        queue_missing=false,
         prebuild=[],
         queued=[],
         work_id,
@@ -37,6 +39,7 @@ init(Settings) ->
     PollTime = ?GV(poll_time, Settings, 10000),
     BuildQueue = queue:new(),
     WaitQueue = queue:new(),
+    QueueMissing = ?GV(queue_missing, Settings, false),
     {ok, WorkerList} = create_workers(?GV(build_workers_number, Settings, 5)),
     error_logger:info_msg("workers initialized"),
     UnpackState = ets:new(unpack_state, []),
@@ -54,6 +57,7 @@ init(Settings) ->
             next_to_build=none,
             unpack_state=UnpackState,
             build_path=BuildPath,
+            queue_missing=QueueMissing,
             poll_time=PollTime,
             work_id=WorkIdFile,
             ident=Ident
@@ -72,7 +76,7 @@ handle_call({newref, RevDef}, _From, State) ->
     end,
     {reply, ok, NewState};
 handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
-    caterpillar_dependencies:update_dependencies(State#state.deps, RevDef, built),
+    ?CDEP:update_dependencies(State#state.deps, RevDef, built),
     DeployPkg = #deploy_package{
         name = binary_to_list(RevDef#rev_def.name),
         branch = binary_to_list(RevDef#rev_def.branch),
@@ -106,7 +110,7 @@ handle_call({err_built, Worker, RevDef, BuildInfo}, _From, State) ->
         ]),
     notify(Subj, BuildInfo#build_info.description),
     BuildState = BuildInfo#build_info.state,
-    caterpillar_dependencies:update_dependencies(State#state.deps, RevDef, BuildState),
+    ?CDEP:update_dependencies(State#state.deps, RevDef, BuildState),
     NewWorkers = release_worker(Worker, State#state.workers),
     {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
     {ok, NewState} = try_build(ScheduledState),
@@ -121,6 +125,19 @@ handle_cast({changes, WorkId, Archives}, State) ->
     ToPreprocess = lists:usort(Archives),
     {ok, NewState} = process_archives(ToPreprocess, State, WorkId),
     {noreply, NewState};
+handle_cast({rebuild_deps, WorkId, Version}, State) ->
+    DepArchives = case ?CDEP:fetch_dependencies(State#state.deps, Version) of
+        {ok, []} ->
+            [];
+        {ok, {_, {St, _}, _Object, Subject}} when St == built; St == tested ->
+            lists:map(fun(X) -> ?CPU:get_version_archive(X) end, Subject);
+        Other ->
+            error_logger:info_msg("wrong: ~p~n", [Other]),
+            []
+    end,
+    error_logger:info_msg("rebuilding ~p dependencies: ~p~n", [Version, DepArchives]),
+    {ok, NewState} = process_archives(DepArchives, State, WorkId),
+    {noreply, NewState};
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -133,9 +150,8 @@ handle_info({'DOWN', Reference, _, _, Reason}, State) ->
             [{Reference, Archive}|_] = ets:lookup(State#state.unpack_state, Reference),
             error_logger:error_msg("preprocess on ~p failed: ~p~n", [Archive, Reason]),
             Preparing = lists:delete(Archive, State#state.queued),
-            Subj = io_lib:format("#~B error", [State#state.work_id
-                ]),
-            Body = io_lib:format("Failed to receive archive ~p: ~p~n", [Archive, Reason]),
+            Subj = io_lib:format("#Unpack error: ~p", [Archive]),
+            Body = io_lib:format("Failed to unpack archive ~p: ~p~n", [Archive, Reason]),
             notify(Subj, Body)
     end,
     ets:delete(State#state.unpack_state, Reference),
@@ -322,7 +338,7 @@ get_build_candidate(main_queue, State) ->
     {{value, Candidate}, MainQueue} = queue:out(State#state.main_queue),
     case check_build_deps(Candidate, State) of
         independent ->
-            caterpillar_dependencies:update_dependencies(State#state.deps, Candidate, new),
+            ?CDEP:update_dependencies(State#state.deps, Candidate, new),
             {ok, State#state{
                     main_queue=MainQueue, 
                     next_to_build=Candidate,
@@ -345,7 +361,7 @@ get_build_candidate(wait_queue, State) ->
     {{value, Candidate}, WaitQueue} = queue:out(State#state.wait_queue),
     case check_build_deps(Candidate, State) of
         independent ->
-            caterpillar_dependencies:update_dependencies(State#state.deps, Candidate, new),
+            ?CDEP:update_dependencies(State#state.deps, Candidate, new),
             {ok, State#state{
                     wait_queue=WaitQueue, 
                     queued=lists:delete(?VERSION(Candidate), State#state.queued),
@@ -367,7 +383,7 @@ get_build_candidate(both, State) ->
     {{value, Candidate}, WaitQueue} = queue:out(State#state.wait_queue),
     case check_build_deps(Candidate, State) of
         independent ->
-            caterpillar_dependencies:update_dependencies(State#state.deps, Candidate, new),
+            ?CDEP:update_dependencies(State#state.deps, Candidate, new),
             {ok, State#state{
                     queued=lists:delete(?VERSION(Candidate), State#state.queued),
                     wait_queue=WaitQueue, 
@@ -399,11 +415,11 @@ notify(Subject, Body) ->
     independent|dependent|missing|{error, term()}.
 check_build_deps(Candidate, State) ->
     Preparing = State#state.queued,
-    case caterpillar_dependencies:list_unresolved_dependencies(
+    case ?CDEP:list_unresolved_dependencies(
             State#state.deps, Candidate, Preparing) of
         {ok, [], []} ->
             {ok, NowBuilding} = list_building_revs(State),
-            {ok, Res} = caterpillar_dependencies:check_intersection(
+            {ok, Res} = ?CDEP:check_intersection(
                 Candidate,
                 NowBuilding),
             Res;
@@ -418,7 +434,12 @@ check_build_deps(Candidate, State) ->
                 ]),
             Body = io_lib:format("Missing dependencies: ~p~n", [Dependencies]),
             notify(Subj, Body),
-            missing;
+            case State#state.queue_missing of
+                true ->
+                    dependent;
+                _Other ->
+                    missing
+            end;
         {error, Res} ->
             {error, Res};
         Other ->

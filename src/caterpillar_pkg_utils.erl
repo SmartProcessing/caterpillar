@@ -5,6 +5,7 @@
 -export([get_pkg_config_record/2]).
 -export([get_dep_list/2]).
 -export([get_archive_version/1]).
+-export([get_version_archive/1]).
 -export([pack_rev_def/3, get_dir_name/1]).
 -define(LTB, list_to_binary).
 -define(BTL, binary_to_list).
@@ -64,6 +65,14 @@ get_valid_versions(L, Archive) ->
 get_archive_version(Archive) ->
     {?LTB(Archive#archive.name), ?LTB(Archive#archive.branch), ?LTB(Archive#archive.tag)}.
 
+get_version_archive(Version) ->
+    {Name, Branch, Tag} = Version,
+    #archive{
+        name = ?BTL(Name),
+        branch = ?BTL(Branch),
+        tag = ?BTL(Tag)
+    }.
+
 pack_rev_def(Archive, PkgRecord, WorkId) ->
     Deps = get_dep_list(PkgRecord, Archive),
     #rev_def{
@@ -91,7 +100,7 @@ get_pkg_config_list(Path) ->
 
 get_pkg_config(Arch, Path) ->
     Res = get_pkg_config_record(Arch, get_pkg_config_list(Path)),
-    logging:info_msg("got package config record: ~p~n", [Res]),
+    error_logger:info_msg("got package config record: ~p~n", [Res]),
     Res.
 
 
@@ -125,5 +134,5 @@ parse_control_entry(["Depends", Deps]) ->
             Package
         end, 
         string:tokens(Deps, ","))};
-parse_control_entry([Param, Value]) ->
+parse_control_entry([Param, Value|_]) ->
     {Param, string:strip(Value)}.

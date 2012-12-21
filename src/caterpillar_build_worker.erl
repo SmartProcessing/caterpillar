@@ -122,7 +122,7 @@ build_rev(ToBuild, State) ->
                         description=Msg
                     }}, infinity);
         Other ->
-            logging:info_msg("build pipe failed with reason: ~p~n", [Other]),
+            error_logger:info_msg("build pipe failed with reason: ~p~n", [Other]),
             ok = gen_server:call(caterpillar,
                 {
                     err_built, 
@@ -402,7 +402,7 @@ make_complete_actions(
     [{Version, {_, InBuckets}, _, _}] = dets:lookup(DepsDets, Version),
     ?UNLOCK(Version),
     UpdateInBuckets = lists:delete(BName, InBuckets),
-    logging:info_msg("to update buckets: ~p for package ~p~n", [UpdateInBuckets, Version]),
+    error_logger:info_msg("to update buckets: ~p for package ~p~n", [UpdateInBuckets, Version]),
     Buckets = lists:map(fun(X) -> 
                 ?LOCK(X),
                 [Res] = dets:lookup(BucketsDets, X), 
@@ -419,7 +419,7 @@ make_complete_actions(
     ?LOCK(Version),
     [{Version, {_, InBuckets}, _, _}] = dets:lookup(DepsDets, Version),
     ?UNLOCK(Version),
-    logging:info_msg("to delete from buckets: ~p for package ~p~n", [InBuckets, Version]),
+    error_logger:info_msg("to delete from buckets: ~p for package ~p~n", [InBuckets, Version]),
     lists:map(fun(X) -> 
                 ?LOCK(X),
                 [{BName, BPath, BContain}] = dets:lookup(BucketsDets, X), 

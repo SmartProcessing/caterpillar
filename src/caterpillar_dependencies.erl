@@ -1,7 +1,7 @@
 -module(caterpillar_dependencies).
 -include_lib("caterpillar_internal.hrl").
 -export([check_intersection/2, list_unresolved_dependencies/3]).
--export([update_dependencies/3]).
+-export([update_dependencies/3, fetch_dependencies/2]).
 
 -spec list_unresolved_dependencies(reference(), #rev_def{}, [version()]) ->
     {ok, Unresolved :: [version()]}.
@@ -70,7 +70,6 @@ fetch_dependencies(DepTree, Version) ->
             {error, dets_error}
     end,
     Res.
-
 
 -spec update_dependencies(reference(), #rev_def{}, atom()) -> 
     {ok, done}|{error, Reason :: atom()}.
