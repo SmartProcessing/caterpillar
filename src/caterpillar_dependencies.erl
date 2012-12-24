@@ -3,6 +3,9 @@
 -export([check_intersection/2, list_unresolved_dependencies/3]).
 -export([update_dependencies/3, fetch_dependencies/2]).
 
+-define(LOCK(X), gen_server:call(caterpillar_lock, {lock, X}, infinity)).
+-define(UNLOCK(X), gen_server:call(caterpillar_lock, {unlock, X})).
+
 -spec list_unresolved_dependencies(reference(), #rev_def{}, [version()]) ->
     {ok, Unresolved :: [version()]}.
 list_unresolved_dependencies(DepTree, Candidate, Preparing) ->
@@ -60,6 +63,7 @@ check_intersection(Candidate, CheckList) ->
 -spec fetch_dependencies(DepTree :: reference(), Version :: version()) ->
     {ok, dependencie_record()} | {error, Reason :: atom()}.
 fetch_dependencies(DepTree, Version) ->
+    ?LOCK(Version),
     Res = case catch dets:lookup(DepTree, Version) of
         [{BuildVersion, State, Object, Subject}|_] ->
             {ok, {BuildVersion, State, Object, Subject}};
@@ -68,6 +72,7 @@ fetch_dependencies(DepTree, Version) ->
         _Other ->
             {error, dets_error}
     end,
+    ?UNLOCK(Version),
     Res.
 
 -spec update_dependencies(reference(), #rev_def{}, atom()) -> 
@@ -77,6 +82,7 @@ update_dependencies(DepTree, Rev, Status) ->
     Version = ?VERSION(Rev),
     DepObject = Rev#rev_def.dep_object, 
     update_subjects(DepTree, DepObject, Version),
+    ?LOCK(Version),
     NewObj = case dets:lookup(DepTree, Version) of
         [{V, {_, Buckets}, _, Subj}|_] when V == Version ->
             {Version, {Status, Buckets}, DepObject, Subj};
@@ -84,12 +90,14 @@ update_dependencies(DepTree, Rev, Status) ->
             {Version, {Status, []}, DepObject, []}
     end,
     dets:insert(DepTree, NewObj),
+    ?UNLOCK(Version),
     {ok, done}.
 
 
 update_subjects(_, [], _) ->
     {ok, done};
 update_subjects(Deps, [Version|Other], NewRef) ->
+    ?LOCK(Version),
     [{Version, BuildInfo, Object, Subject}|_] = dets:lookup(Deps, Version),
     case lists:member(NewRef, Subject) of
         true ->
@@ -97,4 +105,5 @@ update_subjects(Deps, [Version|Other], NewRef) ->
         false ->
             dets:insert(Deps, {Version, BuildInfo, Object, [NewRef|Subject]})
     end,
+    ?UNLOCK(Version),
     update_subjects(Deps, Other, NewRef).

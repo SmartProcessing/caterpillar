@@ -24,10 +24,8 @@ stop() ->
 
     
 handle_call({lock, Ident}, From, State) ->
-    error_logger:info_msg("locking: ~p~n", [Ident]),
     case ets:lookup(State#state.storage, Ident) of
         [{Ident, true, SomeRef, Q}] ->
-            error_logger:info_msg("busy: ~p~n", [Ident]),
             ets:insert(State#state.storage, {Ident, true, SomeRef, queue:in({From}, Q)}),
             {noreply, State};
         [{Ident, false, _, _}] ->
@@ -39,7 +37,6 @@ handle_call({lock, Ident}, From, State) ->
     end;
 
 handle_call({unlock, Ident}, From, State) ->
-    error_logger:info_msg("unlocking: ~p~n", [Ident]),
     unlock_ref(Ident, From, State),
     {reply, ok, State};
 

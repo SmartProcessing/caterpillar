@@ -252,7 +252,6 @@ iter_dets(BucketDets, Package, Deps, BucketId) ->
     B = dets:lookup(BucketDets, BucketId),
     case B of
         [{Id, Path, Entries}] = [Bucket] ->
-            error_logger:info_msg("validating bucket: ~p with deps: ~p~n", [Bucket, [Package|Deps]]),
             case validate_bucket(Entries, [Package|Deps]) of
                 true ->
                     dets:insert(BucketDets, {Id, Path, lists:usort([Package|Entries] ++ Deps)}),
@@ -315,7 +314,6 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
         true ->
             pass;
         false ->
-            error_logger:info_msg("found buckets with dep ~p in: ~p~n", [Dep, DepBuckets]),
             case [X || X <- DepBuckets, X /= BName] of
                 [AnyBucket|_] ->
                     ?LOCK(AnyBucket),
@@ -336,17 +334,14 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
 
 update_package_buckets(BucketsTable, DepsTable, Buckets, BuildPath, Source, Rev) ->
     Package = ?VERSION(Rev),
-    error_logger:info_msg("updating package buckets: ~p~n", [Buckets]),
     case catch update_buckets(BucketsTable, BuildPath, Source, Rev, Buckets, []) of
         {ok, UpdatedBuckets} ->
             SuccessB = [X || {X, _, _} <- UpdatedBuckets],
-            error_logger:info_msg("updated buckets: ~p~n", [SuccessB]),
             ?LOCK(Package),
             [{Package, {NewState, NewBucketList}, NewDepObj, NewDepSubj}|_] = dets:lookup(DepsTable, Package),
             ok = dets:insert(DepsTable, 
                 {Package, {NewState, lists:usort(SuccessB ++ NewBucketList)}, NewDepObj, NewDepSubj}),
             ?UNLOCK(Package),
-            error_logger:info_msg("writing for pkg: ~p ~p~n", [Package, SuccessB ++ NewBucketList]),
             {ok, UpdatedBuckets};
         Other ->
             error_logger:error_msg("failed to update package buckets for ~p: ~p", [Rev, Other]),
@@ -373,7 +368,6 @@ update_buckets(BucketsTable, BuildPath, Source, Rev, [Bucket|O], Acc) ->
     try
         copy_package_to_bucket(Source, Path),
         ok = dets:insert(BucketsTable, {BName, BPath, lists:usort(NewContain)}),
-        error_logger:info_msg("updated bucket :~p now: ~p~n", [BName, [Package|BContain]]),
         ?UNLOCK(BName)
     catch
         _:Reason ->
@@ -402,7 +396,6 @@ make_complete_actions(
     [{Version, {_, InBuckets}, _, _}] = dets:lookup(DepsDets, Version),
     ?UNLOCK(Version),
     UpdateInBuckets = lists:delete(BName, InBuckets),
-    error_logger:info_msg("to update buckets: ~p for package ~p~n", [UpdateInBuckets, Version]),
     Buckets = lists:map(fun(X) -> 
                 ?LOCK(X),
                 [Res] = dets:lookup(BucketsDets, X), 
@@ -419,7 +412,6 @@ make_complete_actions(
     ?LOCK(Version),
     [{Version, {_, InBuckets}, _, _}] = dets:lookup(DepsDets, Version),
     ?UNLOCK(Version),
-    error_logger:info_msg("to delete from buckets: ~p for package ~p~n", [InBuckets, Version]),
     lists:map(fun(X) -> 
                 ?LOCK(X),
                 [{BName, BPath, BContain}] = dets:lookup(BucketsDets, X), 
@@ -440,7 +432,6 @@ create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev) ->
             get_temp_path(BuildPath, Rev),
             Rev),
         ?CU:del_dir(get_temp_path(BuildPath, Rev)),
-        error_logger:info_msg("arming bucket ~p with deps: ~p~n", [Bucket, Deps]),
         arm_build_bucket(Buckets, DepsDets, NewBucket, BuildPath, Deps)
     catch
         _:Reason ->
