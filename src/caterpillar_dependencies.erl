@@ -25,7 +25,6 @@ list_none_new_dependencies(DepTree, [Dep|O], Preparing, {NoneDeps, NewDeps}) ->
         {ok, []} ->
             case lists:member(Dep, Preparing) of
                 true ->
-                    error_logger:info_msg("package ~p is preparing~n", [Dep]),
                     list_none_new_dependencies(DepTree, O, Preparing, {NoneDeps, [Dep|NewDeps]});
                 false ->
                     list_none_new_dependencies(DepTree, O, Preparing, {[Dep|NoneDeps], NewDeps})
