@@ -12,7 +12,7 @@ prepare(_Dir) ->
 
 submit(Dir) ->
     error_logger:info_msg("executing make package in ~s:~n", [Dir]),
-    case ?CMD("make package PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk PATH_PY_MK=../smprc.setup/Makefile.mk", Dir) of
+    case ?CMD("make package PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk PATH_PY_MK=../devel-tools/Makefile-py.mk", Dir) of
         {0, _Msg} ->
             find_deb_file(filename:join([Dir, "dist"]));
         {Code, Msg} when is_integer(Code) ->
