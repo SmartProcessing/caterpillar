@@ -426,18 +426,24 @@ check_build_deps(Candidate, State) ->
         {ok, [], _Deps} ->
             dependent;
         {ok, Dependencies, _} when is_list(Dependencies) ->
-            Subj = io_lib:format("#~B error: ~s/~s/~s", [
-                    Candidate#rev_def.work_id,
-                    binary_to_list(Candidate#rev_def.name),
-                    binary_to_list(Candidate#rev_def.branch),
-                    binary_to_list(Candidate#rev_def.tag)
-                ]),
-            Body = io_lib:format("Missing dependencies: ~p~n", [Dependencies]),
-            notify(Subj, Body),
             case State#state.queue_missing of
                 true ->
+                    lists:map(
+                        fun(Dep) ->
+                                {BPackage, BBranch, _} = Dep,
+                                Msg = {rebuild_package, {binary_to_list(BPackage), binary_to_list(BBranch)}},
+                                caterpillar_event:sync_event(Msg)
+                        end, Dependencies),
                     dependent;
                 _Other ->
+                    Subj = io_lib:format("#~B error: ~s/~s/~s", [
+                            Candidate#rev_def.work_id,
+                            binary_to_list(Candidate#rev_def.name),
+                            binary_to_list(Candidate#rev_def.branch),
+                            binary_to_list(Candidate#rev_def.tag)
+                        ]),
+                    Body = io_lib:format("Missing dependencies: ~p~n", [Dependencies]),
+                    notify(Subj, Body),
                     missing
             end;
         {error, Res} ->
