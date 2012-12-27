@@ -7,6 +7,7 @@
 -export([get_archive_version/1]).
 -export([get_version_archive/1]).
 -export([pack_rev_def/3, get_dir_name/1]).
+-export([gen_control_from_pkg_config/1]).
 -define(LTB, list_to_binary).
 -define(BTL, binary_to_list).
 -define(ITL, integer_to_list).
@@ -19,7 +20,7 @@ get_pkg_config_record(Archive, {control, Data}) ->
         package_t=["deb"],
         arch=?GV("Architecture", Data, "all"),
         description=?GV("Description", Data, ""),
-        maintainers=[?GV("Maintainer", Data, "example@example.org")],
+        maintainers=[?GV("Maintainer", Data, ["example@example.org"])],
         platform="default",
         deps=?GV("Depends", Data, [])
     };
@@ -148,9 +149,9 @@ gen_control_from_pkg_config(Rev) ->
     NewVersion = OldVersion ++ "-" ++ ?BTL(Rev#rev_def.branch) ++ "." ++ ?ITL(Rev#rev_def.work_id),
     OldSection = PkgConfig#pkg_config.section,
     NewSection = OldSection ++ "-" ++ ?BTL(Rev#rev_def.branch),
-    [Maintainer|_] = PkgConfig#pkg_config.maintainers,
+    [Maintainer|_] = PkgConfig#pkg_config.maintainers ++ ["example@example.org"],
     list_to_binary(io_lib:format(
-        "Package: ~s~nSection: ~s~nVersion: ~s~nArchitecture: ~s~nDescription: ~s~nMaintainer: ~s~nDepends:~s",
+        "Package: ~s~nSection: ~s~nVersion: ~s~nArchitecture: ~s~nDescription: ~s~nMaintainer: ~s~n~s",
         [
             PkgConfig#pkg_config.name,
             NewSection,
@@ -161,10 +162,12 @@ gen_control_from_pkg_config(Rev) ->
             gen_deps(PkgConfig#pkg_config.deps)
         ])).
 
+gen_deps([]) ->
+    "";
 gen_deps(Deps) ->
-    gen_deps(Deps, "").
+    gen_deps(Deps, "Depends:").
 gen_deps([], Acc) ->
-    Acc;
+    Acc ++ "\n";
 gen_deps([Dep|O], Acc) ->
     case Dep of
         Str when is_list(Dep) ->

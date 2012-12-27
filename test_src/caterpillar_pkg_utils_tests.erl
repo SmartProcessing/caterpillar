@@ -46,7 +46,7 @@ gen_control_from_pkg_config_test() ->
             deps = ["erlang-base", {"testik", "trunk", ""}, "blabla"]
         }
     },
-    ?assertEqual(<<"Package: newpkg\nSection: smprc-trunk\nVersion: 0.0.0-trunk.11\nArchitecture: all\nDescription: new package\nMaintainer: main@mail.com\nDepends: erlang-base testik blabla">>,
+    ?assertEqual(<<"Package: newpkg\nSection: smprc-trunk\nVersion: 0.0.0-trunk.11\nArchitecture: all\nDescription: new package\nMaintainer: main@mail.com\nDepends: erlang-base testik blabla\n">>,
         ?CPU:gen_control_from_pkg_config(Rev)).
 
 

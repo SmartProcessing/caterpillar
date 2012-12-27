@@ -7,7 +7,8 @@
 check(_Rev, _Dir) ->
     {ok, ""}.
 
-prepare(_Rev, _Dir) ->
+prepare(Rev, Dir) ->
+    file:write_file(filename:join(Dir, "control"), caterpillar_pkg_utils:gen_control_from_pkg_config(Rev)),
     {ok, ""}.
 
 submit(_Rev, Dir) ->
