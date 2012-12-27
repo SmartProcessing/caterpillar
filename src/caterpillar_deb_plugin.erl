@@ -1,16 +1,16 @@
 -module(caterpillar_deb_plugin).
 
--export([check/1, prepare/1, submit/1]).
+-export([check/2, prepare/2, submit/2]).
 
 -define(CMD, caterpillar_utils:command).
 
-check(_Dir) ->
+check(_Rev, _Dir) ->
     {ok, ""}.
 
-prepare(_Dir) ->
+prepare(_Rev, _Dir) ->
     {ok, ""}.
 
-submit(Dir) ->
+submit(_Rev, Dir) ->
     error_logger:info_msg("executing make package in ~s:~n", [Dir]),
     case ?CMD("make package PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk PATH_PY_MK=../devel-tools/Makefile-py.mk", Dir) of
         {0, _Msg} ->

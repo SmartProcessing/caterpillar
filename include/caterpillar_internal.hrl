@@ -11,6 +11,7 @@
     build_deps=[]       :: [version()|string()],
     section="smprc"     :: string(),
     platform="default"  :: string(),
+    description=""      :: string(),
     package_t=["deb"]   :: [string()],
     arch=["all"]        :: [string()],
     maintainers=[]      :: [string()]
