@@ -169,7 +169,7 @@ platform_get_env({Rev, {_, BPath, _}, BuildPath}, Plugins) ->
     Platform = PkgConfig#pkg_config.platform,
     Plugin = ?GV(Platform, Plugins, caterpillar_default_builder),
     Path = filename:join([BuildPath, BPath, binary_to_list(Name)]),
-    {ok, Plugin, Path}.
+    {ok, Plugin, Path, Rev}.
 
 package_get_env({Rev, {_, BPath, _}, BuildPath}, Plugins) ->
     {Name, _B, _T} = ?VERSION(Rev),
@@ -177,32 +177,32 @@ package_get_env({Rev, {_, BPath, _}, BuildPath}, Plugins) ->
     PackageT = PkgConfig#pkg_config.package_t,
     Plugin = ?GV(PackageT, Plugins, caterpillar_deb_plugin),
     Path = filename:join([BuildPath, BPath, binary_to_list(Name)]),
-    {ok, Plugin, Path}.
+    {ok, Plugin, Path, Rev}.
 
 platform_clean(Env, Plugins) ->
-    {ok, Plugin, Path} = platform_get_env(Env, Plugins),
-    informer(none, Plugin:clean(Path), Env).
+    {ok, Plugin, Path, Rev} = platform_get_env(Env, Plugins),
+    informer(none, Plugin:clean(Rev, Path), Env).
 
 platform_test(Env, Plugins) ->
-    {ok, Plugin, Path} = platform_get_env(Env, Plugins),
-    informer(tested, Plugin:test(Path), Env).
+    {ok, Plugin, Path, Rev} = platform_get_env(Env, Plugins),
+    informer(tested, Plugin:test(Rev, Path), Env).
 
 
 platform_prebuild(Env, Plugins) ->
-    {ok, Plugin, Path} = platform_get_env(Env, Plugins),
-    informer(tested, Plugin:prebuild(Path), Env).
+    {ok, Plugin, Path, Rev} = platform_get_env(Env, Plugins),
+    informer(tested, Plugin:prebuild(Rev, Path), Env).
 
 build_prepare(Env, Plugins) ->
-    {ok, Plugin, Path} = package_get_env(Env, Plugins),
-    informer(tested, Plugin:prepare(Path), Env).
+    {ok, Plugin, Path, Rev} = package_get_env(Env, Plugins),
+    informer(tested, Plugin:prepare(Rev, Path), Env).
 
 build_check(Env, Plugins) ->
-    {ok, Plugin, Path} = package_get_env(Env, Plugins),
-    informer(tested, Plugin:check(Path), Env).
+    {ok, Plugin, Path, Rev} = package_get_env(Env, Plugins),
+    informer(tested, Plugin:check(Rev, Path), Env).
 
 build_submit(Env, Plugins) ->
-    {ok, Plugin, Path} = package_get_env(Env, Plugins),
-    {State, Msg} = Plugin:submit(Path),
+    {ok, Plugin, Path, Rev} = package_get_env(Env, Plugins),
+    {State, Msg} = Plugin:submit(Rev, Path),
     case State of
         ok ->
             {_Fd, _Name} = Msg,
