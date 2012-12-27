@@ -36,11 +36,11 @@ clean:
 
 compile:
 	@echo $(PWD)
-ifeq ($(PATH_MK), ../../devel-tools/trunk/Makefile.mk)
-	$(REBAR) compile
-else
-	$(REBAR) -C new.rebar.config compile
-endif
+	ifeq ($(PATH_MK), ../../devel-tools/trunk/Makefile.mk)
+		$(REBAR) compile
+	else
+		$(REBAR) -C new.rebar.config compile
+	endif
 
 
 
@@ -53,7 +53,7 @@ test_compile: $(BEAMS) $(TEST_BEAMS)
 
 test: export_all
 	$(ERL) -pa ebin/ -env ERL_LIBS "$(NORMALIZED_LIBS)" -noshell \
-    	-eval 'test_runner:start({application, caterpillar}, [verbose, {test_timeout, 15000}])' \
+    	-eval 'test_runner:start({dir, "ebin"}, [verbose, {test_timeout, 15000}])' \
     	-s init stop 
 
 
