@@ -45,6 +45,7 @@ get_pkg_config_record(Archive, {empty, Data}) ->
         package_t=?GV("package_t", Data, ["deb"]),
         arch=?GV("architecture", Data, "all"),
         maintainers=?GV("maintainers", Data, ["example@example.org"]),
+        description=?GV("description", Data, ""),
         platform=?GV("platform", Data, "default"),
         deps=?GV("deps", Data, []),
         build_deps=?GV("build_deps", Data, [])
@@ -148,20 +149,20 @@ gen_control_from_pkg_config(Rev) ->
     OldSection = PkgConfig#pkg_config.section,
     NewSection = OldSection ++ "-" ++ ?BTL(Rev#rev_def.branch),
     [Maintainer|_] = PkgConfig#pkg_config.maintainers,
-    io_lib:format(
-        "Package: ~s~nSection: ~s~nVersion ~s~nArchitecture: ~s~n Description: ~s~n Maintainer: ~s~n Depends: ~s~n",
+    list_to_binary(io_lib:format(
+        "Package: ~s~nSection: ~s~nVersion: ~s~nArchitecture: ~s~nDescription: ~s~nMaintainer: ~s~nDepends:~s",
         [
             PkgConfig#pkg_config.name,
             NewSection,
             NewVersion,
-            PkgConfig#pkg_config.architecture,
+            PkgConfig#pkg_config.arch,
             PkgConfig#pkg_config.description,
             Maintainer,
             gen_deps(PkgConfig#pkg_config.deps)
-        ]).
+        ])).
 
 gen_deps(Deps) ->
-    gen_deps(Deps, Acc).
+    gen_deps(Deps, "").
 gen_deps([], Acc) ->
     Acc;
 gen_deps([Dep|O], Acc) ->

@@ -1,6 +1,7 @@
 -module(caterpillar_pkg_utils_tests).
 -include_lib("eunit/include/eunit.hrl").
 -include("caterpillar.hrl").
+-include("caterpillar_internal.hrl").
 -define(CPU, caterpillar_pkg_utils).
 
 -on_load(tty_off/0).
@@ -27,5 +28,26 @@ parse_control_test() ->
         fun({P, V}) ->
             ?assertEqual(?GV(P, Res), V)
         end, Sample).
+
+gen_control_from_pkg_config_test() ->
+    Rev = #rev_def{
+        name = <<"newpkg">>, 
+        branch = <<"trunk">>, 
+        tag = <<>>, 
+        work_id = 11,
+        dep_object = [], 
+        pkg_config=#pkg_config{
+            name = "newpkg",
+            section = "smprc",
+            version = "0.0.0",
+            arch = "all",
+            description = "new package",
+            maintainers = ["main@mail.com", "test@mail.com"],
+            deps = ["erlang-base", {"testik", "trunk", ""}, "blabla"]
+        }
+    },
+    ?assertEqual(<<"Package: newpkg\nSection: smprc-trunk\nVersion: 0.0.0-trunk.11\nArchitecture: all\nDescription: new package\nMaintainer: main@mail.com\nDepends: erlang-base testik blabla">>,
+        ?CPU:gen_control_from_pkg_config(Rev)).
+
 
 -endif.
