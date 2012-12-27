@@ -165,15 +165,15 @@ gen_control_from_pkg_config(Rev) ->
 gen_deps([]) ->
     "";
 gen_deps(Deps) ->
-    gen_deps(Deps, "Depends:").
+    gen_deps(Deps, []).
 gen_deps([], Acc) ->
-    Acc ++ "\n";
+    "Depends: " ++ string:join(Acc, ", ") ++ "\n";
 gen_deps([Dep|O], Acc) ->
     case Dep of
         Str when is_list(Dep) ->
-            gen_deps(O, Acc ++ " " ++ Str);
+            gen_deps(O, [Str|Acc]);
         {P, _B, _T} ->
-            gen_deps(O, Acc ++ " " ++ P);
+            gen_deps(O, [P|Acc]);
         _Other ->
             gen_deps(O, Acc)
     end.
