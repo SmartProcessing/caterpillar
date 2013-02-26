@@ -273,3 +273,43 @@ get_value_or_die_test_() ->
         
     ]
 ]}.
+
+
+filename_join_test_() ->
+{foreach, fun() -> ok end,
+[
+    {Message, fun() ->
+        ?assertEqual(Result, caterpillar_utils:filename_join(Data))
+    end} || {Message, Data, Result} <- [
+        {
+            "empty list",
+            [],
+            []
+        },
+        {
+            "one element in the list(string)",
+            ["test"],
+            "test"
+        },
+        {
+            "one element in the list(binary)",
+            [<<"test">>],
+            "test"
+        },
+        {
+            "few elements in the list(string and binary)",
+            ["t1", <<"t2">>],
+            "t1/t2"
+        },
+        {
+            "few elements in the list(only strings with unicode symbols)",
+            ["t1", "абцд"],
+            "t1/абцд"
+        },
+        {
+            "few elements in the list(string and list with unicode symbols)",
+            ["t1", "т1", <<"t1">>, <<208, 176>>],
+            "t1/т1/t1/а"
+        }
+    ]
+]}.

@@ -12,6 +12,7 @@
 -export([ensure_dir/1]).
 -export([get_value_or_die/2]).
 -export([command/1, command/2, command/4]).
+-export([filename_join/1, filename_join/2]).
 
 -define(DEFAULT_TIMEOUT, 300000).
 
@@ -244,3 +245,19 @@ to_binary(Bin) when is_binary(Bin) -> Bin.
 
 to_list(List) when is_list(List) -> List;
 to_list(Bin) when is_binary(Bin) -> binary_to_list(Bin).
+
+
+filename_join(First, Second) ->
+    filename_join([First, Second]).
+
+
+filename_join(Names) -> filename_join_(Names, []).
+
+
+filename_join_([Name|[]], []) -> to_list(Name);
+filename_join_([], Accum) -> lists:flatten(lists:reverse(Accum));
+filename_join_([Name|Other], []) -> filename_join_(Other, [unicode:characters_to_list(Name), "/"|[]]);
+filename_join_([Name|[]], Accum) -> filename_join_([], [unicode:characters_to_list(Name)|Accum]);
+filename_join_([Name|Other], Accum) -> filename_join(Other, [unicode:characters_to_list(Name), "/"|Accum]).
+    
+    
