@@ -308,8 +308,13 @@ filename_join_test_() ->
         },
         {
             "few elements in the list(string and list with unicode symbols)",
-            ["t1", "т1", <<"t1">>, <<208, 176>>],
-            "t1/т1/t1/а"
+            ["t1", "т1", <<"t2">>, <<208, 176, 208, 176, "2">>],
+            "t1/т1/t2/аа2"
+        },
+        {
+            "few elements, latin1",
+            ["t1", "t2", "t3", "t4", "t5"],
+            "t1/t2/t3/t4/t5"
         }
     ]
 ]}.

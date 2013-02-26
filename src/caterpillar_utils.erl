@@ -251,13 +251,13 @@ filename_join(First, Second) ->
     filename_join([First, Second]).
 
 
-filename_join(Names) -> filename_join_(Names, []).
+filename_join(Names) -> unicode:characters_to_list(filename_join_(Names, [])).
 
 
 filename_join_([Name|[]], []) -> to_list(Name);
 filename_join_([], Accum) -> lists:flatten(lists:reverse(Accum));
-filename_join_([Name|Other], []) -> filename_join_(Other, [unicode:characters_to_list(Name), "/"|[]]);
-filename_join_([Name|[]], Accum) -> filename_join_([], [unicode:characters_to_list(Name)|Accum]);
-filename_join_([Name|Other], Accum) -> filename_join(Other, [unicode:characters_to_list(Name), "/"|Accum]).
+filename_join_([Name|Other], []) -> filename_join_(Other, ["/", to_list(Name)|[]]);
+filename_join_([Name|[]], Accum) -> filename_join_([], [to_list(Name)|Accum]);
+filename_join_([Name|Other], Accum) -> filename_join_(Other, ["/", to_list(Name)|Accum]).
     
     
