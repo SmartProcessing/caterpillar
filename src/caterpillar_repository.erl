@@ -419,7 +419,7 @@ get_branches([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugin
                     true ->
                         [Package#package{branch=Branch}|Acc];
                     false ->
-                        error_logger:info_msg("~p/~p not a branch~n", [Package, Branch]), 
+                        error_logger:info_msg("~p/~p not a branch~n", [Package#package.name, Branch]), 
                         Acc;
                     Err ->
                         error_logger:error_msg(

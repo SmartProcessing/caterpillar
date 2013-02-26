@@ -95,12 +95,12 @@ check_work_id_file(Filename) ->
 
 
 package_to_archive(Repo, Branch) ->
-    string:join([Repo, Branch], "__ARCHIVE__").
+    <<(to_binary(Repo))/binary, "__ARCHIVE__", (to_binary(Branch))/binary>>.
 
 
 archive_to_package(Archive) ->
-    [Repo, Branch] = string:tokens(Archive, "__ARCHIVE__"),
-    {Repo, Branch}.
+    [Repo, Branch] = string:tokens(to_list(Archive), "__ARCHIVE__"),
+    {to_binary(Repo), to_binary(Branch)}.
 
 
 
@@ -116,7 +116,7 @@ list_packages([], Accum) ->
 list_packages([ [$.|_]|O ], Accum) ->
     list_packages(O, Accum);
 list_packages([ H|O ], Accum) ->
-    list_packages(O, [H|Accum]).
+    list_packages(O, [unicode:characters_to_binary(H)|Accum]).
 
 
 del_dir(Dir) ->
@@ -129,7 +129,7 @@ del_dir(Dir) ->
     end.
 
 
-del_dir(Dir, [H|T]) when H /= "." andalso H /= ".." ->
+del_dir(Dir, [H|T]) when H /= <<".">> andalso H /= <<"..">> ->
     AbsPath = filename:join(Dir, H),
     case filelib:is_dir(AbsPath) of
         false ->
@@ -145,7 +145,9 @@ del_dir(Dir, []) ->
 
 
 
-ensure_dir(Path) ->
+ensure_dir(Path) when is_binary(Path) ->
+    ensure_dir(unicode:characters_to_list(Path));
+ensure_dir(Path) when is_list(Path) ->
     case filelib:ensure_dir(Path ++ "/") of
         ok -> filename:absname(Path);
         Err -> exit({ensure_dir, Err})
@@ -234,3 +236,11 @@ copy_by_type(Type, NewFrom, NewTo, Mode) ->
             {ok, SymPath} = file:read_link(NewFrom),
             file:make_symlink(SymPath, NewTo)
     end.
+
+
+to_binary(List) when is_list(List) -> list_to_binary(List);
+to_binary(Bin) when is_binary(Bin) -> Bin.
+
+
+to_list(List) when is_list(List) -> List;
+to_list(Bin) when is_binary(Bin) -> binary_to_list(Bin).
