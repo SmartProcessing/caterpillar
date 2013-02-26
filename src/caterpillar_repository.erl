@@ -132,7 +132,7 @@ handle_call({get_archive, #archive{name=Name, branch=Branch, fd=Fd}}, From, Stat
         }],
         Reply = case catch dets:select(Dets, SelectPattern) of
             [AName] ->
-                file:copy(filename:join(AR, AName), Fd);
+                file:copy(caterpillar_utils:filename_join(AR, AName), Fd);
             BadReturn ->
                 error_logger:info_msg(
                     "get_archive cant select archive for package ~p/~p with: ~p~n",
@@ -259,10 +259,10 @@ scan_repository(Delay) when is_integer(Delay), Delay >= 0 ->
 clean_packages(_State, []) ->
     ok;
 clean_packages(#state{dets=D, export_root=ER, archive_root=AR}=State, [{Name, Branch}|O]) ->
-    AbsEr = filename:join(ER, Name),
-    file:delete(filename:join(AR, caterpillar_utils:package_to_archive(Name, Branch))),
+    AbsEr = caterpillar_utils:filename_join(ER, Name),
+    file:delete(caterpillar_utils:filename_join(AR, caterpillar_utils:package_to_archive(Name, Branch))),
     dets:delete(D, {Name, Branch}),
-    caterpillar_utils:del_dir(filename:join(AbsEr, Branch)),
+    caterpillar_utils:del_dir(caterpillar_utils:filename_join(AbsEr, Branch)),
     case catch caterpillar_utils:list_packages(AbsEr) of
         {ok, []} -> caterpillar_utils:del_dir(AbsEr);
         _ -> ok
@@ -302,7 +302,7 @@ async_notify(#state{notify_root=NR}) ->
     case file:list_dir(NR) of
         {ok, Files} -> 
             ForeachFun = fun(File) ->
-                AbsFile = filename:join(NR, File),
+                AbsFile = caterpillar_utils:filename_join(NR, File),
                 Result = (catch begin 
                     {ok, Data} = file:read_file(AbsFile),
                     Msg = binary_to_term(Data),
@@ -325,7 +325,7 @@ notify(#state{notify_root=NR}, #notify{}=Notify) ->
         Error -> 
             {A, B, C} = os:timestamp(),
             Name = A * 1000000 * 1000000 + B * 1000000 + C,
-            FileName = filename:join(NR, integer_to_list(Name)),
+            FileName = caterpillar_utils:filename_join(NR, integer_to_list(Name)),
             error_logger:error_msg(
                 "failed to notify with error: ~p~nsaving packages dump to ~p~n",
                 [Error, FileName]
@@ -385,7 +385,8 @@ get_packages(_, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSSt
     case caterpillar_utils:list_packages(RR) of
         {ok, Packages} ->
             FoldFun = fun(Package, Accum) ->
-                case VCSPlugin:is_repository(VCSState, filename:join(RR, Package)) of
+                AbsPackage = caterpillar_utils:filename_join(RR, Package),
+                case VCSPlugin:is_repository(VCSState, AbsPackage) of
                     true -> [#package{name=Package} | Accum];
                     false ->
                         error_logger:info_msg("~p is not repository~n", [Package]),
@@ -408,7 +409,7 @@ get_branches([], Branches, _State) ->
     {ok, lists:sort(Branches)};
 
 get_branches([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSState}=State) ->
-    AbsPackage = filename:join(RR, Package#package.name),
+    AbsPackage = caterpillar_utils:filename_join(RR, Package#package.name),
     NewAccum = case VCSPlugin:get_branches(VCSState, AbsPackage) of
         {ok, []} -> 
             error_logger:info_msg("no branches in ~p~n", [Package]),
@@ -473,7 +474,7 @@ find_modified_packages([Package|O], Accum, State) ->
     RR = State#state.repository_root,
     PackageBranch = Package#package.branch,
     PackageName = Package#package.name,
-    AbsPackage = filename:join(RR, PackageName),
+    AbsPackage = caterpillar_utils:filename_join(RR, PackageName),
     DetsResult = dets:select(
         State#state.dets,
         [{{
@@ -521,8 +522,8 @@ export_packages([Package|O], Accum, #state{export_root=ER, repository_root=RR}=S
     Name = Package#package.name,
     Branch = Package#package.branch,
     Revno = Package#package.current_revno,
-    AbsExport = filename:join([ER, Name, Branch]),
-    AbsPackage = filename:join(RR, Name),
+    AbsExport = caterpillar_utils:filename_join([ER, Name, Branch]),
+    AbsPackage = caterpillar_utils:filename_join(RR, Name),
     caterpillar_utils:del_dir(AbsExport),
     caterpillar_utils:ensure_dir(AbsExport),
     NewAccum = case catch VCSPlugin:export(VCSState, AbsPackage, Branch, Revno, AbsExport) of
@@ -552,16 +553,16 @@ archive_packages([#package{status=error}=Package|O], Accum, State) ->
 archive_packages([Package|O], Accum, #state{export_root=ER, archive_root=AR}=State) ->
     PackageName = Package#package.name,
     PackageBranch = Package#package.branch,
-    ExportPath = filename:join([ER, PackageName, PackageBranch]),
+    ExportPath = caterpillar_utils:filename_join([ER, PackageName, PackageBranch]),
     ArchiveName = caterpillar_utils:package_to_archive(PackageName, PackageBranch),
-    Archive = filename:join(AR, ArchiveName),
+    Archive = caterpillar_utils:filename_join(AR, ArchiveName),
     Result = (catch begin
         Tar = case erl_tar:open(Archive, [write, compressed]) of
             {ok, T} -> T;
             ErrT -> throw(ErrT)
         end,
         ForeachAddFun = fun(File) -> 
-            AbsFile = filename:join(ExportPath, File),
+            AbsFile = unicode:characters_to_binary(caterpillar_utils:filename_join(ExportPath, File)),
             case erl_tar:add(Tar, AbsFile, File, []) of
                 ok -> ok;
                 ErrAd -> throw(ErrAd)
@@ -599,7 +600,7 @@ get_diff([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugin, vc
     Branch = Package#package.branch,
     CurrentRevno = Package#package.current_revno,
     OldRevno = Package#package.old_revno,
-    Diff = case catch VCSPlugin:get_diff(VCSState, filename:join(RR, Name), Branch, OldRevno, CurrentRevno) of
+    Diff = case catch VCSPlugin:get_diff(VCSState, caterpillar_utils:filename_join(RR, Name), Branch, OldRevno, CurrentRevno) of
         {ok, D} when is_binary(D) -> D;
         Error ->
             error_logger:error_msg("get_diff error: ~p~n at ~s/~s~n", [Error, Name, Branch]),
@@ -625,7 +626,7 @@ get_changelog([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugi
     Branch = Package#package.branch,
     CurrentRevno = Package#package.current_revno,
     OldRevno = Package#package.old_revno,
-    AbsPath = filename:join(RR, Name),
+    AbsPath = caterpillar_utils:filename_join(RR, Name),
     Changelog = case catch VCSPlugin:get_changelog(VCSState, AbsPath, Branch, OldRevno, CurrentRevno) of
         {ok, C} when is_binary(C) -> C;
         Error ->
@@ -648,7 +649,7 @@ get_tag([Package|O], Accum, #state{vcs_plugin=VcsP, vcs_state=VcsS}=State) ->
     Name = Package#package.name,
     Branch = Package#package.branch,
     Revno = Package#package.current_revno,
-    case catch VcsP:get_tag(VcsS, filename:join(RR, Name), Branch, Revno) of
+    case catch VcsP:get_tag(VcsS, caterpillar_utils:filename_join(RR, Name), Branch, Revno) of
         {ok, T} -> 
             get_tag(O, [Package#package{tag=T}|Accum], State);
         Error ->

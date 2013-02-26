@@ -168,9 +168,9 @@ package_to_archive_to_package_test_() ->
     end} || {Message, Package, Branch, Archive} <- [
         {
             "valid package n repo",
-            <<"package">>,
-            <<"branch">>,
-            <<"package__ARCHIVE__branch">>
+            "package",
+            "branch",
+            "package__ARCHIVE__branch"
         }
     ]
 ]}.
@@ -179,7 +179,7 @@ package_to_archive_to_package_test_() ->
 
 list_packages_test_() ->
 {foreachx,
-    fun(Setup) -> [filelib:ensure_dir(Dir) || Dir <- Setup] end,
+    fun(Setup) -> [caterpillar_utils:ensure_dir(Dir) || Dir <- Setup] end,
     fun(Setup, _) ->  [file:del_dir(Dir) || Dir <- Setup] end,
 [
     {Setup, fun(_, _) ->
@@ -189,9 +189,9 @@ list_packages_test_() ->
     end} || {Message, Setup, Path, Result} <- [
         {
             "list packages in existing dir",
-            ["__test/package1/", "__test/package2/", "__test/package3/", "__test"],
+            ["__test/package1/", "__test/package2/", "__test/package3/", "__test/абцд", "__test"],
             "__test",
-            {ok, [<<"package1">>, <<"package2">>, <<"package3">>]}
+            {ok, ["package1", "package2", "package3", "абцд"]}
         },
         {
             "bad path, dir not exists",

@@ -96,12 +96,12 @@ check_work_id_file(Filename) ->
 
 
 package_to_archive(Repo, Branch) ->
-    <<(to_binary(Repo))/binary, "__ARCHIVE__", (to_binary(Branch))/binary>>.
+    string:join([Repo, Branch], "__ARCHIVE__").
 
 
 archive_to_package(Archive) ->
-    [Repo, Branch] = string:tokens(to_list(Archive), "__ARCHIVE__"),
-    {to_binary(Repo), to_binary(Branch)}.
+    [Repo, Branch] = string:tokens(Archive, "__ARCHIVE__"),
+    {Repo, Branch}.
 
 
 
@@ -117,7 +117,7 @@ list_packages([], Accum) ->
 list_packages([ [$.|_]|O ], Accum) ->
     list_packages(O, Accum);
 list_packages([ H|O ], Accum) ->
-    list_packages(O, [unicode:characters_to_binary(H)|Accum]).
+    list_packages(O, [unicode:characters_to_list(H)|Accum]).
 
 
 del_dir(Dir) ->
@@ -131,7 +131,7 @@ del_dir(Dir) ->
 
 
 del_dir(Dir, [H|T]) when H /= <<".">> andalso H /= <<"..">> ->
-    AbsPath = filename:join(Dir, H),
+    AbsPath = filename_join(Dir, H),
     case filelib:is_dir(AbsPath) of
         false ->
             file:delete(AbsPath);
@@ -139,11 +139,8 @@ del_dir(Dir, [H|T]) when H /= <<".">> andalso H /= <<"..">> ->
             del_dir(AbsPath)
     end,
     del_dir(Dir, T);
-del_dir(Dir, [_|T]) ->
-    del_dir(Dir, T);
-del_dir(Dir, []) ->
-    file:del_dir(Dir).
-
+del_dir(Dir, [_|T]) -> del_dir(Dir, T);
+del_dir(Dir, []) -> file:del_dir(Dir).
 
 
 ensure_dir(Path) when is_binary(Path) ->
@@ -155,18 +152,18 @@ ensure_dir(Path) when is_list(Path) ->
     end.
 
 
-
 get_value_or_die(Key, PropList) ->
     case proplists:get_value(Key, PropList, '$$die$$') of
         '$$die$$' -> erlang:exit({no_value, Key});
         Value -> Value
     end.
 
-command(Cmd) ->
-    command(Cmd, "").
 
-command(Cmd, Dir) ->
-    command(Cmd, Dir, [], ?DEFAULT_TIMEOUT).
+command(Cmd) -> command(Cmd, "").
+
+
+command(Cmd, Dir) -> command(Cmd, Dir, [], ?DEFAULT_TIMEOUT).
+
 
 command(Cmd, Dir, Env, Timeout) ->
     CD = if Dir =:= "" -> [];
@@ -179,6 +176,7 @@ command(Cmd, Dir, Env, Timeout) ->
 			   stderr_to_stdout, in, eof],
     P = open_port({spawn, Cmd}, Opt),
     get_port_data(P, [], Timeout).
+
 
 get_port_data(P, D, Timeout) ->
     receive
@@ -194,14 +192,13 @@ get_port_data(P, D, Timeout) ->
         {110, "timeout"}
     end.
 
-normalize([$\r, $\n | Cs]) ->
-    [$\n | normalize(Cs)];
-normalize([$\r | Cs]) ->
-    [$\n | normalize(Cs)];
-normalize([C | Cs]) ->
-    [C | normalize(Cs)];
-normalize([]) ->
-    [].
+
+%FIXME? not tail recursive?
+normalize([$\r, $\n | Cs]) -> [$\n | normalize(Cs)];
+normalize([$\r | Cs]) -> [$\n | normalize(Cs)];
+normalize([C | Cs]) -> [C | normalize(Cs)];
+normalize([]) -> [].
+
 
 -spec recursive_copy(list(), list()) -> ok.                            
 recursive_copy(From, To) ->
@@ -209,10 +206,11 @@ recursive_copy(From, To) ->
     [ok = rec_copy(From, To, X) || X <- Files],
     ok.
  
+
 -spec rec_copy(list(), list(), list()) -> ok.                            
 rec_copy(From, To, File) ->
-    NewFrom = filename:join(From, File),
-    NewTo   = filename:join(To, File),
+    NewFrom = filename_join(From, File),
+    NewTo   = filename_join(To, File),
     {ok, FI} = file:read_link_info(NewFrom),
     Type = FI#file_info.type,
     Mode = FI#file_info.mode,
@@ -244,7 +242,8 @@ to_binary(Bin) when is_binary(Bin) -> Bin.
 
 
 to_list(List) when is_list(List) -> List;
-to_list(Bin) when is_binary(Bin) -> binary_to_list(Bin).
+to_list(Bin) when is_binary(Bin) -> binary_to_list(Bin);
+to_list(Atom) when is_atom(Atom) -> atom_to_list(Atom).
 
 
 filename_join(First, Second) ->

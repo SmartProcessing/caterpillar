@@ -61,7 +61,7 @@ retrieve_archives(Archives, State) ->
 retrieve_archives([], Accum, _State) ->
     {ok, Accum};
 retrieve_archives([#archive{archive_name=AN}=A|O], Accum, #state{archive_root=AR}=State) ->
-    Name = filename:join(AR, AN),
+    Name = caterpillar_utils:filename_join(AR, AN),
     {ok, FD} = file:open(Name, [write]),
     RequestArchive = A#archive{fd=FD},
     case catch caterpillar_worker:retrieve_archive(RequestArchive) of
@@ -87,8 +87,8 @@ unarchive([], Accum, _State) ->
 unarchive([ #archive{name=Name, branch=Branch, archive_name=AR}=A|T ], Accum, State) ->
     ArchiveRoot = State#state.archive_root,
     RepositoryRoot = State#state.repository_root,
-    ArchivePath = filename:join([ArchiveRoot, AR]),
-    UnArchivePath = filename:join([RepositoryRoot, Name, Branch]),
+    ArchivePath = caterpillar_utils:filename_join([ArchiveRoot, AR]),
+    UnArchivePath = caterpillar_utils:filename_join([RepositoryRoot, Name, Branch]),
     caterpillar_utils:del_dir(UnArchivePath),
     caterpillar_utils:ensure_dir(UnArchivePath),
     case erl_tar:extract(ArchivePath, [{cwd, UnArchivePath}, compressed]) of
@@ -124,13 +124,13 @@ make_packages(Archives, State) ->
 make_packages([], Accum, _State) ->
     {ok, Accum};
 make_packages([ #package{name=Name, branch=Branch}=Package|T ], Accum, #state{next_work_id=WorkId}=State) ->
-    UnArchivePath = filename:join([State#state.repository_root, Name, Branch]),
-    ControlFile = filename:join(UnArchivePath, "control"),
+    UnArchivePath = caterpillar_utils:filename_join([State#state.repository_root, Name, Branch]),
+    ControlFile = caterpillar_utils:filename_join(UnArchivePath, "control"),
     case filelib:is_regular(ControlFile) of
         true -> catch modify_control(ControlFile, Branch, WorkId, State#state.ident);
         _ -> ok
     end,
-    DistDir = filename:join(UnArchivePath, "dist"),
+    DistDir = caterpillar_utils:filename_join(UnArchivePath, "dist"),
     caterpillar_utils:del_dir(DistDir),
     NewPackage = case filelib:is_dir(UnArchivePath) of
         true ->
@@ -161,10 +161,10 @@ make_packages([ #package{name=Name, branch=Branch}=Package|T ], Accum, #state{ne
 make(Package, DistDir, Commands, #state{deploy_root=DeployRoot}) ->
     case make(Package, Commands) of
         {ok, done} ->
-            case filelib:wildcard(filename:join(DistDir, "*.deb")) of
+            case filelib:wildcard(caterpillar_utils:filename_join(DistDir, "*.deb")) of
                 [Deb] ->
                     DebName = lists:last(filename:split(Deb)),
-                    DeployName = filename:join(DeployRoot, DebName),
+                    DeployName = caterpillar_utils:filename_join(DeployRoot, DebName),
                     {ok, _} = file:copy(Deb, DeployName),
                     {ok, DebName};
                 Other ->
@@ -220,7 +220,7 @@ pre_deploy(Packages, #state{deploy_root=DR, next_work_id=NWI, ident=Ident}) ->
     DeployFold = fun
         (#package{name=N, branch=B, build_status=ok, package=Package}, {Deploy, Notify}) ->
             error_logger:info_msg("openning ~p~n", [Package]),
-            {ok, Fd} = file:open(filename:join(DR, Package), [read, binary]),
+            {ok, Fd} = file:open(caterpillar_utils:filename_join(DR, Package), [read, binary]),
             NewDeploy = Deploy#deploy{
                 packages=[
                     #deploy_package{name=N, branch=B, package=Package, fd=Fd}|
