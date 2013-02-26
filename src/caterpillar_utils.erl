@@ -237,10 +237,6 @@ copy_by_type(Type, NewFrom, NewTo, Mode) ->
     end.
 
 
-to_binary(List) when is_list(List) -> list_to_binary(List);
-to_binary(Bin) when is_binary(Bin) -> Bin.
-
-
 to_list(List) when is_list(List) -> List;
 to_list(Bin) when is_binary(Bin) -> binary_to_list(Bin);
 to_list(Atom) when is_atom(Atom) -> atom_to_list(Atom).
