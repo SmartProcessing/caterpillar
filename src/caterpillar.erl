@@ -213,7 +213,7 @@ prepare(BuildPath, Archive, WorkId) ->
     Msg = {get_archive, ArchiveWithFd},
     ok = caterpillar_event:sync_event(Msg),
     Cwd = filename:join([BuildPath, "temp", TempName]) ++ "/",
-    ok = erl_tar:extract(TempArch, [{cwd, Cwd}, compressed]),
+    ok = caterpillar_tar:extract(TempArch, [{cwd, Cwd}, compressed]),
     file:delete(TempArch),
     PkgRecord = ?CPU:get_pkg_config(Archive, Cwd),
     RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId),

@@ -555,7 +555,7 @@ archive_packages_test_() ->
 {foreachx,
     fun(Directories) ->
         Dirs = Directories++["__test_archive/", "__test_export/"],
-        [filelib:ensure_dir(Dir) || Dir <- Dirs],
+        [caterpillar_utils:ensure_dir(Dir) || Dir <- Dirs],
         #state{archive_root="__test_archive", export_root="__test_export", vcs_plugin=test_vcs_plugin}
     end,
     fun(_, #state{archive_root=AR, export_root=ER}) ->
@@ -564,10 +564,7 @@ archive_packages_test_() ->
 [
     {Setup, fun(_, State) ->
         {Message, fun() ->
-            ?assertEqual(
-                Result,
-                caterpillar_repository:archive_packages(Packages, State)
-            ),
+            ?assertEqual(Result, caterpillar_repository:archive_packages(Packages, State)),
             Check()
         end}
     end} || {Message, Setup, Packages, Check, Result} <- [
@@ -596,6 +593,25 @@ archive_packages_test_() ->
             fun() ->
                 {ok, Names} = erl_tar:table("__test_archive/package__ARCHIVE__branch", [compressed]),
                 ?assertEqual(lists:sort(Names), ["dir1", "dir2"])
+            end,
+            {ok, [#package{
+                name= "package", branch= "branch",
+                archive_name= "package__ARCHIVE__branch",
+                current_revno=rev
+            }]}
+        },
+        {
+            "package successfuly archived(unicode symbols inside)",
+            [
+                <<"__test_export/package/branch/абв/">>,
+                <<"__test_export/package/branch/бав/">>,
+                "__test_export/package/branch/dir1/"
+                
+            ],
+            [#package{name= "package", branch= "branch", current_revno=rev}],
+            fun() ->
+                {ok, Names} = erl_tar:table("__test_archive/package__ARCHIVE__branch", [compressed]),
+                ?assertEqual(["dir1", "абв", "бав"], lists:sort(Names))
             end,
             {ok, [#package{
                 name= "package", branch= "branch",

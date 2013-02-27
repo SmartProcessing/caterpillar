@@ -91,7 +91,7 @@ unarchive([ #archive{name=Name, branch=Branch, archive_name=AR}=A|T ], Accum, St
     UnArchivePath = caterpillar_utils:filename_join([RepositoryRoot, Name, Branch]),
     caterpillar_utils:del_dir(UnArchivePath),
     caterpillar_utils:ensure_dir(UnArchivePath),
-    case erl_tar:extract(ArchivePath, [{cwd, UnArchivePath}, compressed]) of
+    case caterpillar_tar:extract(ArchivePath, [{cwd, UnArchivePath}, compressed, verbose]) of
         {error, Reason} ->
             error_logger:error_msg(
                 "Failed to unarchive ~p with reason ~p~n",

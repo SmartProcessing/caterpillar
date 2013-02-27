@@ -557,20 +557,20 @@ archive_packages([Package|O], Accum, #state{export_root=ER, archive_root=AR}=Sta
     ArchiveName = caterpillar_utils:package_to_archive(PackageName, PackageBranch),
     Archive = caterpillar_utils:filename_join(AR, ArchiveName),
     Result = (catch begin
-        Tar = case erl_tar:open(Archive, [write, compressed]) of
+        Tar = case caterpillar_tar:open(Archive, [write, compressed]) of
             {ok, T} -> T;
             ErrT -> throw(ErrT)
         end,
         ForeachAddFun = fun(File) -> 
             AbsFile = unicode:characters_to_binary(caterpillar_utils:filename_join(ExportPath, File)),
-            case erl_tar:add(Tar, AbsFile, File, []) of
+            case caterpillar_tar:add(Tar, AbsFile, File, []) of
                 ok -> ok;
                 ErrAd -> throw(ErrAd)
             end
         end,
-        {ok, Listing} = file:list_dir(ExportPath),
+        {ok, Listing} = caterpillar_utils:list_packages(ExportPath),
         lists:foreach(ForeachAddFun, Listing),
-        erl_tar:close(Tar),
+        caterpillar_tar:close(Tar),
         ok
     end),
     NewAccum = case Result of
