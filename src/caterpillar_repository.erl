@@ -559,13 +559,23 @@ archive_packages([Package|O], Accum, #state{export_root=ER, archive_root=AR}=Sta
     Result = (catch begin
         Tar = case caterpillar_tar:open(Archive, [write, compressed]) of
             {ok, T} -> T;
-            ErrT -> throw({tar_open, ErrT})
+            ErrOpen ->
+                error_logger:error_msg(
+                    "archive_packages tar_open error: ~p~nstacktrace: ~p~n",
+                    [ErrOpen, erlang:get_stacktrace()]
+                ),
+                throw({tar_open, ErrOpen})
         end,
         ForeachAddFun = fun(File) -> 
             AbsFile = unicode:characters_to_binary(caterpillar_utils:filename_join(ExportPath, File)),
             case caterpillar_tar:add(Tar, AbsFile, File, []) of
                 ok -> ok;
-                ErrAd -> throw({tar_add, ErrAd})
+                ErrAdd -> 
+                    error_logger:error_msg(
+                        "archive_packages tar_add error: ~p~nstacktrace:~p~n",
+                        [ErrAdd, erlang:get_stacktrace()]
+                    ),
+                    throw({tar_add, ErrAdd})
             end
         end,
         {ok, Listing} = caterpillar_utils:list_packages(ExportPath),
