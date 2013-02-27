@@ -63,8 +63,13 @@ handle_info(_Msg, State) ->
 
 handle_cast({changes, WorkId, Archives}, #state{worker_plugin=WP, worker_state=WS}=State) ->
     error_logger:info_msg("changes for work id ~p arrived~n", [WorkId]),
-    {ok, NewWorkerState} = WP:changes(WS, WorkId, Archives),
-    {noreply, State#state{worker_state=NewWorkerState}};
+    case catch WP:changes(WS, WorkId, Archives) of
+        {ok, NewWorkerState} -> 
+            {noreply, State#state{worker_state=NewWorkerState}};
+        Other ->
+            error_logger:error_msg("changes error: ~p~n", [Other]),
+            {noreply, State}
+    end;
 %handle_cast({deploy, WorkId, Deploy}, #state{worker_plugin=WP, worker_state=WS}=State) ->
 %    NewWorkerState = WP:deploy(WorkId, Deploy),
 %    {noreply, State#state{worker_state=NewWorkerState}};
