@@ -554,11 +554,15 @@ export_packages_test_() ->
 archive_packages_test_() ->
 {foreachx,
     fun(Directories) ->
+        tty_on(),
         Dirs = Directories++["__test_archive/", "__test_export/"],
         [caterpillar_utils:ensure_dir(Dir) || Dir <- Dirs],
         #state{archive_root="__test_archive", export_root="__test_export", vcs_plugin=test_vcs_plugin}
     end,
     fun(_, #state{archive_root=AR, export_root=ER}) ->
+        tty_off(),
+        ?debugFmt("~p~n", ["sleeping"]),
+        timer:sleep(4000),
         [caterpillar_utils:del_dir(D) || D <- [AR, ER]]
     end,
 [
@@ -569,21 +573,21 @@ archive_packages_test_() ->
         end}
     end} || {Message, Setup, Packages, Check, Result} <- [
         {
-            "nothing archived",
+         %   "nothing archived",
             [], 
             [],
             fun() -> ok end,
             {error, {archive_packages, "nothing archived"}}
         },
         {
-            "checking packages with bad status ignored",
+          %  "checking packages with bad status ignored",
             [],
             [#package{status=error}],
             fun() -> ok end,
             {ok, [#package{status=error}]}
         },
         {
-            "package successfuly archived",
+           % "package successfuly archived",
             [
                 "__test_export/package/branch/dir1/",
                 "__test_export/package/branch/dir2/"

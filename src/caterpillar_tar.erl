@@ -285,7 +285,23 @@ format_error(Term) ->
 %%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-
+add1(TarFile, Bin, NameInArchive, Opts) when is_binary(Bin) ->
+    Now = calendar:now_to_local_time(now()),
+    Info = #file_info{size = byte_size(Bin),
+		      type = regular,
+		      access = read_write,
+		      atime = Now,
+		      mtime = Now,
+		      ctime = Now,
+		      mode  = 8#100644,
+		      links = 1,
+		      major_device = 0,
+		      minor_device = 0,
+		      inode = 0,
+		      uid = 0,
+		      gid = 0},
+    Header = create_header(NameInArchive, Info),
+    add1(TarFile, NameInArchive, Header, Bin, Opts);
 add1(TarFile, Name, NameInArchive, Opts) ->
     case read_file_and_info(Name, Opts) of
 	{ok, Bin, Info} when Info#file_info.type =:= regular ->
@@ -298,10 +314,9 @@ add1(TarFile, Name, NameInArchive, Opts) ->
 		true ->
 		    Info2 = Info#file_info{size=0},
 		    Header = create_header(NameInArchive, Info2, PointsTo),
-		    add1(TarFile, Name, Header, <<>>, Opts)
+		    add1(TarFile, Name, Header, list_to_binary([]), Opts)
 	    end;
 	{ok, _, Info} when Info#file_info.type =:= directory ->
-        error_logger:info_msg("directory: ~p~n", [Name]),
 	    add_directory(TarFile, Name, NameInArchive, Info, Opts);
 	{ok, _, #file_info{type=Type}} ->
 	    {error, {bad_file_type, Name, Type}};
@@ -351,7 +366,7 @@ create_header(Name, #file_info {mode=Mode, uid=Uid, gid=Gid,
 	  "00",
 	  zeroes(?th_prefix-?th_version-?th_version_len),
 	  to_string(Prefix, ?th_prefix_len)],
-    H = unicode:characters_to_binary(H0),
+    H = list_to_binary(H0),
     512 = byte_size(H),				%Assertion.
     ChksumString = to_octal(checksum(H), 6, [0,$\s]),
     <<Before:?th_chksum/binary,_:?th_chksum_len/binary,After/binary>> = H,
@@ -369,7 +384,7 @@ to_octal(Int, Count, Result) ->
     to_octal(Int div 8, Count-1, [Int rem 8 + $0|Result]).
 
 to_string(Str0, Count) ->
-    Str = unicode:characters_to_binary(Str0),
+    Str = list_to_binary(Str0),
     case byte_size(Str) of
 	Size when Size < Count ->
 	    [Str|zeroes(Count-Size)];
@@ -540,7 +555,7 @@ get_header(File) ->
 	{ok, Bin} when is_binary(Bin) ->
 	    convert_header(Bin);
 	{ok, List} ->
-	    convert_header(unicode:characters_to_binary(List));
+	    convert_header(list_to_binary(List));
 	{error, Reason} ->
 	    throw({error, Reason})
     end.
@@ -630,7 +645,7 @@ from_octal([$\s|Rest]) ->
 from_octal([Digit|Rest]) when $0 =< Digit, Digit =< $7 ->
     from_octal(Rest, Digit-$0);
 from_octal(Bin) when is_binary(Bin) ->
-    from_octal(unicode:characters_to_list(Bin));
+    from_octal(binary_to_list(Bin));
 from_octal(Other) ->
     throw({error, {bad_header, "Bad octal number: ~p", [Other]}}).
 
@@ -656,7 +671,7 @@ get_element(File, #tar_header{size = Size}) ->
 	    Res;
 	{ok,List} when length(List) =:= Size ->
 	    skip_to_next(File),
-	    {ok, unicode:characters_to_binary(List)};
+	    {ok,list_to_binary(List)};
 	{ok,_} -> throw({error,eof});
 	{error, Reason} -> throw({error, Reason});
 	eof -> throw({error,eof})
@@ -682,7 +697,7 @@ verify_checksum(Bin) ->
 %% The checksums didn't match.  Now try a signed addition.
 
 verify_checksum(H1, H2, Csum, ShouldBe, Unsigned) ->
-    case signed_sum(unicode:characters_to_list(H1), signed_sum(unicode:characters_to_list(H2), Csum)) of
+    case signed_sum(binary_to_list(H1), signed_sum(binary_to_list(H2), Csum)) of
 	ShouldBe -> ok;
 	Signed ->
 	    throw({error,
