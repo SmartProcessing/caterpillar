@@ -617,7 +617,10 @@ archive_packages_test_() ->
                     {ok, ["dir"]}, file:list_dir(UnArchivePath)
                 ),
                 ?assertEqual(
-                    {ok, ["subdir2", "subdir"]}, file:list_dir(filename:join(UnArchivePath, "dir"))
+                    {ok, ["subdir", "subdir2"]},
+                    (fun({ok, X}) -> {ok, lists:sort(X)};(O) -> O end)(
+                        file:list_dir(filename:join(UnArchivePath, "dir"))
+                    )
                 )
             end,
             {ok, [#package{
