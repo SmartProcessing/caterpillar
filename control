@@ -2,6 +2,6 @@ Package: caterpillar
 Section: smprc
 Description: "package building tools"
 Architecture: all
-Version: 1.4.2
+Version: 1.4.3
 Maintainer: vavdiushkin@smprc.ru
 Depends: erlang-base(>=14), smprc-mochiweb, smprc-cowboy
