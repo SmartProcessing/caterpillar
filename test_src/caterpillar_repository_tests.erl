@@ -554,16 +554,12 @@ export_packages_test_() ->
 archive_packages_test_() ->
 {foreachx,
     fun(Directories) ->
-        tty_on(),
-        Dirs = Directories++["__test_archive/", "__test_export/"],
+        Dirs = Directories++["__test_archive/", "__test_export/", "__test_extract"],
         [caterpillar_utils:ensure_dir(Dir) || Dir <- Dirs],
         #state{archive_root="__test_archive", export_root="__test_export", vcs_plugin=test_vcs_plugin}
     end,
     fun(_, #state{archive_root=AR, export_root=ER}) ->
-        tty_off(),
-        ?debugFmt("~p~n", ["sleeping"]),
-        timer:sleep(4000),
-        [caterpillar_utils:del_dir(D) || D <- [AR, ER]]
+        [caterpillar_utils:del_dir(D) || D <- [AR, ER, "__test_extract"]]
     end,
 [
     {Setup, fun(_, State) ->
@@ -591,12 +587,38 @@ archive_packages_test_() ->
             [
                 "__test_export/package/branch/dir1/",
                 "__test_export/package/branch/dir2/"
-                
             ],
             [#package{name= "package", branch= "branch", current_revno=rev}],
             fun() ->
                 {ok, Names} = erl_tar:table("__test_archive/package__ARCHIVE__branch", [compressed]),
                 ?assertEqual(lists:sort(Names), ["dir1", "dir2"])
+            end,
+            {ok, [#package{
+                name= "package", branch= "branch",
+                archive_name= "package__ARCHIVE__branch",
+                current_revno=rev
+            }]}
+        },
+        {
+            "testing archive consistency",
+            [
+                "__test_export/package/branch/dir/subdir",
+                "__test_export/package/branch/dir/subdir2"
+            ],
+            [#package{name= "package", branch= "branch", current_revno=rev}],
+            fun() -> 
+                ArchiveName = "__test_archive/package__ARCHIVE__branch",
+                UnArchivePath = "__test_extract",
+                ?assertEqual(
+                    ok,
+                    caterpillar_tar:extract(ArchiveName, [{cwd, UnArchivePath}, compressed])
+                ),
+                ?assertEqual(
+                    {ok, ["dir"]}, file:list_dir(UnArchivePath)
+                ),
+                ?assertEqual(
+                    {ok, ["subdir2", "subdir"]}, file:list_dir(filename:join(UnArchivePath, "dir"))
+                )
             end,
             {ok, [#package{
                 name= "package", branch= "branch",

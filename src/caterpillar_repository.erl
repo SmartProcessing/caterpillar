@@ -567,7 +567,7 @@ archive_packages([Package|O], Accum, #state{export_root=ER, archive_root=AR}=Sta
                 throw({tar_open, ErrOpen})
         end,
         ForeachAddFun = fun(File) -> 
-            AbsFile = unicode:characters_to_binary(caterpillar_utils:filename_join(ExportPath, File)),
+            AbsFile = caterpillar_utils:filename_join(ExportPath, File),
             case caterpillar_tar:add(Tar, AbsFile, File, []) of
                 ok -> ok;
                 ErrAdd -> 
