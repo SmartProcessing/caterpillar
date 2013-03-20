@@ -426,6 +426,7 @@ check_build_deps(Candidate, State) ->
         {ok, [], _Deps} ->
             dependent;
         {ok, Dependencies, _} when is_list(Dependencies) ->
+            error_logger:info_msg("Missing dependencies: ~p~n", [Dependencies]),
             case State#state.queue_missing of
                 true ->
                     lists:map(

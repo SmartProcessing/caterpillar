@@ -49,5 +49,30 @@ gen_control_from_pkg_config_test() ->
     ?assertEqual(<<"Package: newpkg\nSection: smprc-trunk\nVersion: 0.0.0-trunk.11\nArchitecture: all\nDescription: new package\nMaintainer: main@mail.com\nDepends: blabla, testik, erlang-base\n">>,
         ?CPU:gen_control_from_pkg_config(Rev)).
 
+gen_control_from_pkg_config2_test() ->
+    Rev = #rev_def{
+        name = <<"cater">>, 
+        branch = <<"trunk">>, 
+        tag = <<>>, 
+        work_id = 11,
+        dep_object = [], 
+        pkg_config = #pkg_config{
+            name= "caterpillar",
+            version= "0.14.0",
+            section= "smprc",
+            package_t= ["deb"],
+            arch= "all",
+            maintainers= [],
+            deps= [
+                {"smprc-mochiweb", "trunk", ""},
+                {"smprc-cowboy", "trunk", ""}
+            ],
+            build_deps= [
+                {"devel-tools", "trunk", ""},
+                {"test_runner", "trunk", ""}] 
+        }
+    },
+    ?debugFmt("~s~n", [?CPU:gen_control_from_pkg_config(Rev)]).
+
 
 -endif.
