@@ -67,6 +67,7 @@ init(Settings) ->
 handle_call({newref, RevDef}, _From, State) ->
     error_logger:info_msg("received new revision: ~p~n", [RevDef]),
     Queue = queue:in(RevDef, State#state.main_queue),
+    ?CDEP:update_dependencies(State#state.deps, RevDef, <<"new">>),
     QueuedState = State#state{main_queue=Queue},
     case State#state.next_to_build of
         none ->
@@ -76,7 +77,7 @@ handle_call({newref, RevDef}, _From, State) ->
     end,
     {reply, ok, NewState};
 handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
-    ?CDEP:update_dependencies(State#state.deps, RevDef, built),
+    ?CDEP:update_dependencies(State#state.deps, RevDef, <<"built">>),
     DeployPkg = #deploy_package{
         name = binary_to_list(RevDef#rev_def.name),
         branch = binary_to_list(RevDef#rev_def.branch),
@@ -338,7 +339,6 @@ get_build_candidate(main_queue, State) ->
     {{value, Candidate}, MainQueue} = queue:out(State#state.main_queue),
     case check_build_deps(Candidate, State) of
         independent ->
-            ?CDEP:update_dependencies(State#state.deps, Candidate, new),
             {ok, State#state{
                     main_queue=MainQueue, 
                     next_to_build=Candidate,
@@ -361,7 +361,6 @@ get_build_candidate(wait_queue, State) ->
     {{value, Candidate}, WaitQueue} = queue:out(State#state.wait_queue),
     case check_build_deps(Candidate, State) of
         independent ->
-            ?CDEP:update_dependencies(State#state.deps, Candidate, new),
             {ok, State#state{
                     wait_queue=WaitQueue, 
                     queued=lists:delete(?VERSION(Candidate), State#state.queued),
@@ -383,7 +382,6 @@ get_build_candidate(both, State) ->
     {{value, Candidate}, WaitQueue} = queue:out(State#state.wait_queue),
     case check_build_deps(Candidate, State) of
         independent ->
-            ?CDEP:update_dependencies(State#state.deps, Candidate, new),
             {ok, State#state{
                     queued=lists:delete(?VERSION(Candidate), State#state.queued),
                     wait_queue=WaitQueue, 

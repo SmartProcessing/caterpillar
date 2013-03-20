@@ -17,13 +17,15 @@ list_none_new_dependencies(DepTree, Deps, Preparing) ->
 
 list_none_new_dependencies(_DepTree, [], _Preparing, {NoneDeps, NewDeps}) ->
     {ok, NoneDeps, NewDeps};
-list_none_new_dependencies(DepTree, [Dep|O], Preparing, {NoneDeps, NewDeps}) ->
+list_none_new_dependencies(DepTree, [{Dep, State}|O], Preparing, {NoneDeps, NewDeps}) ->
     case fetch_dependencies(DepTree, Dep) of
         {ok, {_VersionSpec, {none, _B}, _Obj, _Subj}} ->
             list_none_new_dependencies(DepTree, O, Preparing, {[Dep|NoneDeps], NewDeps});
         {ok, {_VersionSpec, {new, _B}, _Obj, _Subj}} ->
             list_none_new_dependencies(DepTree, O, Preparing, {NoneDeps, [Dep|NewDeps]});
-        {ok, {_VersionSpec, {Success, _B}, _Obj, _Subj}} when Success == built; Success == tested ->
+        {ok, {_VersionSpec, {Success, _B}, _Obj, _Subj}} when State == <<"new">> ->
+            list_none_new_dependencies(DepTree, O, Preparing, {NoneDeps, NewDeps});
+        {ok, {_VersionSpec, {Success, _B}, _Obj, _Subj}} when Success == <<"built">>; Success == State ->
             list_none_new_dependencies(DepTree, O, Preparing, {NoneDeps, NewDeps});
         {ok, []} ->
             case lists:member(Dep, Preparing) of
@@ -43,11 +45,11 @@ list_none_new_dependencies(DepTree, [Dep|O], Preparing, {NoneDeps, NewDeps}) ->
 %% have in dependecies or depends on current build candidate
 check_intersection(Candidate, CheckList) ->
     CandidateVersion = ?VERSION(Candidate),
-    CandidateDeps = Candidate#rev_def.dep_object,
+    CandidateDeps = [{N, B, T} || {{N, B, T}, S} <- Candidate#rev_def.dep_object],
     Intersect = lists:foldl(
         fun(BuildUnit, Res) ->
             BuildVersion = ?VERSION(BuildUnit), 
-            BuildDeps = BuildUnit#rev_def.dep_object,
+            BuildDeps = [{N, B, T} || {{N, B, T}, S} <- BuildUnit#rev_def.dep_object],
             IsDepObject = lists:member(CandidateVersion, BuildDeps),
             IsDepSubject = lists:member(BuildVersion, CandidateDeps),
             IsBuilding = BuildVersion =:= CandidateVersion,

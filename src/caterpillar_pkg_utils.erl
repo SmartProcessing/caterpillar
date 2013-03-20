@@ -53,19 +53,36 @@ get_pkg_config_record(Archive, {empty, Data}) ->
     }.
 
 get_dep_list(Pkg, Archive) ->
-    get_valid_versions(Pkg#pkg_config.deps, Archive) ++ 
-        get_valid_versions(Pkg#pkg_config.build_deps, Archive).
+    get_valid_versions(Pkg#pkg_config.deps, Archive, deps) ++ 
+        get_valid_versions(Pkg#pkg_config.build_deps, Archive, build_deps).
 
-get_valid_versions(L, Archive) ->
+get_valid_versions(L, Archive, deps) ->
     Res = [{?LTB(N), ?LTB(B), ?LTB(T)} || {N, B, T} <- L],
     lists:map(fun({N, B, T}) ->
         case B of
             <<"*">> ->
-                {N, ?LTB(Archive#archive.branch), T};
+                {{N, ?LTB(Archive#archive.branch), T}, <<"built">>};
             RealBranch ->
-                {N, RealBranch, T}
+                {{N, RealBranch, T}, <<"built">>}
         end
-    end, Res).
+    end, Res);
+get_valid_versions(L, Archive, build_deps) ->
+    lists:map(fun
+    ({N, B, T}) ->
+        case B of
+            <<"*">> ->
+                {{?LTB(N), ?LTB(Archive#archive.branch), ?LTB(T)}, <<"new">>};
+            RealBranch ->
+                {{N, RealBranch, T}, <<"new">>}
+        end;
+    ({{N, B, T}, State}) ->
+        case B of
+            <<"*">> ->
+                {{?LTB(N), ?LTB(Archive#archive.branch), ?LTB(T)}, ?LTB(State)};
+            RealBranch ->
+                {{N, RealBranch, T}, ?LTB(State)}
+        end
+    end, L).
 
 get_archive_version(Archive) ->
     {?LTB(Archive#archive.name), ?LTB(Archive#archive.branch), ?LTB(Archive#archive.tag)}.
@@ -109,10 +126,16 @@ get_pkg_config(Arch, Path) ->
     Res.
 
 
-get_dir_name(Rev) ->
+get_dir_name(Rev=#rev_def{}) ->
     Name = ?BTL(Rev#rev_def.name),
     Branch = ?BTL(Rev#rev_def.branch),
     Tag = ?BTL(Rev#rev_def.tag),
+    io_lib:format(
+        "~s-~s~s", [Name, Branch, Tag]);
+get_dir_name({N, B, T}) ->
+    Name = ?BTL(N),
+    Branch = ?BTL(B),
+    Tag = ?BTL(T),
     io_lib:format(
         "~s-~s~s", [Name, Branch, Tag]).
 

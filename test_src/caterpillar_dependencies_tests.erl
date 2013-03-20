@@ -15,7 +15,7 @@ setup() ->
     DepObj = [
         {
             {<<"smprc-test">>, <<"trunk">>, <<>>},
-            {built, [<<"0001">>]},
+            {<<"built">>, [<<"0001">>]},
             [],
             [
                 {<<"caterpillar">>, <<"trunk">>, <<>>},
@@ -24,19 +24,19 @@ setup() ->
         },
         {
             {<<"caterpillar">>, <<"trunk">>, <<>>},
-            {built, [<<"0001">>]},
+            {<<"built">>, [<<"0001">>]},
             [{<<"smprc-test">>, <<"trunk">>, <<>>}],
             []
         },
         {
             {<<"pequen">>, <<"trunk">>, <<>>},
-            {none, [<<"0001">>]},
+            {<<"none">>, [<<"0001">>]},
             [{<<"smprc-test">>, <<"trunk">>, <<>>}],
             [{<<"destiny">>, <<"trunk">>, <<>>}]
         },
         {
             {<<"destiny">>, <<"trunk">>, <<>>},
-            {none, [<<"0001">>]},
+            {<<"none">>, [<<"0001">>]},
             [
                 {<<"smprc-test">>, <<"trunk">>, <<>>},
                 {<<"pequen">>, <<"trunk">>, <<>>}
@@ -63,8 +63,8 @@ list_unresolved_dependencies_test_() ->
                         branch = <<"trunk">>,
                         tag = <<"">>,
                         pkg_config={},
-                        dep_object = [{<<"smprc-test">>, <<"trunk">>, <<"">>},
-                        {<<"caterpillar">>, <<"trunk">>, <<"">>}]
+                        dep_object = [{{<<"smprc-test">>, <<"trunk">>, <<"">>}, <<"built">>},
+                            {{<<"caterpillar">>, <<"trunk">>, <<"">>}, <<"built">>}]
                     },
                     []
                 ),
@@ -76,7 +76,7 @@ list_unresolved_dependencies_test_() ->
                         branch = <<"trunk">>,
                         tag = <<"">>,
                         pkg_config={},
-                        dep_object = [{<<"pequen">>, <<"trunk">>, <<"">>}]
+                        dep_object = [{{<<"pequen">>, <<"trunk">>, <<"">>}, <<"built">>}]
                     },
                     []
                 ),
@@ -90,24 +90,24 @@ check_intersection_test() ->
         branch = <<"trunk">>,
         tag = <<>>,
         pkg_config={},
-        dep_object = [{<<"smprc-test">>, <<"trunk">>, <<>>}]},
+        dep_object = [{{<<"smprc-test">>, <<"trunk">>, <<>>}, <<"built">>}]},
     Rev2  =  #rev_def{
         name = <<"new_test">>,
         branch = <<"trunk">>,
         tag = <<>>,
         pkg_config={},
-        dep_object = [{<<"smprc-test">>, <<"trunk">>, <<>>}, {<<"smprc-caterpillar">>, <<"trunk">>, <<>>}]},
+        dep_object = [{{<<"smprc-test">>, <<"trunk">>, <<>>}, <<"built">>}, {{<<"smprc-caterpillar">>, <<"trunk">>, <<>>}, <<"built">>}]},
     Rev3  =  #rev_def{
         name = <<"destiny">>,
         branch = <<"trunk">>,
         tag = <<>>,
         pkg_config={},
-        dep_object = [{<<"pequen">>, <<"trunk">>, <<>>}, {<<"smprc-test">>, <<"trunk">>, <<>>}]},
+        dep_object = [{{<<"pequen">>, <<"trunk">>, <<>>}, <<"built">>}, {{<<"smprc-test">>, <<"trunk">>, <<>>}, <<"built">>}]},
     Rev4  =  #rev_def{
         name = <<"depends_on_destiny">>,
         branch = <<"trunk">>,
         tag = <<>>,
         pkg_config={},
-        dep_object = [{<<"destiny">>, <<"trunk">>, <<>>}, {<<"smprc-test">>, <<"trunk">>, <<>>}]},
+        dep_object = [{{<<"destiny">>, <<"trunk">>, <<>>}, <<"built">>}, {{<<"smprc-test">>, <<"trunk">>, <<>>}, <<"built">>}]},
     ?assertEqual({ok, independent}, caterpillar_dependencies:check_intersection(Rev4, [])),
     ?assertEqual({ok, dependent}, caterpillar_dependencies:check_intersection(Rev4, [Rev3, Rev2, Rev1])).

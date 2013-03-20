@@ -181,24 +181,24 @@ package_get_env({Rev, {_, BPath, _}, BuildPath}, Plugins) ->
 
 platform_clean(Env, Plugins) ->
     {ok, Plugin, Path, Rev} = platform_get_env(Env, Plugins),
-    informer(none, Plugin:clean(Rev, Path), Env).
+    informer(<<"none">>, Plugin:clean(Rev, Path), Env).
 
 platform_test(Env, Plugins) ->
     {ok, Plugin, Path, Rev} = platform_get_env(Env, Plugins),
-    informer(tested, Plugin:test(Rev, Path), Env).
+    informer(<<"tested">>, Plugin:test(Rev, Path), Env).
 
 
 platform_prebuild(Env, Plugins) ->
     {ok, Plugin, Path, Rev} = platform_get_env(Env, Plugins),
-    informer(tested, Plugin:prebuild(Rev, Path), Env).
+    informer(<<"tested">>, Plugin:prebuild(Rev, Path), Env).
 
 build_prepare(Env, Plugins) ->
     {ok, Plugin, Path, Rev} = package_get_env(Env, Plugins),
-    informer(tested, Plugin:prepare(Rev, Path), Env).
+    informer(<<"tested">>, Plugin:prepare(Rev, Path), Env).
 
 build_check(Env, Plugins) ->
     {ok, Plugin, Path, Rev} = package_get_env(Env, Plugins),
-    informer(tested, Plugin:check(Rev, Path), Env).
+    informer(<<"tested">>, Plugin:check(Rev, Path), Env).
 
 build_submit(Env, Plugins) ->
     {ok, Plugin, Path, Rev} = package_get_env(Env, Plugins),
@@ -318,16 +318,22 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
                 [AnyBucket|_] ->
                     ?LOCK(AnyBucket),
                     [{AnyBucket, Path, _Packages}] = dets:lookup(BucketsDets, AnyBucket),
-                    ok = dets:insert(BucketsDets, {BName, BPath, [Dep|BPackages]}),
                     ?UNLOCK(AnyBucket),
+                    DepPath = filename:join([BuildPath, Path, binary_to_list(Name)]),
+                    ?CU:recursive_copy(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)])),
                     ?LOCK(Dep),
                     [{Dep, {NewState, NewDepBuckets}, NewDepOn, NewHasInDep}|_] = dets:lookup(Deps, Dep),
                     ok = dets:insert(Deps, {Dep, {NewState, lists:usort([BName|NewDepBuckets])}, NewDepOn, NewHasInDep}),
-                    ?UNLOCK(Dep),
-                    DepPath = filename:join([BuildPath, Path, binary_to_list(Name)]),
-                    ?CU:recursive_copy(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)]));
+                    ok = dets:insert(BucketsDets, {BName, BPath, [Dep|BPackages]}),
+                    ?UNLOCK(Dep);
                 [] ->
-                    ok
+                    DepPath = get_temp_path(BuildPath, Dep),
+                    ?CU:recursive_copy(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)])),
+                    ?LOCK(Dep),
+                    [{Dep, {NewState, NewDepBuckets}, NewDepOn, NewHasInDep}|_] = dets:lookup(Deps, Dep),
+                    ok = dets:insert(Deps, {Dep, {NewState, lists:usort([BName|NewDepBuckets])}, NewDepOn, NewHasInDep}),
+                    ok = dets:insert(BucketsDets, {BName, BPath, [Dep|BPackages]}),
+                    ?UNLOCK(Dep)
             end
     end,
     arm_build_bucket(BucketsDets, Deps, {BName, BPath, [Dep|BPackages]}, BuildPath, O).

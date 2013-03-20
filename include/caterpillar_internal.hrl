@@ -27,7 +27,7 @@
 }).
 
 -record(build_info, {
-    state           :: packed|tested|none,
+    state           :: binary(),
     fd              :: file:io_device(),
     pkg_name        :: list(),
     description     :: list()
