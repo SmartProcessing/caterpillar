@@ -46,7 +46,13 @@ gen_control_from_pkg_config_test() ->
             deps = ["erlang-base", {"testik", "trunk", ""}, "blabla"]
         }
     },
-    ?assertEqual(<<"Package: newpkg\nSection: smprc-trunk\nVersion: 0.0.0-trunk.11\nArchitecture: all\nDescription: new package\nMaintainer: main@mail.com\nDepends: blabla, testik, erlang-base\n">>,
+    ?assertEqual(<<"Package: newpkg\n"
+        "Section: smprc-trunk\n"
+        "Version: 0.0.0-trunk.11\n"
+        "Architecture: all\n"
+        "Description: new package\n"
+        "Maintainer: main@mail.com\n"
+        "Depends: blabla, testik, erlang-base\n">>,
         ?CPU:gen_control_from_pkg_config(Rev)).
 
 gen_control_from_pkg_config2_test() ->
@@ -72,7 +78,13 @@ gen_control_from_pkg_config2_test() ->
                 {"test_runner", "trunk", ""}] 
         }
     },
-    ?debugFmt("~s~n", [?CPU:gen_control_from_pkg_config(Rev)]).
+    ?assertEqual(<<"Package: caterpillar\n"
+        "Section: smprc-trunk\n"
+        "Version: 0.14.0-trunk.11\n"
+        "Architecture: all\n"
+        "Description: \n"
+        "Maintainer: example@example.org\n"
+        "Depends: smprc-cowboy, smprc-mochiweb\n">>, ?CPU:gen_control_from_pkg_config(Rev)).
 
 
 -endif.
