@@ -70,17 +70,17 @@ get_valid_versions(L, Archive, build_deps) ->
     lists:map(fun
     ({N, B, T}) ->
         case B of
-            <<"*">> ->
+            "*" ->
                 {{?LTB(N), ?LTB(Archive#archive.branch), ?LTB(T)}, <<"new">>};
             RealBranch ->
-                {{N, RealBranch, T}, <<"new">>}
+                {{?LTB(N), ?LTB(RealBranch), ?LTB(T)}, <<"new">>}
         end;
     ({{N, B, T}, State}) ->
         case B of
-            <<"*">> ->
+            "*" ->
                 {{?LTB(N), ?LTB(Archive#archive.branch), ?LTB(T)}, ?LTB(State)};
             RealBranch ->
-                {{N, RealBranch, T}, ?LTB(State)}
+                {{?LTB(N), ?LTB(RealBranch), ?LTB(T)}, ?LTB(State)}
         end
     end, L).
 

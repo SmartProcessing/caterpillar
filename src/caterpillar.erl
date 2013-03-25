@@ -66,8 +66,8 @@ init(Settings) ->
 
 handle_call({newref, RevDef}, _From, State) ->
     error_logger:info_msg("received new revision: ~p~n", [RevDef]),
+    ?CDEP:create_dependencie(State#state.deps, RevDef),
     Queue = queue:in(RevDef, State#state.main_queue),
-    ?CDEP:update_dependencies(State#state.deps, RevDef, <<"new">>),
     QueuedState = State#state{main_queue=Queue},
     case State#state.next_to_build of
         none ->
@@ -214,6 +214,7 @@ prepare(BuildPath, Archive, WorkId) ->
     Msg = {get_archive, ArchiveWithFd},
     ok = caterpillar_event:sync_event(Msg),
     Cwd = filename:join([BuildPath, "temp", TempName]) ++ "/",
+    catch ?CU:del_dir(Cwd),
     ok = caterpillar_tar:extract(TempArch, [{cwd, Cwd}, compressed]),
     file:delete(TempArch),
     PkgRecord = ?CPU:get_pkg_config(Archive, Cwd),
@@ -337,8 +338,11 @@ get_build_candidate(State) ->
 
 get_build_candidate(main_queue, State) ->
     {{value, Candidate}, MainQueue} = queue:out(State#state.main_queue),
+    logging:info_msg("checking ~p: ", [Candidate]),
     case check_build_deps(Candidate, State) of
         independent ->
+            logging:info_msg("next candidate: ~p", [Candidate]),
+            ?CDEP:update_dependencies(State#state.deps, Candidate, <<"new">>),
             {ok, State#state{
                     main_queue=MainQueue, 
                     next_to_build=Candidate,
@@ -361,6 +365,7 @@ get_build_candidate(wait_queue, State) ->
     {{value, Candidate}, WaitQueue} = queue:out(State#state.wait_queue),
     case check_build_deps(Candidate, State) of
         independent ->
+            ?CDEP:update_dependencies(State#state.deps, Candidate, <<"new">>),
             {ok, State#state{
                     wait_queue=WaitQueue, 
                     queued=lists:delete(?VERSION(Candidate), State#state.queued),
@@ -382,6 +387,7 @@ get_build_candidate(both, State) ->
     {{value, Candidate}, WaitQueue} = queue:out(State#state.wait_queue),
     case check_build_deps(Candidate, State) of
         independent ->
+            ?CDEP:update_dependencies(State#state.deps, Candidate, <<"new">>),
             {ok, State#state{
                     queued=lists:delete(?VERSION(Candidate), State#state.queued),
                     wait_queue=WaitQueue, 
@@ -421,7 +427,8 @@ check_build_deps(Candidate, State) ->
                 Candidate,
                 NowBuilding),
             Res;
-        {ok, [], _Deps} ->
+        {ok, [], Deps} ->
+            error_logger:info_msg("Waiting for deps to build for ~p: ~p~n", [Candidate, Deps]),
             dependent;
         {ok, Dependencies, _} when is_list(Dependencies) ->
             error_logger:info_msg("Missing dependencies: ~p~n", [Dependencies]),

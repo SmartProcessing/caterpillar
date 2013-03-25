@@ -140,7 +140,7 @@ build_rev(ToBuild, State) ->
 
 unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
     Package = ?VERSION(Rev),
-    Deps = Rev#rev_def.dep_object,
+    Deps = [{N, B, T} || {{N, B, T}, _} <- Rev#rev_def.dep_object],
     error_logger:info_msg("unpacking revision ~p~n", [Package]),
     Res = case find_bucket(Buckets, Package, Deps) of
         [Bucket] ->
@@ -301,7 +301,8 @@ get_new_bucket(Dets) ->
 
 arm_build_bucket(_Buckets, _Deps, _Current, _BuildPath, []) ->
     {ok, done};
-arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
+arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]=Dependencies) ->
+    error_logger:info_msg("Arming ~p with ~p~n", [Dependencies]),
     {BName, _, _} = Current,
     {Name, _, _} = Dep,
     ?LOCK(BName),
@@ -309,6 +310,7 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
     ?UNLOCK(BName),
     ?LOCK(Dep),
     [{Dep, {_, DepBuckets}, _, _}|_] = dets:lookup(Deps, Dep),
+    error_logger:info_msg("Arming with dependencie ~p in buckets ~p~n", [Dep, DepBuckets]),
     ?UNLOCK(Dep),
     case lists:member(BName, DepBuckets) of
         true ->
@@ -327,13 +329,18 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
                     ok = dets:insert(BucketsDets, {BName, BPath, [Dep|BPackages]}),
                     ?UNLOCK(Dep);
                 [] ->
+                    error_logger:info_msg("Arming temp ~p in buckets ~p~n", [Dep, DepBuckets]),
                     DepPath = get_temp_path(BuildPath, Dep),
                     ?CU:recursive_copy(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)])),
                     ?LOCK(Dep),
                     [{Dep, {NewState, NewDepBuckets}, NewDepOn, NewHasInDep}|_] = dets:lookup(Deps, Dep),
                     ok = dets:insert(Deps, {Dep, {NewState, lists:usort([BName|NewDepBuckets])}, NewDepOn, NewHasInDep}),
                     ok = dets:insert(BucketsDets, {BName, BPath, [Dep|BPackages]}),
-                    ?UNLOCK(Dep)
+                    ?UNLOCK(Dep),
+                    ?LOCK(BName),
+                    [{BName, BPath, OldContain}] = dets:lookup(BucketsDets, BName),
+                    ok = dets:insert(BucketsDets, {BName, BPath, [Dep|OldContain]}),
+                    ?UNLOCK(BName)
             end
     end,
     arm_build_bucket(BucketsDets, Deps, {BName, BPath, [Dep|BPackages]}, BuildPath, O).
@@ -351,7 +358,7 @@ update_package_buckets(BucketsTable, DepsTable, Buckets, BuildPath, Source, Rev)
             {ok, UpdatedBuckets};
         Other ->
             error_logger:error_msg("failed to update package buckets for ~p: ~p", [Rev, Other]),
-            ?UNLOCK(Package),
+            % ?UNLOCK(Package),
             throw(Other)
     end.
 
@@ -360,7 +367,7 @@ update_buckets(_, _, _, _, [], Acc) ->
 update_buckets(BucketsTable, BuildPath, Source, Rev, [Bucket|O], Acc) ->
     Package = ?VERSION(Rev),
     {BName, TempPath, TempContain} = Bucket,
-    Deps = Rev#rev_def.dep_object,
+    Deps = [{N, B, T} || {{N, B, T}, _S} <-Rev#rev_def.dep_object],
     ?LOCK(BName),
     [{BName, BPath, BContain}] = case dets:lookup(BucketsTable, BName) of
         [] -> 
@@ -396,7 +403,8 @@ make_complete_actions(
     Status, 
     {Rev, {BName, BPath, _}, BuildPath}, 
     DepsDets, 
-    BucketsDets) when Status == built; Status == tested ->
+    BucketsDets) when Status == <<"built">>; Status == <<"tested">>
+->
     Version = ?VERSION(Rev),
     ?LOCK(Version),
     [{Version, {_, InBuckets}, _, _}] = dets:lookup(DepsDets, Version),
@@ -413,7 +421,8 @@ make_complete_actions(
     _Status, 
     {Rev, {BName, BPath, _}, BuildPath}, 
     DepsDets, 
-    BucketsDets) ->
+    BucketsDets) 
+->
     Version = ?VERSION(Rev),
     ?LOCK(Version),
     [{Version, {_, InBuckets}, _, _}] = dets:lookup(DepsDets, Version),
@@ -421,15 +430,16 @@ make_complete_actions(
     lists:map(fun(X) -> 
                 ?LOCK(X),
                 [{BName, BPath, BContain}] = dets:lookup(BucketsDets, X), 
-                dets:insert(BName, BPath, lists:delete(BContain, Version)),
+                dets:insert(BucketsDets, {BName, BPath, lists:delete(Version, BContain)}),
                 ?UNLOCK(X),
                 ToClean = filename:join([BuildPath, BPath, binary_to_list(Rev#rev_def.name)]),
-                ?CU:del_dir(ToClean)
+                error_logger:info_msg("was cleaning: ~p~n", [ToClean])
+                % ?CU:del_dir(ToClean)
             end, InBuckets).
 
 create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev) ->
     try
-        Deps = Rev#rev_def.dep_object,
+        Deps = [{N, B, T} || {{N, B, T}, _S} <- Rev#rev_def.dep_object],
         {ok, [NewBucket]} = update_package_buckets(
             Buckets,
             DepsDets, 
@@ -437,7 +447,7 @@ create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev) ->
             BuildPath, 
             get_temp_path(BuildPath, Rev),
             Rev),
-        ?CU:del_dir(get_temp_path(BuildPath, Rev)),
+        % ?CU:del_dir(get_temp_path(BuildPath, Rev)),
         arm_build_bucket(Buckets, DepsDets, NewBucket, BuildPath, Deps)
     catch
         _:Reason ->

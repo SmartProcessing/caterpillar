@@ -1,7 +1,7 @@
 -module(caterpillar_dependencies).
 -include_lib("caterpillar_internal.hrl").
 -export([check_intersection/2, list_unresolved_dependencies/3]).
--export([update_dependencies/3, fetch_dependencies/2]).
+-export([update_dependencies/3, fetch_dependencies/2, create_dependencie/2]).
 
 -define(LOCK(X), gen_server:call(caterpillar_lock, {lock, X}, infinity)).
 -define(UNLOCK(X), gen_server:call(caterpillar_lock, {unlock, X})).
@@ -19,12 +19,12 @@ list_none_new_dependencies(_DepTree, [], _Preparing, {NoneDeps, NewDeps}) ->
     {ok, NoneDeps, NewDeps};
 list_none_new_dependencies(DepTree, [{Dep, State}|O], Preparing, {NoneDeps, NewDeps}) ->
     case fetch_dependencies(DepTree, Dep) of
-        {ok, {_VersionSpec, {none, _B}, _Obj, _Subj}} ->
-            list_none_new_dependencies(DepTree, O, Preparing, {[Dep|NoneDeps], NewDeps});
-        {ok, {_VersionSpec, {new, _B}, _Obj, _Subj}} ->
-            list_none_new_dependencies(DepTree, O, Preparing, {NoneDeps, [Dep|NewDeps]});
         {ok, {_VersionSpec, {_Success, _B}, _Obj, _Subj}} when State == <<"new">> ->
             list_none_new_dependencies(DepTree, O, Preparing, {NoneDeps, NewDeps});
+        {ok, {_VersionSpec, {<<"none">>, _B}, _Obj, _Subj}} ->
+            list_none_new_dependencies(DepTree, O, Preparing, {[Dep|NoneDeps], NewDeps});
+        {ok, {_VersionSpec, {<<"new">>, _B}, _Obj, _Subj}} ->
+            list_none_new_dependencies(DepTree, O, Preparing, {NoneDeps, [Dep|NewDeps]});
         {ok, {_VersionSpec, {Success, _B}, _Obj, _Subj}} when Success == <<"built">>; Success == State ->
             list_none_new_dependencies(DepTree, O, Preparing, {NoneDeps, NewDeps});
         {ok, []} ->
@@ -77,10 +77,22 @@ fetch_dependencies(DepTree, Version) ->
     ?UNLOCK(Version),
     Res.
 
--spec update_dependencies(reference(), #rev_def{}, atom()) -> 
+create_dependencie(DepTree, Rev) ->
+    Version = ?VERSION(Rev),
+    DepObject = Rev#rev_def.dep_object, 
+    ?LOCK(Version),
+    case dets:lookup(DepTree, Version) of
+        [{V, {_, _Buckets}, _, _Subj}|_] ->
+            pass;
+        [] ->
+            dets:insert(DepTree, {Version, {<<"new">>, []}, DepObject, []})
+    end,
+    ?UNLOCK(Version),
+    {ok, done}.
+
+-spec update_dependencies(reference(), #rev_def{}, binary()) -> 
     {ok, done}|{error, Reason :: atom()}.
 update_dependencies(DepTree, Rev, Status) ->
-    error_logger:info_msg("updating dependencies: Rev: ~p Status: ~p~n", [Rev, Status]),
     Version = ?VERSION(Rev),
     DepObject = Rev#rev_def.dep_object, 
     update_subjects(DepTree, DepObject, Version),
@@ -100,12 +112,16 @@ update_subjects(_, [], _) ->
     {ok, done};
 update_subjects(Deps, [Version|Other], NewRef) ->
     ?LOCK(Version),
-    [{Version, BuildInfo, Object, Subject}|_] = dets:lookup(Deps, Version),
-    case lists:member(NewRef, Subject) of
-        true ->
-            ok;
-        false ->
-            dets:insert(Deps, {Version, BuildInfo, Object, [NewRef|Subject]})
+    case dets:lookup(Deps, Version) of
+        [{Version, BuildInfo, Object, Subject}|_] ->
+            case lists:member(NewRef, Subject) of
+                true ->
+                    ok;
+                false ->
+                    dets:insert(Deps, {Version, BuildInfo, Object, [NewRef|Subject]})
+            end;
+        [] ->
+            ok
     end,
     ?UNLOCK(Version),
     update_subjects(Deps, Other, NewRef).

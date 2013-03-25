@@ -46,7 +46,7 @@ setup() ->
     DepObj = [
         {
             {<<"smprc-test">>, <<"trunk">>, <<>>},
-            {built, [<<"0001">>]},
+            {<<"built">>, [<<"0001">>]},
             [],
             [
                 {<<"caterpillar">>, <<"trunk">>, <<>>},
@@ -55,19 +55,19 @@ setup() ->
         },
         {
             {<<"caterpillar">>, <<"trunk">>, <<>>},
-            {built, [<<"0001">>]},
+            {<<"built">>, [<<"0001">>]},
             [{<<"smprc-test">>, <<"trunk">>, <<>>}],
             []
         },
         {
             {<<"pequen">>, <<"trunk">>, <<>>},
-            {error, []},
+            {<<"error">>, []},
             [{<<"smprc-test">>, <<"trunk">>, <<>>}],
             [{<<"destiny">>, <<"trunk">>, <<>>}]
         },
         {
             {<<"destiny">>, <<"trunk">>, <<>>},
-            {error, []},
+            {<<"error">>, []},
             [
                 {<<"smprc-test">>, <<"trunk">>, <<>>},
                 {<<"pequen">>, <<"trunk">>, <<>>}
@@ -76,7 +76,7 @@ setup() ->
         },
         {
             {<<"newpkg">>, <<"trunk">>, <<"1.0.1">>},
-            {in_process, [<<"0003">>]},
+            {<<"new">>, [<<"0003">>]},
             [
                 {<<"smprc-test">>, <<"trunk">>, <<>>},
                 {<<"caterpillar">>, <<"trunk">>, <<>>}
@@ -85,7 +85,7 @@ setup() ->
         },
         {
             {<<"newpkg_dep">>, <<"test">>, <<>>},
-            {built, [<<"0002">>]},
+            {<<"built">>, [<<"0002">>]},
             [],
             [{<<"newpkg">>, <<"trunk">>, <<"1.0.1">>}]
         }
@@ -129,11 +129,11 @@ list_unresolved_dependencies_test_() ->
     }.
 
 validate_bucket_test() ->
-    ?assertEqual(?CBW:validate_bucket([{<<"1">>, <<"1">>, <<"1">>}], []), true),
-    ?assertEqual(?CBW:validate_bucket([{<<"1">>, <<"1">>, <<"1">>}], [{<<"1">>, <<"1">>, <<"1">>}]), true),
-    ?assertEqual(?CBW:validate_bucket([{<<"1">>, <<"1">>, <<"1">>}], [{<<"1">>, <<"2">>, <<"1">>}]), false),
-    ?assertEqual(?CBW:validate_bucket([{<<"1">>, <<"1">>, <<"1">>}, {<<"2">>, <<"2">>, <<"2">>}], [{<<"1">>, <<"1">>, <<"1">>}]), true),
-    ?assertEqual(?CBW:validate_bucket([{<<"1">>, <<"1">>, <<"1">>}, {<<"2">>, <<"4">>, <<"2">>}], [{<<"1">>, <<"1">>, <<"1">>}, {<<"2">>, <<"2">>, <<"2">>}]), false).
+    ?assertEqual(?CBW:validate_bucket([{{<<"1">>, <<"1">>, <<"1">>}, 1}], []), true),
+    ?assertEqual(?CBW:validate_bucket([{{<<"1">>, <<"1">>, <<"1">>}, 1}], [{<<"1">>, <<"1">>, <<"1">>}]), true),
+    ?assertEqual(?CBW:validate_bucket([{{<<"1">>, <<"1">>, <<"1">>}, 1}], [{<<"1">>, <<"2">>, <<"1">>}]), false),
+    ?assertEqual(?CBW:validate_bucket([{{<<"1">>, <<"1">>, <<"1">>}, 1}, {{<<"2">>, <<"2">>, <<"2">>}, 2}], [{<<"1">>, <<"1">>, <<"1">>}]), true),
+    ?assertEqual(?CBW:validate_bucket([{{<<"1">>, <<"1">>, <<"1">>}, 1}, {{<<"2">>, <<"4">>, <<"2">>}, 2}], [{<<"1">>, <<"1">>, <<"1">>}, {<<"2">>, <<"2">>, <<"2">>}]), false).
 
 find_bucket1_test_() ->
     {setup,
@@ -141,7 +141,7 @@ find_bucket1_test_() ->
         fun cleanup/1,
         fun() ->
             Bucket1 = dets:lookup('buckets', <<"0001">>),
-            ?assertEqual(?CBW:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, [{<<"caterpillar">>, <<"trunk">>, <<>>}]), Bucket1)
+            ?assertEqual(?CBW:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, [{{<<"caterpillar">>, <<"trunk">>, <<>>}, <<"built">>}]), Bucket1)
         end
     }.
 
@@ -161,7 +161,7 @@ find_bucket3_test_() ->
         fun cleanup/1,
         fun() ->
             Bucket3 = dets:lookup('buckets', <<"0003">>),
-            ?assertEqual(?CBW:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, [{<<"smprc-test">>, <<"stable">>, <<"1.2">>}]), Bucket3)
+            ?assertEqual(?CBW:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, [{{<<"smprc-test">>, <<"stable">>, <<"1.2">>}, <<"built">>}]), Bucket3)
         end
     }.
 
@@ -173,8 +173,8 @@ find_bucket4_test_() ->
             Bucket1 = dets:lookup('buckets', <<"0001">>),
             ?assertEqual(?CBW:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, 
                     [
-                        {<<"smprc-test">>, <<"trunk">>, <<>>},
-                        {<<"caterpillar">>, <<"trunk">>, <<>>}
+                        {{<<"smprc-test">>, <<"trunk">>, <<>>}, <<"built">>},
+                        {{<<"caterpillar">>, <<"trunk">>, <<>>}, <<"built">>}
                     ])
                     , Bucket1)
         end
