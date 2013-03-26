@@ -338,10 +338,10 @@ get_build_candidate(State) ->
 
 get_build_candidate(main_queue, State) ->
     {{value, Candidate}, MainQueue} = queue:out(State#state.main_queue),
-    logging:info_msg("checking ~p: ", [Candidate]),
+    error_logger:info_msg("checking ~p~n", [Candidate]),
     case check_build_deps(Candidate, State) of
         independent ->
-            logging:info_msg("next candidate: ~p", [Candidate]),
+            error_logger:info_msg("next candidate: ~p~n", [Candidate]),
             ?CDEP:update_dependencies(State#state.deps, Candidate, <<"new">>),
             {ok, State#state{
                     main_queue=MainQueue, 

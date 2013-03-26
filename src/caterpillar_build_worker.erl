@@ -98,12 +98,12 @@ build_rev(ToBuild, State) ->
         {ok, {{Fd, Name}, Env}} ->
             ok = gen_server:call(caterpillar, 
                 {built, self(), ToBuild, #build_info{
-                        state=built,
+                        state = <<"built">>,
                         fd=Fd,
                         pkg_name=Name,
                         description="ok"
                     }}, infinity),
-            make_complete_actions(built, Env, DepsDets, BuildBuckets);
+            make_complete_actions(<<"built">>, Env, DepsDets, BuildBuckets);
         {error, Value, Msg, Env} ->
             ok = gen_server:call(caterpillar, 
                 {err_built, self(), ToBuild, #build_info{
@@ -273,12 +273,12 @@ validate_bucket([], _Deps, Prev) ->
 validate_bucket([E|O], Deps, Prev) -> 
     {Name, Branch, Tag} = E,
     Res = case [{B, T} || {N, B, T} <- Deps, N == Name] of
-        [{B, T}|_] when B==Branch, T==Tag ->
+        [{B, T}|_] when B /= Branch; T /= Tag ->
+            false;
+        [{B, T}|_] when B == Branch, T == Tag ->
             true;
         [] ->
             true;
-        [{B, T}|_] when B/=Branch; T/=Tag ->
-            false;
         _Other ->
             false
     end,
@@ -322,7 +322,7 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]=Dependencies) ->
                     [{AnyBucket, Path, _Packages}] = dets:lookup(BucketsDets, AnyBucket),
                     ?UNLOCK(AnyBucket),
                     DepPath = filename:join([BuildPath, Path, binary_to_list(Name)]),
-                    ?CU:recursive_copy(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)])),
+                    copy_package_to_bucket(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)])),
                     ?LOCK(Dep),
                     [{Dep, {NewState, NewDepBuckets}, NewDepOn, NewHasInDep}|_] = dets:lookup(Deps, Dep),
                     ok = dets:insert(Deps, {Dep, {NewState, lists:usort([BName|NewDepBuckets])}, NewDepOn, NewHasInDep}),
@@ -331,7 +331,7 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]=Dependencies) ->
                 [] ->
                     error_logger:info_msg("Arming temp ~p in buckets ~p~n", [Dep, DepBuckets]),
                     DepPath = get_temp_path(BuildPath, Dep),
-                    ?CU:recursive_copy(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)])),
+                    copy_package_to_bucket(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)])),
                     ?LOCK(Dep),
                     [{Dep, {NewState, NewDepBuckets}, NewDepOn, NewHasInDep}|_] = dets:lookup(Deps, Dep),
                     ok = dets:insert(Deps, {Dep, {NewState, lists:usort([BName|NewDepBuckets])}, NewDepOn, NewHasInDep}),
