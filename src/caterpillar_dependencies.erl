@@ -82,7 +82,7 @@ create_dependencie(DepTree, Rev) ->
     DepObject = Rev#rev_def.dep_object, 
     ?LOCK(Version),
     case dets:lookup(DepTree, Version) of
-        [{V, {_, _Buckets}, _, _Subj}|_] ->
+        [{_V, {_, _Buckets}, _, _Subj}|_] ->
             pass;
         [] ->
             dets:insert(DepTree, {Version, {<<"new">>, []}, DepObject, []})
