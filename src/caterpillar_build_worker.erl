@@ -301,7 +301,7 @@ get_new_bucket(Dets) ->
 
 arm_build_bucket(_Buckets, _Deps, _Current, _BuildPath, []) ->
     {ok, done};
-arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]=Dependencies) ->
+arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
     {BName, _, _} = Current,
     {Name, _, _} = Dep,
     ?LOCK(BName),
@@ -430,9 +430,9 @@ make_complete_actions(
                 [{BName, BPath, BContain}] = dets:lookup(BucketsDets, X), 
                 dets:insert(BucketsDets, {BName, BPath, lists:delete(Version, BContain)}),
                 ?UNLOCK(X),
-                ToClean = filename:join([BuildPath, BPath, binary_to_list(Rev#rev_def.name)])
-                % error_logger:info_msg("was cleaning: ~p~n", [ToClean])
-                % ?CU:del_dir(ToClean)
+                ToClean = filename:join([BuildPath, BPath, binary_to_list(Rev#rev_def.name)]),
+                error_logger:info_msg("cleaning up: ~p~n", [ToClean]),
+                ?CU:del_dir(ToClean)
             end, InBuckets).
 
 create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev) ->
