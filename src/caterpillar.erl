@@ -65,7 +65,7 @@ init(Settings) ->
     }.
 
 handle_call({newref, RevDef}, _From, State) ->
-    error_logger:info_msg("received new revision: ~p~n", [RevDef]),
+    error_logger:info_msg("received new revision: ~p~n", [?VERSION(RevDef)]),
     ?CDEP:create_dependencie(State#state.deps, RevDef),
     Queue = queue:in(RevDef, State#state.main_queue),
     QueuedState = State#state{main_queue=Queue},
@@ -338,10 +338,10 @@ get_build_candidate(State) ->
 
 get_build_candidate(main_queue, State) ->
     {{value, Candidate}, MainQueue} = queue:out(State#state.main_queue),
-    error_logger:info_msg("checking ~p~n", [Candidate]),
+    error_logger:info_msg("checking ~p~n", [?VERSION(Candidate)]),
     case check_build_deps(Candidate, State) of
         independent ->
-            error_logger:info_msg("next candidate: ~p~n", [Candidate]),
+            error_logger:info_msg("next candidate: ~p~n", [?VERSION(Candidate)]),
             ?CDEP:update_dependencies(State#state.deps, Candidate, <<"new">>),
             {ok, State#state{
                     main_queue=MainQueue, 
@@ -428,7 +428,7 @@ check_build_deps(Candidate, State) ->
                 NowBuilding),
             Res;
         {ok, [], Deps} ->
-            error_logger:info_msg("Waiting for deps to build for ~p: ~p~n", [Candidate, Deps]),
+            error_logger:info_msg("Waiting for deps to build for ~p: ~p~n", [?VERSION(Candidate), Deps]),
             dependent;
         {ok, Dependencies, _} when is_list(Dependencies) ->
             error_logger:info_msg("Missing dependencies: ~p~n", [Dependencies]),

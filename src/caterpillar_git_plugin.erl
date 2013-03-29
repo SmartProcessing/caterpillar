@@ -135,9 +135,9 @@ get_changelog(_State, Package, _Branch, OldRevno, NewRevno) ->
 get_tag(_State, Package, _Branch, NewRevno) ->
     TagCmd = format("git describe --exact-match ~s 2> /dev/null", [NewRevno]),
     case command(TagCmd, [{cd, Package}]) of
-        {ok, <<>>} -> {ok, none};
-        {ok, Tag} -> {ok, binary:replace(Tag, <<"\n">>, <<>>, [global])};
-        {error, _} -> {ok, none}
+        {ok, <<>>} -> {ok, ""};
+        {ok, Tag} -> {ok, binary_to_list(binary:replace(Tag, <<"\n">>, <<>>, [global]))};
+        {error, _} -> {ok, ""}
     end.
 
 
