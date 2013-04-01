@@ -107,6 +107,7 @@ handle(#http_req{path=[<<"init_repository">>, Path]}=Req, State) ->
     {ok, Req2, State};
 
 handle(Req, State) ->
+    error_logger:info_msg("bad request: ~p~n", [Req]),
     {ok, Req2} = cowboy_http_req:reply(400, [], <<"bad request">>, Req),
     {ok, Req2, State}.
 
