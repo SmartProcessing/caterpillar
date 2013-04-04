@@ -85,10 +85,10 @@ handle(#http_req{path=[Cmd, Package, Branch]}=Req, State)
     AtomCmd = binary_to_atom(<<Cmd/binary, "_package">>, latin1),
     Response = case gen_server:call(?MODULE, {execute, {AtomCmd, Package, Branch}}, infinity) of
         true ->
-            {ok, Req2} = cowboy_http_req:reply(200, [], <<"ok">>, Req),
+            {ok, Req2} = cowboy_http_req:reply(200, [], <<"ok\n">>, Req),
             Req2;
         false ->
-            {ok, Req2} = cowboy_http_req:reply(200, [], <<"already in process">>, Req),
+            {ok, Req2} = cowboy_http_req:reply(200, [], <<"already in process\n">>, Req),
             Req2;
         Error -> 
             Res = format("~p~n", [Error]),
@@ -108,7 +108,7 @@ handle(#http_req{path=[<<"init_repository">>, Path]}=Req, State) ->
 
 handle(Req, State) ->
     error_logger:info_msg("bad request: ~p~n", [Req]),
-    {ok, Req2} = cowboy_http_req:reply(400, [], <<"bad request">>, Req),
+    {ok, Req2} = cowboy_http_req:reply(400, [], <<"bad request\n">>, Req),
     {ok, Req2, State}.
 
 

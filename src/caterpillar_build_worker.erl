@@ -144,7 +144,6 @@ unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
     error_logger:info_msg("unpacking revision ~p~n", [Package]),
     Res = case find_bucket(Buckets, Package, Deps) of
         [Bucket] ->
-            error_logger:info_msg("found a bucket for ~p: ~p~n", [Package, Bucket]),
             create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev),
             {ok, 
                 {none, {Rev, Bucket, BuildPath}}

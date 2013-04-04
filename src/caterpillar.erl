@@ -342,7 +342,7 @@ get_build_candidate(main_queue, State) ->
     case check_build_deps(Candidate, State) of
         independent ->
             error_logger:info_msg("next candidate: ~p~n", [?VERSION(Candidate)]),
-            ?CDEP:update_dependencies(State#state.deps, Candidate, <<"new">>),
+            ?CDEP:update_dependencies(State#state.deps, Candidate, <<"in_progress">>),
             {ok, State#state{
                     main_queue=MainQueue, 
                     next_to_build=Candidate,
@@ -365,7 +365,7 @@ get_build_candidate(wait_queue, State) ->
     {{value, Candidate}, WaitQueue} = queue:out(State#state.wait_queue),
     case check_build_deps(Candidate, State) of
         independent ->
-            ?CDEP:update_dependencies(State#state.deps, Candidate, <<"new">>),
+            ?CDEP:update_dependencies(State#state.deps, Candidate, <<"in_progress">>),
             {ok, State#state{
                     wait_queue=WaitQueue, 
                     queued=lists:delete(?VERSION(Candidate), State#state.queued),
@@ -387,7 +387,7 @@ get_build_candidate(both, State) ->
     {{value, Candidate}, WaitQueue} = queue:out(State#state.wait_queue),
     case check_build_deps(Candidate, State) of
         independent ->
-            ?CDEP:update_dependencies(State#state.deps, Candidate, <<"new">>),
+            ?CDEP:update_dependencies(State#state.deps, Candidate, <<"in_progress">>),
             {ok, State#state{
                     queued=lists:delete(?VERSION(Candidate), State#state.queued),
                     wait_queue=WaitQueue, 
@@ -428,17 +428,20 @@ check_build_deps(Candidate, State) ->
                 NowBuilding),
             Res;
         {ok, [], Deps} ->
-            error_logger:info_msg("Waiting for deps to build for ~p: ~p~n", [?VERSION(Candidate), Deps]),
             dependent;
         {ok, Dependencies, _} when is_list(Dependencies) ->
-            error_logger:info_msg("Missing dependencies: ~p~n", [Dependencies]),
             case State#state.queue_missing of
                 true ->
                     lists:map(
                         fun(Dep) ->
                                 {BPackage, BBranch, _} = Dep,
-                                Msg = {rebuild_package, {binary_to_list(BPackage), binary_to_list(BBranch)}},
-                                caterpillar_event:sync_event(Msg)
+                                QueuedState = lists:member(Dep, State#state.queued),
+                                if not QueuedState ->
+                                    Msg = {rebuild_package, {binary_to_list(BPackage), binary_to_list(BBranch)}},
+                                    caterpillar_event:sync_event(Msg);
+                                true ->
+                                    pass
+                                end
                         end, Dependencies),
                     dependent;
                 _Other ->

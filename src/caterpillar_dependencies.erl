@@ -23,7 +23,7 @@ list_none_new_dependencies(DepTree, [{Dep, State}|O], Preparing, {NoneDeps, NewD
             list_none_new_dependencies(DepTree, O, Preparing, {NoneDeps, NewDeps});
         {ok, {_VersionSpec, {<<"none">>, _B}, _Obj, _Subj}} ->
             list_none_new_dependencies(DepTree, O, Preparing, {[Dep|NoneDeps], NewDeps});
-        {ok, {_VersionSpec, {<<"new">>, _B}, _Obj, _Subj}} ->
+        {ok, {_VersionSpec, {NewInProgress, _B}, _Obj, _Subj}} when NewInProgress == <<"new">>; NewInProgress == <<"in_progress">> ->
             list_none_new_dependencies(DepTree, O, Preparing, {NoneDeps, [Dep|NewDeps]});
         {ok, {_VersionSpec, {Success, _B}, _Obj, _Subj}} when Success == <<"built">>; Success == State ->
             list_none_new_dependencies(DepTree, O, Preparing, {NoneDeps, NewDeps});
