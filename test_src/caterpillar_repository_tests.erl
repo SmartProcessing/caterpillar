@@ -1509,16 +1509,6 @@ handle_call_rescan_n_rebuild_package_test_() ->
             end
         },
         {
-            "rescan package bad request",
-            {rescan_package, bad},
-            fun(Match) ->
-                ?assertEqual(
-                    {reply, {error, bad_msg}, state},
-                    Match
-                )
-            end
-        },
-        {
             "rebuild package test",
             {rebuild_package, {package, branch}},
             fun(Match) ->

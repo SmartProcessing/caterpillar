@@ -108,7 +108,7 @@ handle_call(rescan_repository, _From, State) ->
     scan_repository(0),
     {reply, ok, State};
 
-handle_call({rescan_package, {_Package, _Branch}=Request}, _From, State) ->
+handle_call({rescan_package, Request}, _From, State) ->
     Pid = spawn(fun() ->
         scan_pipe(Request, State)
     end),
@@ -341,6 +341,11 @@ scan_pipe(State) ->
     scan_pipe([], State).
 
 
+scan_pipe({Package, nobranch}, State) ->
+    {ok, Branches} = get_branches(Package, State),
+    Packages = [#package{name=Package, branch=Branch} || Branch <- Branches],
+    scan_pipe(Packages, State);
+
 scan_pipe({Package, Branch}, State) ->
     scan_pipe([#package{name=Package, branch=Branch}], State);
 
@@ -348,7 +353,7 @@ scan_pipe(Packages, State) ->
     ScanPackages = [
         {register_scan_pipe, fun register_scan_pipe/2},
         {get_packages, fun get_packages/2},
-        {get_brances, fun get_branches/2},
+        {get_branches, fun get_branches/2},
         {cast_clean_packages, fun cast_clean_packages/2}
     ],
     CommonFunList = [
