@@ -342,7 +342,7 @@ scan_pipe(State) ->
 
 
 scan_pipe({Package, nobranch}, State) ->
-    {ok, WBranches} = get_branches(#package{name=Package}, State),
+    {ok, WBranches} = get_branches([#package{name=Package}], State),
     scan_pipe(WBranches, State);
 
 scan_pipe({Package, Branch}, State) ->
