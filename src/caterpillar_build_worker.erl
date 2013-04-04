@@ -388,7 +388,7 @@ update_buckets(BucketsTable, BuildPath, Source, Rev, [Bucket|O], Acc) ->
 
 
 copy_package_to_bucket(Source, Path) ->
-    error_logger:info_msg("copying ~p to ~p", [Source, Path]),
+    error_logger:info_msg("copying ~p to ~p~n", [Source, Path]),
     ?CU:del_dir(Path),
     filelib:ensure_dir(Path),
     ?CU:recursive_copy(Source, Path).
