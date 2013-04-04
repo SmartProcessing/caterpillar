@@ -427,7 +427,7 @@ check_build_deps(Candidate, State) ->
                 Candidate,
                 NowBuilding),
             Res;
-        {ok, [], Deps} ->
+        {ok, [], _Deps} ->
             dependent;
         {ok, Dependencies, _} when is_list(Dependencies) ->
             case State#state.queue_missing of
