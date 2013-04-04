@@ -37,7 +37,7 @@ handle_info(_, State) ->
     {noreply, State}.
 
 
-handle_call({execute, {Cmd, Desc}=Key}, _From, #state{ets=Ets}=State) ->
+handle_call({execute, Key}, _From, #state{ets=Ets}=State) ->
     Response = case ets:lookup(Ets, Key) of
         [] -> 
             Msg = Key,
