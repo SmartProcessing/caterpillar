@@ -219,7 +219,7 @@ prepare(BuildPath, Archive, WorkId) ->
     file:delete(TempArch),
     PkgRecord = ?CPU:get_pkg_config(Archive, Cwd),
     RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId),
-    gen_server:call(caterpillar, {newref, RevDef}).
+    gen_server:call(caterpillar, {newref, RevDef}, infinity).
 
 
 can_prepare(Archive, State) ->
