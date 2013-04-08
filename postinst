@@ -14,14 +14,16 @@ if [ "$1" = configure ]; then
     mkdir -p /srv/deploy
     mkdir -p /srv/packages
     mkdir -p /srv/bzr
+    mkdir -p /srv/git
     mkdir -p /var/lib/caterpillar/build
     mkdir -p /var/log/caterpillar
     chown caterpillar:caterpillar /srv/deploy
     chown caterpillar:caterpillar /srv/packages
     chown caterpillar:caterpillar /srv/bzr
+    chown caterpillar:caterpillar /srv/git
     chown -R caterpillar:caterpillar /var/lib/caterpillar
     chown -R caterpillar:caterpillar /var/log/caterpillar
-    chmod 777 /var/log/caterpillar/*
+    chmod -R 755 /var/log/caterpillar
 
     update-rc.d caterpillar defaults >/dev/null || exit $?
     invoke-rc.d caterpillar restart || exit $?
