@@ -4,4 +4,4 @@ Description: "package building tools"
 Architecture: all
 Version: 1.4.3
 Maintainer: vavdiushkin@smprc.ru
-Depends: erlang-base(>=14), smprc-mochiweb, smprc-cowboy, python-setuptools, erlang-eunit, erlang-dev, smprc-rebar, erlang-common-test, python-twisted-core
+Depends: erlang-base(>=14), smprc-mochiweb, smprc-cowboy, python-setuptools, erlang-eunit, erlang-dev, smprc-rebar, erlang-common-test, python-twisted-core, python-twisted-web, python-simplejson
