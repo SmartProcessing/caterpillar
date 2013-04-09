@@ -96,7 +96,7 @@ build_rev(ToBuild, State) ->
     ],
     case catch caterpillar_utils:build_pipe(Funs, {none, ToBuild}) of
         {ok, {{Fd, Name}, Env}} ->
-            ok = gen_server:call(caterpillar, 
+            ok = gen_server:call(caterpillar_builder, 
                 {built, self(), ToBuild, #build_info{
                         state = <<"built">>,
                         fd=Fd,
@@ -105,7 +105,7 @@ build_rev(ToBuild, State) ->
                     }}, infinity),
             make_complete_actions(<<"built">>, Env, DepsDets, BuildBuckets);
         {error, Value, Msg, Env} ->
-            ok = gen_server:call(caterpillar, 
+            ok = gen_server:call(caterpillar_builder, 
                 {err_built, self(), ToBuild, #build_info{
                         state=Value,
                         fd=none,
@@ -114,7 +114,7 @@ build_rev(ToBuild, State) ->
                     }}, infinity),
             make_complete_actions(Value, Env, DepsDets, BuildBuckets);
         {error, Value, Msg} ->
-            ok = gen_server:call(caterpillar, 
+            ok = gen_server:call(caterpillar_builder, 
                 {err_built, self(), ToBuild, #build_info{
                         state=Value,
                         fd=none,
@@ -123,7 +123,7 @@ build_rev(ToBuild, State) ->
                     }}, infinity);
         Other ->
             error_logger:info_msg("build pipe failed with reason: ~p~n", [Other]),
-            ok = gen_server:call(caterpillar,
+            ok = gen_server:call(caterpillar_builder,
                 {
                     err_built, 
                     self(), 

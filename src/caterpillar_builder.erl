@@ -1,4 +1,4 @@
--module(caterpillar).
+-module(caterpillar_builder).
 -include_lib("caterpillar.hrl").
 -include_lib("caterpillar_internal.hrl").
 -behaviour(gen_server).
@@ -33,7 +33,7 @@ start_link(Settings) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, Settings, []).
 
 init(Settings) ->
-    error_logger:info_msg("starting caterpillar~n", []),
+    error_logger:info_msg("starting caterpillar_builder~n", []),
     {ok, Deps} = dets:open_file(deps,
         [{file, ?GV(deps, Settings, ?DEFAULT_DEPENDENCIES_DETS)}]),
     PollTime = ?GV(poll_time, Settings, 10000),
@@ -46,7 +46,7 @@ init(Settings) ->
     BuildPath = ?GV(build_path, Settings, ?DEFAULT_BUILD_PATH),
     WorkIdFile = ?GV(work_id, Settings, ?DEFAULT_WORK_ID_FILE),
     WorkId = get_work_id(WorkIdFile),
-    caterpillar_event:register_worker(caterpillar, WorkId),
+    caterpillar_event:register_worker(caterpillar_builder, WorkId),
     Ident = ?GV(ident, Settings, "unknown"),
     schedule_poller(PollTime),
     {ok, #state{
@@ -219,7 +219,7 @@ prepare(BuildPath, Archive, WorkId) ->
     file:delete(TempArch),
     PkgRecord = ?CPU:get_pkg_config(Archive, Cwd),
     RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId),
-    gen_server:call(caterpillar, {newref, RevDef}, infinity).
+    gen_server:call(caterpillar_builder, {newref, RevDef}, infinity).
 
 
 can_prepare(Archive, State) ->
