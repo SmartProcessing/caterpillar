@@ -13,6 +13,7 @@
 -define(UNPACK_RETRY_LIMIT, 15).
 
 -record(state, {
+        master_state=false,
         deps,
         main_queue,
         wait_queue,
@@ -34,7 +35,6 @@ start_link(Settings) ->
 
 init(Settings) ->
     error_logger:info_msg("starting caterpillar_builder~n", []),
-    global:sync(),
     {ok, Deps} = dets:open_file(deps,
         [{file, ?GV(deps, Settings, ?DEFAULT_DEPENDENCIES_DETS)}]),
     PollTime = ?GV(poll_time, Settings, 10000),
@@ -47,7 +47,6 @@ init(Settings) ->
     BuildPath = ?GV(build_path, Settings, ?DEFAULT_BUILD_PATH),
     WorkIdFile = ?GV(work_id, Settings, ?DEFAULT_WORK_ID_FILE),
     WorkId = get_work_id(WorkIdFile),
-    caterpillar_event:register_worker(caterpillar_builder, WorkId),
     Ident = ?GV(ident, Settings, "unknown"),
     schedule_poller(PollTime),
     {ok, #state{
@@ -158,7 +157,15 @@ handle_info({'DOWN', Reference, _, _, Reason}, State) ->
     end,
     ets:delete(State#state.unpack_state, Reference),
     {noreply, State#state{queued=Preparing}};
-handle_info(schedule, State) ->
+handle_info(schedule, State#state{master_state=false}) ->
+    case catch caterpillar_event:register_worker(caterpillar_builder, State#state.work_id) of
+        {ok, _} ->
+            {noreply, State#state{master_state=true}};
+        Other ->
+            error_logger:error_msg("couldn't register self: ~p~n", [Other])
+            {noreply, State};
+    end;
+handle_info(schedule, State#state{master_state=true}) ->
     {ok, ScheduledState} = schedule_build(State),
     case State#state.prebuild of
         [{Archive, WorkId}|Rest] ->
