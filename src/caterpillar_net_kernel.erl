@@ -52,6 +52,7 @@ init(Args) ->
     ScanNodes = proplists:get_value(scan_nodes, Args, []),
     State = #state{scan_nodes=ScanNodes, down_nodes=ScanNodes},
     scan_nodes(1000, State),
+    net_kernel:monitor_nodes(true),
     {ok, State}.
 
 
@@ -62,23 +63,33 @@ handle_call(_, _, State) ->
     {reply, bad_msg, State}.
 
 
-handle_info(scan_nodes, #state{down_nodes=DownNodes, up_nodes=UpNodes}=State) ->
-    FoldFun = fun(Node, {Up, Down}) ->
+handle_info({nodeup, Node}, #state{up_nodes=UpNodes, down_nodes=DownNodes}=State) ->
+    global:sync(),
+    NewDown = lists:delete(Node, DownNodes),
+    NewUp = [Node|UpNodes],
+    {noreply, State#state{down_nodes=NewDown, up_nodes=NewUp}};
+handle_info({nodedown, Node}, #state{down_nodes=DownNodes, up_nodes=UpNodes}=State) ->
+    global:sync(),
+    NewState = case lists:member(Node, UpNodes) of
+        true ->
+            error_logger:info_msg("node ~p down, adding to down_nodes list~n", [Node]),
+            State#state{down_nodes=[Node|DownNodes], up_nodes=lists:delete(Node, UpNodes)};
+        false ->
+            State
+    end,
+    {noreply, NewState};
+handle_info(scan_nodes, #state{down_nodes=DownNodes}=State) ->
+    Foreach = fun(Node) ->
         catch case net_adm:ping(Node) of
-            pong -> 
-                error_logger:info_msg("Node ~p up~n", [Node]),
-                {[Node|Up], Down};
-            pang ->
-                error_logger:info_msg("Node ~p still down", [Node]),
-                {Up, [Node|Down]};
+            pong ->  error_logger:info_msg("Node ~p up~n", [Node]);
+            pang -> error_logger:info_msg("Node ~p still down", [Node]);
             Other ->
                 error_logger:error_msg("ping error: ~p~n", [Other]), 
-                error_logger:error_msg("Bad node ~p, excluding~n", [Node]),
-                {Up, Down}
+                error_logger:error_msg("Bad node ~p, excluding~n", [Node])
         end
     end,
-    {Up, Down} = lists:foldl(FoldFun, {UpNodes, []}, DownNodes),
-    {noreply, scan_nodes(State#state{down_nodes=Down, up_nodes=Up})};
+    lists:foreach(Foreach, DownNodes),
+    {noreply, scan_nodes(State)};
 
 handle_info(_, State) ->
     {noreply, State}.
