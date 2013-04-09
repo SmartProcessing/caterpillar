@@ -14,7 +14,9 @@ init(Settings) ->
     init_logging(proplists:get_value(logs, Settings, [])),
     NetKernel = init_net_kernel(proplists:get_value(net_kernel, Settings, [])),
     Services = init_services(proplists:get_value(services, Settings, [])),
-    {ok, {{one_for_one, 4, 3600}, [NetKernel|Services]}}.
+    Spec = {ok, {{one_for_one, 4, 3600}, [NetKernel|Services]}},
+    error_logger:info_msg("initializing childs: ~p~n", Spec),
+    Spec.
 
 
 init_logging(Settings) ->

@@ -33,7 +33,7 @@ start_link(Settings) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, Settings, []).
 
 init(Settings) ->
-    error_logger:info_msg("starting caterpillar", []),
+    error_logger:info_msg("starting caterpillar~n", []),
     {ok, Deps} = dets:open_file(deps,
         [{file, ?GV(deps, Settings, ?DEFAULT_DEPENDENCIES_DETS)}]),
     PollTime = ?GV(poll_time, Settings, 10000),
