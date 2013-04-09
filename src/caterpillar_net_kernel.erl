@@ -72,7 +72,8 @@ handle_info(scan_nodes, #state{down_nodes=DownNodes, up_nodes=UpNodes}=State) ->
                 error_logger:info_msg("Node ~p still down", [Node]),
                 {Up, [Node|Down]};
             Other ->
-                error_logger:error_msg("Bad node ~p, excluding f~n", [Node]),
+                error_logger:error_msg("ping error: ~p~n", [Other]), 
+                error_logger:error_msg("Bad node ~p, excluding~n", [Node]),
                 {Up, Down}
         end
     end,
