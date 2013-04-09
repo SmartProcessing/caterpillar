@@ -165,6 +165,7 @@ handle_info(schedule, State) when State#state.master_state == false ->
             {noreply, State#state{master_state=true}};
         Other ->
             error_logger:error_msg("couldn't register self: ~p~n", [Other]),
+            schedule_poller(State#state.poll_time),
             {noreply, State}
     end;
 handle_info(schedule, State) when State#state.master_state == true ->
