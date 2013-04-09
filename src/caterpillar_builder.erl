@@ -26,6 +26,7 @@
         prebuild=[],
         queued=[],
         work_id,
+        wid,
         ident
     }).
 
@@ -60,6 +61,7 @@ init(Settings) ->
             queue_missing=QueueMissing,
             poll_time=PollTime,
             work_id=WorkIdFile,
+            wid = WorkId,
             ident=Ident
         }
     }.
@@ -158,7 +160,7 @@ handle_info({'DOWN', Reference, _, _, Reason}, State) ->
     ets:delete(State#state.unpack_state, Reference),
     {noreply, State#state{queued=Preparing}};
 handle_info(schedule, State) when State#state.master_state == false ->
-    case catch caterpillar_event:register_worker(caterpillar_builder, State#state.work_id) of
+    case catch caterpillar_event:register_worker(caterpillar_builder, State#state.wid) of
         {ok, _} ->
             {noreply, State#state{master_state=true}};
         Other ->
