@@ -157,15 +157,15 @@ handle_info({'DOWN', Reference, _, _, Reason}, State) ->
     end,
     ets:delete(State#state.unpack_state, Reference),
     {noreply, State#state{queued=Preparing}};
-handle_info(schedule, State#state{master_state=false}) ->
+handle_info(schedule, State) when State#state.master_state == false ->
     case catch caterpillar_event:register_worker(caterpillar_builder, State#state.work_id) of
         {ok, _} ->
             {noreply, State#state{master_state=true}};
         Other ->
-            error_logger:error_msg("couldn't register self: ~p~n", [Other])
-            {noreply, State};
+            error_logger:error_msg("couldn't register self: ~p~n", [Other]),
+            {noreply, State}
     end;
-handle_info(schedule, State#state{master_state=true}) ->
+handle_info(schedule, State) when State#state.master_state == true ->
     {ok, ScheduledState} = schedule_build(State),
     case State#state.prebuild of
         [{Archive, WorkId}|Rest] ->
