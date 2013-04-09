@@ -77,6 +77,8 @@ package: clean compile
 	mkdir -p $(DEB_DIR)/$(SBIN_DIR)
 	mkdir -p $(DEB_DIR)/$(PRIV_PATH)
 	cp caterpillar.config $(DEB_DIR)/$(ETC_PATH)/
+	cp priv/update_repo.sh $(DEB_DIR)/$(ETC_PATH)/
+	chmod +x $(DEB_DIR)/$(ETC_PATH)/update_repo.sh
 	cp caterpillar_shell $(DEB_DIR)/$(SBIN_DIR)/caterpillar
 	cp caterpillar.escript $(DEB_DIR)/$(SBIN_DIR)	
 	chmod +x $(DEB_DIR)/$(SBIN_DIR)/*
