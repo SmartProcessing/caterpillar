@@ -40,7 +40,7 @@ init(Settings) ->
     BuildQueue = queue:new(),
     WaitQueue = queue:new(),
     QueueMissing = ?GV(queue_missing, Settings, false),
-    {ok, WorkerList} = create_workers(?GV(build_workers_number, Settings, 5)),
+    {ok, WorkerList} = create_workers({?GV(build_workers_number, Settings, 5), Settings}),
     error_logger:info_msg("workers initialized"),
     UnpackState = ets:new(unpack_state, []),
     BuildPath = ?GV(build_path, Settings, ?DEFAULT_BUILD_PATH),
@@ -263,11 +263,11 @@ job_free_worker([{Pid, none}|Other], ToBuild, OldW) ->
 job_free_worker([{Pid, SomeRef}|Other], ToBuild, OldW) ->
     job_free_worker(Other, ToBuild, [{Pid, SomeRef}|OldW]).
     
--spec create_workers(WorkerNumber :: non_neg_integer()) -> 
+-spec create_workers({WorkerNumber :: non_neg_integer(), Settings :: term()}) -> 
     {ok, [{Pid :: pid(), none}]}.
-create_workers(WorkerNumber) ->
+create_workers({WorkerNumber, Settings}) ->
     error_logger:info_msg("starting ~B build workers, worker supervisor and lock storage: ~p ~n", 
-        [WorkerNumber, caterpillar_build_worker_sup:start_link()]),
+        [WorkerNumber, caterpillar_build_worker_sup:start_link(Settings)]),
     caterpillar_lock_sup:start_link(),
     create_workers(WorkerNumber, []).
 create_workers(0, Acc) ->
