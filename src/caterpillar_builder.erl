@@ -34,6 +34,7 @@ start_link(Settings) ->
 
 init(Settings) ->
     error_logger:info_msg("starting caterpillar_builder~n", []),
+    global:sync(),
     {ok, Deps} = dets:open_file(deps,
         [{file, ?GV(deps, Settings, ?DEFAULT_DEPENDENCIES_DETS)}]),
     PollTime = ?GV(poll_time, Settings, 10000),
