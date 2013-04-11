@@ -1,0 +1,3 @@
+*.pyc
+*.beam
+*egg-info
