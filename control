@@ -1,6 +1,6 @@
 Package: caterpillar
 Section: smprc
-Description: "package building tools"
+Description: "Caterpillar - package building tools"
 Architecture: all
 Version: 1.4.3
 Maintainer: vavdiushkin@smprc.ru
