@@ -23,6 +23,7 @@ if [ "$1" = configure ]; then
     chown caterpillar:caterpillar /srv/git
     chown -R caterpillar:caterpillar /var/lib/caterpillar
     chown -R caterpillar:caterpillar /var/log/caterpillar
+    chown -R caterpillar:caterpillar /etc/caterpillar
     chmod -R 755 /var/log/caterpillar
 
     update-rc.d caterpillar defaults >/dev/null || exit $?
