@@ -3,12 +3,21 @@
 -export([check/2, prepare/2, submit/2]).
 
 -define(CMD, caterpillar_utils:command).
+-include("caterpillar_internal.hrl").
 
 check(_Rev, _Dir) ->
     {ok, ""}.
 
 prepare(Rev, Dir) ->
-    file:write_file(filename:join(Dir, "control"), caterpillar_pkg_utils:gen_control_from_pkg_config(Rev), [exclusive]),
+    ControlFile = filename:join(Dir, "control"),
+    case filelib:is_regular(ControlFile) of
+        true ->
+            Branch = binary_to_list(Rev#rev_def.branch),
+            WorkId = Rev#rev_def.work_id,
+            catch caterpillar_simple_builder:modify_control(ControlFile, Branch, WorkId, "all");
+        _ ->
+            file:write_file(filename:join(Dir, "control"), caterpillar_pkg_utils:gen_control_from_pkg_config(Rev), [exclusive])
+    end,
     {ok, ""}.
 
 submit(_Rev, Dir) ->
