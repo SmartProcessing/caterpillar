@@ -5,7 +5,7 @@
 
 -define(GVOD, caterpillar_utils:get_value_or_die).
 
--export([init_worker/2, changes/3, get_work_id/1, terminate_worker/1]).
+-export([init_worker/2, changes/3, get_work_id/1, terminate_worker/1, modify_control/4]).
 
 
 init_worker(Ident, Args) when is_atom(Ident) ->
