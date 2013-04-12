@@ -98,7 +98,8 @@ handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
             binary_to_list(RevDef#rev_def.branch),
             binary_to_list(RevDef#rev_def.tag)
         ]),
-    notify(Subj, "ok"),
+    Message = io_lib:format("built package: ~s", [BuildInfo#build_info.pkg_name]),
+    notify(Subj, Message),
     NewWorkers = release_worker(Worker, State#state.workers),
     {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
     {ok, NewState} = try_build(ScheduledState),
