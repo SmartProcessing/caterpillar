@@ -355,11 +355,11 @@ register_scan_pipe(PrevRes, _State) ->
     end.
 
 
-get_packages(_, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSState}) ->
-    case caterpillar_utils:list_packages(RR) of
+get_packages(_, #state{repository_root=RepositoryRoot, vcs_plugin=VCSPlugin, vcs_state=VCSState}) ->
+    case caterpillar_utils:list_packages(RepositoryRoot) of
         {ok, Packages} ->
             FoldFun = fun(Package, Accum) ->
-                AbsPackage = caterpillar_utils:filename_join(RR, Package),
+                AbsPackage = caterpillar_utils:filename_join(RepositoryRoot, Package),
                 case VCSPlugin:is_repository(VCSState, AbsPackage) of
                     true -> [#package{name=Package} | Accum];
                     false ->
@@ -382,8 +382,8 @@ get_branches(Packages, State) ->
 get_branches([], Branches, _State) ->
     {ok, lists:sort(Branches)};
 
-get_branches([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSState}=State) ->
-    AbsPackage = caterpillar_utils:filename_join(RR, Package#package.name),
+get_branches([Package|O], Accum, #state{repository_root=RepositoryRoot, vcs_plugin=VCSPlugin, vcs_state=VCSState}=State) ->
+    AbsPackage = caterpillar_utils:filename_join(RepositoryRoot, Package#package.name),
     NewAccum = case VCSPlugin:get_branches(VCSState, AbsPackage) of
         {ok, []} -> 
             error_logger:info_msg("no branches in ~p~n", [Package]),
@@ -443,20 +443,11 @@ find_modified_packages([], Acc, _State) ->
     {ok, lists:reverse(Acc)};
 
 find_modified_packages([Package|O], Accum, State) ->
-    VCSPlugin = State#state.vcs_plugin,
-    VCSState = State#state.vcs_state,
-    RR = State#state.repository_root,
-    PackageBranch = Package#package.branch,
-    PackageName = Package#package.name,
-    AbsPackage = caterpillar_utils:filename_join(RR, PackageName),
-    DetsResult = dets:select(
-        State#state.dets,
-        [{{
-            {'$1', '$2'}, '_', '$3', '_', '_'},
-            [{'==', '$1', PackageName},
-            {'==', '$2', PackageBranch}], ['$3']
-        }]
-    ),
+    #state{vcs_plugin=VCSPlugin, vcs_state=VCSState, repository_root=RepositoryRoot}=State,
+    #package{name=PackageName, branch=PackageBranch} = Package,
+    AbsPackage = caterpillar_utils:filename_join(RepositoryRoot, PackageName),
+    SelectPattern = [{{{'$1', '$2'}, '_', '$3', '_', '_'}, [{'==', '$1', PackageName}, {'==', '$2', PackageBranch}], ['$3']}],
+    DetsResult = dets:select(State#state.dets, SelectPattern),
     DetsRevno = case DetsResult of
         [] -> none;
         [R] -> R
@@ -519,15 +510,13 @@ get_diff([], Accum, _State) ->
 get_diff([#package{status=error}=Package|O], Accum, State) ->
     get_diff(O, [Package|Accum], State);
 
-get_diff([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSState}=State) ->
-    Name = Package#package.name,
-    Branch = Package#package.branch,
-    CurrentRevno = Package#package.current_revno,
-    OldRevno = Package#package.old_revno,
-    Diff = case catch VCSPlugin:get_diff(VCSState, caterpillar_utils:filename_join(RR, Name), Branch, OldRevno, CurrentRevno) of
+get_diff([Package|O], Accum, #state{repository_root=RepositoryRoot, vcs_plugin=VCSPlugin, vcs_state=VCSState}=State) ->
+    #package{name=PackageName, branch=PackageBranch, current_revno=CurrentRevno, old_revno=OldRevno} = Package,
+    AbsName = caterpillar_utils:filename_join(RepositoryRoot, PackageName),
+    Diff = case catch VCSPlugin:get_diff(VCSState, AbsName, PackageBranch, OldRevno, CurrentRevno) of
         {ok, D} when is_binary(D) -> D;
         Error ->
-            error_logger:error_msg("get_diff error: ~p~n at ~s/~s~n", [Error, Name, Branch]),
+            error_logger:error_msg("get_diff error: ~p~n at ~p/~p~n", [Error, PackageName, PackageBranch]),
             <<"cant get diff">>
     end,
     get_diff(O, [Package#package{diff=Diff}|Accum], State).
@@ -545,16 +534,13 @@ get_changelog([#package{status=error}=Package|O], Accum, State) ->
     get_changelog(O, [Package|Accum], State);
 
 
-get_changelog([Package|O], Accum, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSState}=State) ->
-    Name = Package#package.name,
-    Branch = Package#package.branch,
-    CurrentRevno = Package#package.current_revno,
-    OldRevno = Package#package.old_revno,
-    AbsPath = caterpillar_utils:filename_join(RR, Name),
-    Changelog = case catch VCSPlugin:get_changelog(VCSState, AbsPath, Branch, OldRevno, CurrentRevno) of
+get_changelog([Package|O], Accum, #state{repository_root=RepositoryRoot, vcs_plugin=VCSPlugin, vcs_state=VCSState}=State) ->
+    #package{name=PackageName, branch=PackageBranch, current_revno=CurrentRevno, old_revno=OldRevno}=Package,
+    AbsPath = caterpillar_utils:filename_join(RepositoryRoot, PackageName),
+    Changelog = case catch VCSPlugin:get_changelog(VCSState, AbsPath, PackageBranch, OldRevno, CurrentRevno) of
         {ok, C} when is_binary(C) -> C;
         Error ->
-            error_logger:error_msg("get_changelog bad return: ~p~n at ~s/~s~n", [Error, Name, Branch]),
+            error_logger:error_msg("get_changelog bad return: ~p~n at ~p/~p~n", [Error, PackageName, PackageBranch]),
             <<"cant get changelog">>
     end,
     get_changelog(O, [Package#package{changelog=Changelog}|Accum], State).
