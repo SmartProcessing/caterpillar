@@ -808,13 +808,12 @@ limit_output_test_() ->
 clean_packages_test_() ->
 {foreachx,
     fun(Packages) ->
-        ER = "__test_export",
         ArchiveRoot = "__test_archive",
-        [caterpillar_utils:ensure_dir(Dir) || Dir <- [ER, ArchiveRoot]],
+        [caterpillar_utils:ensure_dir(Dir) || Dir <- [ArchiveRoot]],
         {ok, D} = dets:open_file("test.dets", [{access, read_write}]),
         [
             begin
-                caterpillar_utils:ensure_dir(filename:join([ER, Name, Branch])),
+                caterpillar_utils:ensure_dir(filename:join([Name, Branch])),
                 Archive = filename:join(ArchiveRoot, caterpillar_utils:package_to_archive(Name, Branch)),
                 filelib:ensure_dir(Archive),
                 file:write_file(Archive, <<"h">>),
