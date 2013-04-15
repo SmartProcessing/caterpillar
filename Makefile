@@ -38,9 +38,9 @@ clean:
 compile:
 	@echo $(PWD)
 ifeq ($(PATH_MK), ../../devel-tools/Makefile.mk)
-	$(REBAR) compile
+	ERL_LIBS="" $(REBAR) compile
 else
-	$(REBAR) -C new.rebar.config compile
+	ERL_LIBS="" $(REBAR) -C new.rebar.config compile
 endif
 
 
