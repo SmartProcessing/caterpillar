@@ -20,6 +20,7 @@
     ets :: ets:tab(),
     dets :: dets:tab(),
     archive_root :: filelib:dirname(),
+    export_root :: filelib:dirname(),
     repository_root :: filelib:dirname(),
     notify_root :: filelib:dirname(),
     vcs_plugin :: atom(),
@@ -29,7 +30,6 @@
     register_service_timer :: reference(),
     scan_interval = ?SCAN_INTERVAL :: non_neg_integer()
 }).
-
 
 -record(package, {
     name :: string(),
@@ -41,7 +41,6 @@
     old_revno = none :: term(),
     current_revno :: term(),
     archive_name :: string(),
-    archive_type :: term(),
     diff = <<>> :: binary(),
     changelog = <<>> :: binary()
 }).

@@ -17,5 +17,5 @@
                         caterpillar_repository_plugin,
                         caterpillar_rotating_log_handler,
                         caterpillar_simple_builder,caterpillar_sup,
-                        caterpillar_utils,caterpillar_worker,
+                        caterpillar_tar,caterpillar_utils,caterpillar_worker,
                         caterpillar_worker_plugin]}]}.

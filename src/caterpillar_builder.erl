@@ -36,9 +36,8 @@ start_link(Settings) ->
 
 init(Settings) ->
     error_logger:info_msg("starting caterpillar_builder~n", []),
-    DetsFile = ?GV(deps, Settings, ?DEFAULT_DEPENDENCIES_DETS),
-    filelib:ensure_dir(DetsFile),
-    {ok, Deps} = dets:open_file(deps, [{file, DetsFile}]),
+    {ok, Deps} = dets:open_file(deps,
+        [{file, ?GV(deps, Settings, ?DEFAULT_DEPENDENCIES_DETS)}]),
     PollTime = ?GV(poll_time, Settings, 10000),
     BuildQueue = queue:new(),
     WaitQueue = queue:new(),
@@ -99,7 +98,8 @@ handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
             binary_to_list(RevDef#rev_def.branch),
             binary_to_list(RevDef#rev_def.tag)
         ]),
-    notify(Subj, "ok"),
+    Message = io_lib:format("built package: ~s", [BuildInfo#build_info.pkg_name]),
+    notify(Subj, Message),
     NewWorkers = release_worker(Worker, State#state.workers),
     {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
     {ok, NewState} = try_build(ScheduledState),
