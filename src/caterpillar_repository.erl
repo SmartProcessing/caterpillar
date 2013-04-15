@@ -33,15 +33,15 @@ init(Args) ->
         #state{
             work_id = caterpillar_utils:read_work_id(WorkIdFile),
             work_id_file = WorkIdFile,
-            dets = Dets, %{{Package, Branch}, ArchiveName, LastRevision, Tag, WorkId}
+            dets = Dets, %{{Package, Branch}, ArchiveName, ArchiveType, LastRevision, Tag, WorkId}
             repository_root = caterpillar_utils:ensure_dir(?GV(repository_root, Args, ?REPOSITORY_ROOT)),
-            export_root = caterpillar_utils:ensure_dir(?GV(export_root, Args, ?EXPORT_ROOT)),
             archive_root = caterpillar_utils:ensure_dir(?GV(archive_root, Args, ?ARCHIVE_ROOT)),
             notify_root = caterpillar_utils:ensure_dir(?GV(notify_root, Args, ?NOTIFY_ROOT)),
             scan_interval = ?GV(scan_interval, Args, ?SCAN_INTERVAL) * 1000,
             registered = false,
             register_service_timer = register_service(0),
-            scan_timer = scan_repository(0)
+            scan_timer = scan_repository(0),
+            vcs_plugin = ?GV(vcs_plugin, Args)
         },
         Args
     ),
@@ -51,9 +51,7 @@ init(Args) ->
 
 %async event for whole repository scan, checking every package and branch
 handle_info(scan_repository, State) ->
-    spawn(fun() ->
-        scan_pipe(State)
-    end),
+    spawn(fun() -> scan_pipe(State) end),
     {noreply, scan_repository(State)};
 
 %async event for pushing saved notifications
@@ -77,8 +75,7 @@ handle_info(_Msg, State) ->
     {noreply, State}.
 
 
-
-%cleaning removed packages, event generatied in scan_repository
+%cleaning removed packages, event generated while scan repository(scan_repository)
 handle_cast({clean_packages, Notify, PackageName}, State) ->
     clean_packages(State, PackageName),
     spawn(fun() ->
@@ -93,15 +90,13 @@ handle_cast(_Msg, State) ->
 
 
 handle_call({repository_custom_command, Command, Args}, From, #state{vcs_plugin=VCP}=State) ->
-    spawn(
-        fun() -> 
-            Response = (catch begin
-                NewArgs = [State] ++ Args,
-                apply(VCP, Command, NewArgs)
-            end),
-            gen_server:reply(From, Response)
-        end
-    ),
+    spawn(fun() -> 
+        Response = (catch begin
+            NewArgs = [State] ++ Args,
+            apply(VCP, Command, NewArgs)
+        end),
+        gen_server:reply(From, Response)
+    end),
     {noreply, State};
 
 handle_call(rescan_repository, _From, State) ->
@@ -109,30 +104,26 @@ handle_call(rescan_repository, _From, State) ->
     {reply, ok, State};
 
 handle_call({rescan_package, Request}, _From, State) ->
-    Pid = spawn(fun() ->
-        scan_pipe(Request, State)
-    end),
+    Pid = spawn(fun() -> scan_pipe(Request, State) end),
     {reply, {ok, Pid}, State};
 
 handle_call({rebuild_package, {Package, Branch}}, _From, State) ->
-    Pid = spawn(fun() ->
-        rebuild_package(Package, Branch, State)
-    end),
+    Pid = spawn(fun() -> rebuild_package(Package, Branch, State) end),
     {reply, {ok, Pid}, State};
 
 %copying archive to remote fd
 handle_call({get_archive, #archive{name=Name, branch=Branch, fd=Fd}}, From, State) ->
     spawn(fun() ->
-        AR = State#state.archive_root,
+        ArchiveRoot = State#state.archive_root,
         Dets = State#state.dets,
         SelectPattern = [{
-            {{'$1', '$2'}, '$3', '_', '_', '_'},
+            {{'$1', '$2'}, '$3', '_', '_', '_', '_'},
             [{'andalso', {'==', '$1', Name}, {'==', '$2', Branch}}],
             ['$3']
         }],
         Reply = case catch dets:select(Dets, SelectPattern) of
-            [AName] ->
-                file:copy(caterpillar_utils:filename_join(AR, AName), Fd);
+            [ArchiveName] ->
+                file:copy(caterpillar_utils:filename_join(ArchiveRoot, ArchiveName), Fd);
             BadReturn ->
                 error_logger:info_msg(
                     "get_archive cant select archive for package ~p/~p with: ~p~n",
@@ -157,19 +148,22 @@ handle_call({get_archives, WorkId}, From, State) ->
 
 %getting all packages in local storage 
 handle_call(get_packages, _From, #state{dets=D}=State) ->
-    Packages = dets:select(D, [{{'$1', '_', '_', '_', '_'}, [], ['$1']}]),
+    Packages = dets:select(D, [{{'$1', '_', '_', '_', '_', '_'}, [], ['$1']}]),
     {reply, Packages, State};
 
 %event for pushing new archives and notify, generated in scan_repository
-handle_call({changes, Changes}, _From, #state{dets=D}=State) ->
-    NewWorkId = State#state.work_id + 1,
-    WorkIdFile = State#state.work_id_file,
-    Notify = Changes#changes.notify,
+handle_call({changes, Changes}, _From, State) ->
+    #state{work_id=WorkId, work_id_file=WorkIdFile, dets=Dets}=State,
+    #changes{notify=Notify, packages=Packages, archives=Archives}=Changes,
     Packages = Changes#changes.packages,
-    [
-        dets:insert(D, {{Name, Branch}, Archive, Revno, Tag, NewWorkId}) ||
-        #package{name=Name, branch=Branch, archive_name=Archive, current_revno=Revno, tag=Tag} <- Packages
-    ],
+    NewWorkId = WorkId + 1,
+    InsertForeach = fun
+        (#package{name=Name, branch=Branch, archive_name=Archive, current_revno=Revno, tag=Tag}) ->
+            dets:insert(Dets, {{Name, Branch}, Archive, Revno, Tag, NewWorkId});
+        (BadPackage) ->
+            error_logger:error_mad("bad package at changes: ~p", [BadPackage])
+    end,
+    lists:foreach(InsertForeach, Packages),
     caterpillar_utils:write_work_id(WorkIdFile, NewWorkId),
     NewState = State#state{work_id=NewWorkId},
     spawn(fun() ->
@@ -178,14 +172,8 @@ handle_call({changes, Changes}, _From, #state{dets=D}=State) ->
             [] -> ok;
             _ -> caterpillar_event:event({changes, NewWorkId, Archives})
         end,
-        notify(
-            NewState,
-            Notify#notify{
-                subject= list_to_binary(
-                    io_lib:format("changes for build ~p", [NewWorkId])
-                )
-            }
-        )
+        NotifySubject = list_to_binary(io_lib:format("changes for build ~p", [NewWorkId])),
+        notify(NewState, Notify#notify{subject=NotifySubject})
     end),
     {reply, ok, NewState};
 
@@ -228,27 +216,16 @@ register_service(Delay) ->
 
 
 -spec vcs_init(State::#state{}, Args::proplists:property()) -> NewState::#state{}.
-
-vcs_init(State, Args) ->
-    case catch vcs_init_(State, Args) of
-        #state{}=NewState -> NewState;
-        Error ->
-            error_logger:error_msg("vcs_init failed with: ~p~n", [Error]),
-            exit({vcs_init, failed})
-    end.
-
-
-vcs_init_(State, Args) ->
-    VcsPlugin = ?GV(vcs_plugin, Args),
-    case VcsPlugin:init_plugin(?GV(vcs_plugin_init, Args, [])) of
-        {ok, VcsState} ->
-            State#state{vcs_plugin=VcsPlugin, vcs_state=VcsState};
-        Error -> Error
+vcs_init(#state{vcs_plugin=VcsPlugin}=State, Args) ->
+    catch begin
+        case catch VcsPlugin:init_plugin(?GV(vcs_plugin_init, Args, [])) of
+            {ok, VcsState} -> State#state{vcs_plugin=VcsPlugin, vcs_state=VcsState};
+            Error -> {error, {vcs_init, Error}}
+        end
     end.
 
 
 -spec scan_repository(#state{}|non_neg_integer()) -> #state{}|reference().
-
 scan_repository(#state{scan_interval=SI, scan_timer=ST}=State) ->
     catch erlang:cancel_timer(ST),
     State#state{scan_timer=scan_repository(SI)};
@@ -256,35 +233,29 @@ scan_repository(Delay) when is_integer(Delay), Delay >= 0 ->
     erlang:send_after(Delay, self(), scan_repository).
 
 
-clean_packages(_State, []) ->
-    ok;
-clean_packages(#state{dets=D, export_root=ER, archive_root=AR}=State, [{Name, Branch}|O]) ->
-    AbsEr = caterpillar_utils:filename_join(ER, Name),
-    file:delete(caterpillar_utils:filename_join(AR, caterpillar_utils:package_to_archive(Name, Branch))),
-    dets:delete(D, {Name, Branch}),
-    caterpillar_utils:del_dir(caterpillar_utils:filename_join(AbsEr, Branch)),
-    case catch caterpillar_utils:list_packages(AbsEr) of
-        {ok, []} -> caterpillar_utils:del_dir(AbsEr);
-        _ -> ok
-    end,
+
+
+-spec clean_packages(#state{}, [{ArchiveName::term(), Branch::term()}]) -> ok.
+clean_packages(_State, []) -> ok;
+clean_packages(#state{dets=Dets, archive_root=ArchiveRoot}=State, [{Name, Branch}|O]) ->
+    file:delete(caterpillar_utils:filename_join(ArchiveRoot, caterpillar_utils:package_to_archive(Name, Branch))),
+    dets:delete(Dets, {Name, Branch}),
     clean_packages(State, O).
 
 
-%{{Package, Branch}, ArchiveName, LastRevision, Tag, WorkId}
+
+-spec select_archives_by_work_id(#state{}, WorkId::pos_integer()) -> [#archive{}].
 select_archives_by_work_id(#state{dets=Dets}, WorkId) ->
-    case dets:select(Dets, [{{'$1', '$2', '_', '$3', '$4'}, [{'<', WorkId, '$4'}], [['$1', '$2', '$3']]}]) of
-        List when is_list(List), List /= [] -> 
-            [
-                #archive{name=Name, branch=Branch, archive_name=ArchiveName, tag=Tag} ||
-                [{Name, Branch}, ArchiveName, Tag] <- List
-            ];
-        _ -> []
-    end.
+    ArchiveList = dets:select(Dets, [{{'$1', '$2', '$3', '_', '$4', '$5'}, [{'<', WorkId, '$5'}], [['$1', '$2', '$3', '$4']]}]),
+    MapFun = fun([{Name, Branch}, ArchiveName, ArchiveType, Tag]) ->
+        #archive{name=Name, branch=Branch, archive_name=ArchiveName, archive_type=ArchiveType, tag=Tag}
+    end,
+    lists:map(MapFun, ArchiveList).
 
 
 
-async_notify() ->
-    erlang:send_after(5000, self(), async_notify).
+-spec async_notify() -> Timer::reference().
+async_notify() -> erlang:send_after(5000, self(), async_notify).
 
 
 %---------------
@@ -337,6 +308,7 @@ notify(#state{notify_root=NR}, #notify{}=Notify) ->
 %-----------
 
 
+-spec scan_pipe(#state{}) -> no_return().
 scan_pipe(State) ->
     scan_pipe([], State).
 
@@ -357,8 +329,7 @@ scan_pipe(Packages, State) ->
     ],
     CommonFunList = [
         {find_modified_packages, fun find_modified_packages/2},
-        {export_packages, fun export_packages/2},
-        {archive_packages, fun archive_packages/2},
+        {export_archives, fun export_archives/2},
         {get_diff, fun get_diff/2},
         {get_changelog, fun get_changelog/2},
         {get_tag, fun get_tag/2},
@@ -382,7 +353,6 @@ register_scan_pipe(PrevRes, _State) ->
             error_logger:error_msg("scan_pipe already in process~n"),
             {error, already_in_process}
     end.
-    
 
 
 get_packages(_, #state{repository_root=RR, vcs_plugin=VCSPlugin, vcs_state=VCSState}) ->
@@ -507,96 +477,36 @@ find_modified_packages([Package|O], Accum, State) ->
     find_modified_packages(O, NewAccum, State).
 
 
-export_packages(Packages, State) -> 
-    export_packages(Packages, [], State).
+export_archives(Packages, State) -> 
+    export_archives(Packages, [], State).
 
 
-export_packages([], [], _State) ->
-    {error, {export_packages, "nothing exported"}};
+export_archives([], [], _State) ->
+    {error, {export_archives, "nothing exported"}};
 
-export_packages([], Accum, _State) ->
+export_archives([], Accum, _State) ->
     {ok, lists:reverse(Accum)};
 
-export_packages([#package{status=error}=Package|O], Accum, State) ->
-    export_packages(O, [Package|Accum], State);
+export_archives([#package{status=error}=Package|O], Accum, State) ->
+    export_archives(O, [Package|Accum], State);
 
-export_packages([Package|O], Accum, #state{export_root=ER, repository_root=RR}=State) ->
-    VCSPlugin = State#state.vcs_plugin,
-    VCSState = State#state.vcs_state,
-    Name = Package#package.name,
-    Branch = Package#package.branch,
-    Revno = Package#package.current_revno,
-    AbsExport = caterpillar_utils:filename_join([ER, Name, Branch]),
-    AbsPackage = caterpillar_utils:filename_join(RR, Name),
-    caterpillar_utils:del_dir(AbsExport),
-    caterpillar_utils:ensure_dir(AbsExport),
-    NewAccum = case catch VCSPlugin:export(VCSState, AbsPackage, Branch, Revno, AbsExport) of
-        ok -> [Package|Accum];
+export_archives([Package|O], Accum, #state{archive_root=ArchiveRoot, repository_root=RepoRoot}=State) ->
+    #state{vcs_plugin=VCSPlugin, vcs_state=VCSState} = State,
+    #package{name=Name, branch=Branch, current_revno=Revno} = Package,
+    RepoPath = caterpillar_utils:filename_join([RepoRoot, Name]),
+    ArchiveName = caterpillar_utils:package_to_archive(Name, Branch),
+    ArchivePath = caterpillar_utils:filename_join([ArchiveRoot, ArchiveName]),
+    caterpillar_utils:ensure_dir(ArchiveRoot),
+    NewAccum = case catch VCSPlugin:export_archive(VCSState, RepoPath, Branch, Revno, ArchivePath) of
+        {ok, Type} -> [Package#package{archive_type=Type, archive_name=ArchiveName}|Accum];
         Error ->
             error_logger:error_msg(
-                "export_packages error ~p~n at ~s/~s~n", [Error, Name, Branch]
+                "export_archives error ~p~n at ~s/~s~n", [Error, Name, Branch]
             ),
-            [Package#package{status=error, failed_at=export_packages, reason=Error}|Accum]
+            [Package#package{status=error, failed_at=export_archives, reason=Error}|Accum]
     end,
-    export_packages(O, NewAccum, State).
+    export_archives(O, NewAccum, State).
 
-
-archive_packages(Packages, State) -> 
-    archive_packages(Packages, [], State).
-
-
-archive_packages([], [], _State) ->
-    {error, {archive_packages, "nothing archived"}};
-
-archive_packages([], Accum, _State) ->
-    {ok, lists:reverse(Accum)};
-
-archive_packages([#package{status=error}=Package|O], Accum, State) ->
-    archive_packages(O, [Package|Accum], State);
-
-archive_packages([Package|O], Accum, #state{export_root=ER, archive_root=AR}=State) ->
-    PackageName = Package#package.name,
-    PackageBranch = Package#package.branch,
-    ExportPath = caterpillar_utils:filename_join([ER, PackageName, PackageBranch]),
-    ArchiveName = caterpillar_utils:package_to_archive(PackageName, PackageBranch),
-    Archive = caterpillar_utils:filename_join(AR, ArchiveName),
-    Result = (catch begin
-        Tar = case caterpillar_tar:open(Archive, [write, compressed]) of
-            {ok, T} -> T;
-            ErrOpen ->
-                error_logger:error_msg(
-                    "archive_packages tar_open error: ~p~nstacktrace: ~p~n",
-                    [ErrOpen, erlang:get_stacktrace()]
-                ),
-                throw({tar_open, ErrOpen})
-        end,
-        ForeachAddFun = fun(File) -> 
-            AbsFile = caterpillar_utils:filename_join(ExportPath, File),
-            case caterpillar_tar:add(Tar, AbsFile, File, []) of
-                ok -> ok;
-                ErrAdd -> 
-                    error_logger:error_msg(
-                        "archive_packages tar_add error: ~p~nstacktrace:~p~n",
-                        [ErrAdd, erlang:get_stacktrace()]
-                    ),
-                    throw({tar_add, ErrAdd})
-            end
-        end,
-        {ok, Listing} = caterpillar_utils:list_packages(ExportPath),
-        lists:foreach(ForeachAddFun, Listing),
-        caterpillar_tar:close(Tar),
-        ok
-    end),
-    NewAccum = case Result of
-        ok -> [Package#package{archive_name=ArchiveName}|Accum];
-        Error ->
-            error_logger:error_msg(
-                "archive_packages error: ~p~n at ~p/~p~n",
-                [Error, PackageName, PackageBranch]
-            ),
-            [Package#package{status=error, failed_at=archive_packages, reason=Error}|Accum]
-    end,
-    archive_packages(O, NewAccum, State).
 
 
 get_diff(Packages, State) ->
@@ -674,10 +584,7 @@ get_tag([Package|O], Accum, #state{vcs_plugin=VcsP, vcs_state=VcsS}=State) ->
 
 
 build_changes(Packages, _State) ->
-    Notify = #notify{
-        subject = <<>>,
-        body = <<>>
-    },
+    Notify = #notify{subject = <<>>, body = <<>>},
     case catch build_changes(Packages, Notify, []) of
         {ok, {NewNotify, Archives}} ->
             NewPackages = [Package#package{diff= <<>>, changelog= <<>>} || Package <- Packages],
@@ -699,6 +606,7 @@ build_changes([Package|O], Notify, ArchiveAccum) ->
             Archive = #archive{
                 name=Name, branch=Branch,
                 archive_name=Package#package.archive_name,
+                archive_type=Package#package.archive_type,
                 tag=Package#package.tag
             },
             {DiffLength, Diff} = limit_output(Package#package.diff, 10240),

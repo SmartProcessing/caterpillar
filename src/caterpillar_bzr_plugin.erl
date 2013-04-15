@@ -7,7 +7,7 @@
 -export([get_diff/5, get_changelog/5, get_revno/3]).
 -export([is_repository/2, is_branch/3]).
 -export([get_branches/2]).
--export([export/5]).
+-export([export_archive/5]).
 -export([get_tag/4]).
 
 
@@ -75,7 +75,7 @@ is_branch(_State, Package, Branch) ->
     end.
 
 
-export(_State, Package, Branch, _Revno, ExportPath) ->
+export_archive(_State, Package, Branch, _Revno, ExportPath) ->
     %FIXME: Revno
     case call_server({export_branch, Package, Branch, ExportPath}) of
         {ok, _} -> ok;

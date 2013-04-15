@@ -3,29 +3,11 @@
 -behaviour(caterpillar_repository_plugin).
 
 -export([init_plugin/1, terminate_plugin/1]).
--export([export/5, get_branches/2]).
+-export([export_archive/5, get_branches/2]).
 -export([get_changelog/5, get_diff/5, get_revno/3, get_tag/4]).
 -export([is_branch/3, is_repository/2]).
 -export([custom_command/1]).
 -export([custom_command/2]).
-
-
--type vcs_state()::term().
--type package()::filelib:dirname().
--type branch()::string().
--type revno()::term().
-
--spec init_plugin(Args::term()) -> {ok, vcs_state()}.
--spec terminate_plugin(vcs_state()) -> no_return().
--spec export(vcs_state(), package(), branch(), revno(), filelib:dirname()) -> ok | {error, Reason::term()}.
--spec get_branches(vcs_state(), package()) -> {ok, [branch()]} | {error, Reason::term()}.
--spec get_revno(vcs_state(), package(), branch()) -> {ok, revno()} | {error, Reason::term()}.
--spec get_diff(vcs_state(), package(), branch(), Old::revno(), Current::revno()) ->
-    {ok, Diff::binary()} | {error, Reason::term()}.
--spec get_changelog(vcs_state(), package(), branch(), Old::revno(), Current::revno()) ->
-    {ok, Changelog::binary()} | {error, Reason::term()}.
--spec is_branch(vcs_state(), package(), branch()) -> boolean().
--spec is_repository(vcs_state(), package()) -> boolean().
 
 
 
@@ -35,8 +17,14 @@ init_plugin(_Args) -> {ok, state}.
 terminate_plugin(_State) -> ok.
 
 
-export(_State, _Package, "no_export", _Revision, _ExportPath) -> error;
-export(_State, _Package, _Branch, _Revision, ExportPath) -> caterpillar_utils:ensure_dir(ExportPath), ok.
+export_archive(_State, _Package, "no_export", _Revision, ArchivePath) -> {error, some_reason};
+export_archive(_State, Package, Branch, _Revision, ArchivePath) ->
+    AbsArchivePath = filename:absname(ArchivePath),
+    ArchiveDir = filename:absname(filename:join(Package, Branch)),
+    Cmd = lists:flatten(io_lib:format("cd ~s && tar -czf ~s *", [ArchiveDir, AbsArchivePath])),
+    %error_logger:info_msg("export_archive result: ~p~nCommand: ~s~n", [os:cmd(Cmd), Cmd]),
+    os:cmd(Cmd),
+    {ok, tgz}.
 
 
 get_branches(_State, "test_repo/sleep") -> timer:sleep(12000), {ok, []};
