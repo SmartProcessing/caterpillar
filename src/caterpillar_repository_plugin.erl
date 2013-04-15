@@ -2,6 +2,7 @@
 
 -export([behaviour_info/1]).
 -compile(nowarn_unused_vars).
+-compile(nowarn_unused_function).
 
 
 behaviour_info(callbacks) ->
