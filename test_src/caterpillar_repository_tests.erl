@@ -805,8 +805,7 @@ limit_output_test_() ->
 ]}.
 
 
-%FIXME:
-clean_packages_test_zzz() ->
+clean_packages_test_() ->
 {foreachx,
     fun(Packages) ->
         ER = "__test_export",
@@ -1186,8 +1185,7 @@ handle_call_get_packages_test_() ->
 ]}.
 
 
-%FIXME:
-handle_info_scan_repository_test_zzz() ->
+handle_info_scan_repository_test_() ->
 {foreachx,
     fun(Packages) -> 
         RepoRoot = "__test",
@@ -1234,43 +1232,7 @@ handle_info_scan_repository_test_zzz() ->
                     {messages, []}
                 )
             end
-        },
-        {
-            "some packages with some branches",
-            ["sleep", "package1/branch1"],
-            fun() ->
-                timer:sleep(1),
-                Pid = whereis(scan_pipe_caterpillar_repository),
-                ?assert(is_pid(Pid) andalso is_process_alive(Pid)),
-                timer:sleep(15),
-                ?assertMatch(
-                    {messages, [
-                        {'$gen_call', _, {changes, #changes{
-                            notify=#notify{
-                                subject = <<>>,
-                                body = <<
-                                    "\n\npackage1/branch1\nbranch1 changelog\nDiff contains 12 bytes"
-                                    "\nbranch1 diff\n"
-                                >>
-                            }, 
-                            packages = [
-                                #package{name= "package1", branch= "branch1", current_revno=1,
-                                    archive_name= "package1__ARCHIVE__branch1",
-                                    diff= <<>>, changelog= <<>>
-                                }
-                            ],
-                            archives = [
-                                #archive{
-                                    name= "package1", branch= "branch1",
-                                    archive_name= "package1__ARCHIVE__branch1"
-                                }
-                            ]
-                        }}}
-                    ]},
-                    process_info(self(), messages)
-                )
-            end
-        }            
+        }
     ]
 ]}.
 

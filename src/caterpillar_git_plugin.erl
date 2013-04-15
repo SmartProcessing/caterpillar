@@ -23,7 +23,7 @@ terminate_plugin(_State) ->
 
 
 export_archive(_State, Package, Branch, _Revno, ExportPath) ->
-    ExportBranch = format("git archive heads/~s", [Branch, ExportPath]),
+    ExportBranch = format("git archive heads/~s ~s", [Branch, ExportPath]),
     case command(ExportBranch, [{cd, Package}]) of
         {ok, <<>>} -> ok;
         Error -> {error, Error}
@@ -60,7 +60,7 @@ is_branch(_State, Package, Branch) ->
 
 
 get_branches(_State, Package) ->
-    GetBranches = "git branch",
+    GetBranches = "git rev-parse --abbrev-ref --branches",
     case command(GetBranches, [{cd, Package}]) of
         {error, _}=Error -> Error;
         {ok, <<>>} -> {ok, []};

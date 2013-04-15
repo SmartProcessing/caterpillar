@@ -2,3 +2,4 @@
 *.beam
 *egg-info
 *.swp
+test.config

@@ -9,22 +9,18 @@
     {services, [
         {caterpillar_event, []},
 
-        {caterpillar, [
-            {build_path, "./test/repo"},
-            {deps, "./test/test_deps.dets"},
-            {poll_time, 10000},
-            {ident, i386},
-            {build_workers_number, 2},
-            {work_id, "./test/work_id_test"}
+
+        {caterpillar_builder, [
+            {build_path, "/var/lib/caterpillar/build"},
+            {deps, "/var/lib/caterpillar/build/dependencies"},
+            {buckets, "/var/lib/caterpillar/build/buckets"},
+            {poll_time, 1000},
+            {ident, amd64},
+            {build_workers_number, 5},
+            {queue_missing, true},
+            {work_id, "/var/lib/caterpillar/build/work_id"}
         ]},
-
-        {caterpillar_build_worker, [
-            {build_path, "./test/repo"},
-            {buckets, "./test/test_buckets.dets"},
-            {deps, "./test/test_deps.dets"}
-        ]},
-
-
+        
         {caterpillar_repository, [
             {work_id_file, "./test/test_work_id"},
             {repository_root, "./test/caterpillar_test"},
