@@ -5,7 +5,7 @@
 
 -define(GVOD, caterpillar_utils:get_value_or_die).
 
--export([init_worker/2, changes/3, get_work_id/1, terminate_worker/1, modify_control/4]).
+-export([init_worker/2, changes/3, get_work_id/1, terminate_worker/1, modify_control/4, clean_packages/2]).
 
 
 init_worker(Ident, Args) when is_atom(Ident) ->
@@ -48,6 +48,11 @@ changes(State, WorkId, Archives) ->
 
 
 get_work_id(#state{work_id=WI}) -> {ok, WI}.
+
+
+
+clean_packages(#state{}, Packages) ->
+
 
 
 
