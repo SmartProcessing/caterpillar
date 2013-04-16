@@ -7,7 +7,7 @@
 -export([get_diff/5, get_changelog/5, get_revno/3]).
 -export([is_repository/2, is_branch/3]).
 -export([get_branches/2]).
--export([export_archive/5]).
+-export([export/5]).
 -export([get_tag/4]).
 -export([init_repository/2]).
 
@@ -22,10 +22,13 @@ terminate_plugin(_State) ->
 
 
 
-export_archive(_State, Package, Branch, _Revno, ExportPath) ->
-    ExportBranch = format("git archive heads/~s -o ~ts", [Branch, ExportPath]),
+export(_State, Package, Branch, _Revno, ExportPath) ->
+    ExportBranch = format(
+        "git archive heads/~s |tar -x -C ~s",
+        [Branch, ExportPath]
+    ),
     case command(ExportBranch, [{cd, Package}]) of
-        {ok, <<>>} -> {ok, tgz};
+        {ok, <<>>} -> ok;
         Error -> {error, Error}
     end.
 
@@ -60,7 +63,7 @@ is_branch(_State, Package, Branch) ->
 
 
 get_branches(_State, Package) ->
-    GetBranches = "git rev-parse --abbrev-ref --branches",
+    GetBranches = "git branch",
     case command(GetBranches, [{cd, Package}]) of
         {error, _}=Error -> Error;
         {ok, <<>>} -> {ok, []};

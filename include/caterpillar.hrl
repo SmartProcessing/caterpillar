@@ -1,18 +1,17 @@
 -define(GV, proplists:get_value).
 
 -record(archive, {
-    name            :: string(), %name of package
-    branch          :: string(), %branch name
-    tag             :: term(), %tags
-    archive_name    :: filelib:filename(), %name of archive file
-    archive_type    :: zip|tar, %type of archive
-    fd              :: file:io_device() %file descriptor
+    name            :: string(),
+    branch          :: string(),
+    tag             :: term(),
+    archive_name    :: filelib:filename(),
+    fd              :: file:io_device()
 }).
 
 
 -record(notify, {
-    subject = <<>> :: binary(),
-    body = <<>>    :: binary()
+    subject = <<>> :: binary,
+    body = <<>>    :: binary
 }).
 
 

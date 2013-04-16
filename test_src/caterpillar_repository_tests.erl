@@ -6,11 +6,12 @@
 -include_lib("caterpillar.hrl").
 -include_lib("caterpillar_repository_internal.hrl").
 
--define(ArchiveRootGS, [
+-define(ARGS, [
     {vcs_plugin, test_vcs_plugin},
     {repository_db, "repo.db"},
     {work_id_file, "work_id_file"},
     {repository_root, "__test_repo"},
+    {export_root, "__test_export"},
     {archive_root, "__archive_root"},
     {notify_root, "__notify_root"}
 ]).
@@ -33,12 +34,12 @@ start_link_test_() ->
         file:delete("repo.db"),
         file:delete("work_id_file"),
         [
-            caterpillar_utils:del_dir(proplists:get_value(D, ?ArchiveRootGS)) || 
-            D <- [repository_root, archive_root, notify_root]
+            caterpillar_utils:del_dir(proplists:get_value(D, ?ARGS)) || 
+            D <- [repository_root, archive_root, notify_root, export_root]
         ]
     end,
     fun() ->
-        Res = (catch caterpillar_repository:start_link(?ArchiveRootGS)),
+        Res = (catch caterpillar_repository:start_link(?ARGS)),
         ?assertMatch({ok, _}, Res),
         {ok, Pid} = Res,
         ?assertEqual(Pid, whereis(caterpillar_repository))
@@ -49,14 +50,14 @@ start_link_test_() ->
 
 stop_test_() ->
 {setup,
-    fun() -> {ok, _Pid} = caterpillar_repository:start_link(?ArchiveRootGS) end,
+    fun() -> {ok, _Pid} = caterpillar_repository:start_link(?ARGS) end,
     fun(_) -> 
         catch (ok = caterpillar_repository:stop()),
         file:delete("repo.db"),
         file:delete("work_id_file"),
         [
-            caterpillar_utils:del_dir(proplists:get_value(D, ?ArchiveRootGS)) || 
-            D <- [repository_root, archive_root, notify_root]
+            caterpillar_utils:del_dir(proplists:get_value(D, ?ARGS)) || 
+            D <- [repository_root, archive_root, notify_root, export_root]
         ]
     end,
     fun() ->
@@ -75,21 +76,20 @@ vcs_init_test_() ->
     fun() -> ok end,
 [
     {Message, fun() ->
-        Check(catch caterpillar_repository:vcs_init(#state{vcs_plugin=VCSPlugin}, []))
-    end} || {Message, VCSPlugin, Check} <- [
+        ?assertEqual(
+            Result,
+            catch caterpillar_repository:vcs_init(#state{}, Args)
+        )
+    end} || {Message, Args, Result} <- [
         {
             "vcs inited",
-            test_vcs_plugin,
-            fun(Result) ->
-                ?assertEqual(#state{vcs_plugin=test_vcs_plugin, vcs_state=state}, Result)
-            end
+            [{vcs_plugin, test_vcs_plugin}],
+            #state{vcs_plugin=test_vcs_plugin, vcs_state=state}
         },
         {
             "bad vcs callback, init failed",
-            undefined,
-            fun(Result) ->
-                ?assertMatch({error, {vcs_init, {'EXIT', {undef, _}}}}, Result)
-            end
+            [{vcs_plugin, undefined}],
+            {'EXIT', {vcs_init, failed}}
         }
     ]
 ]}.
@@ -147,6 +147,7 @@ init_test_() ->
             {work_id_file, "__test_work_id"},
             {repository_root, "__test_repo"},
             {archive_root, "__test_archive"},
+            {export_root, "__test_export"},
             {notify_root, "__test_notify"},
             {scan_interval, 10},
             {vcs_plugin, test_vcs_plugin},
@@ -156,7 +157,7 @@ init_test_() ->
     fun(Settings) ->
         [
             caterpillar_utils:del_dir(proplists:get_value(D, Settings))
-            || D <- [repository_root, archive_root, notify_root]
+            || D <- [repository_root, archive_root, export_root, notify_root]
         ],
         [file:delete(F) || F <- ["repo.db", "__test_work_id"]]
     end,
@@ -170,6 +171,7 @@ init_test_() ->
             ?assert(is_reference(State#state.scan_timer)),
             ?assert(filelib:is_dir(State#state.archive_root)),
             ?assert(filelib:is_dir(State#state.notify_root)),
+            ?assert(filelib:is_dir(State#state.export_root)),
             ?assert(filelib:is_dir(State#state.repository_root)),
             ?assertEqual(State#state.vcs_plugin, test_vcs_plugin),
             ?assertEqual(State#state.vcs_state, state),
@@ -463,104 +465,190 @@ find_modified_packages_test_() ->
 ]}.
 
 
-
-export_archives_test_() ->
+export_packages_test_() ->
 {foreachx,
     fun(Directories) ->
-        Dirs = Directories++["__test_archive",  "__test_repo", "__test_extract"],
-        [caterpillar_utils:ensure_dir(Dir) || Dir <- Dirs],
-        #state{archive_root="__test_archive", vcs_plugin=test_vcs_plugin, repository_root="__test_repo"}
+        [caterpillar_utils:ensure_dir(Dir) || Dir <- Directories],
+        #state{repository_root="__test", export_root="__test_export", vcs_plugin=test_vcs_plugin}
     end,
-    fun(_, #state{archive_root=ArchiveRoot, repository_root=RepoRoot}) ->
-        [caterpillar_utils:del_dir(D) || D <- [ArchiveRoot, RepoRoot, "__test_extract"]]
+    fun(_, #state{repository_root=RR, export_root=ER}) ->
+        [caterpillar_utils:del_dir(D) || D <- [RR, ER]]
     end,
 [
     {Setup, fun(_, State) ->
         {Message, fun() ->
-            Check(caterpillar_repository:export_archives(Packages, State))
+            ?assertEqual(
+                Result,
+                caterpillar_repository:export_packages(Packages, State)
+            ),
+            RR = State#state.repository_root,
+            ER = State#state.export_root,
+            RepoPackages = caterpillar_utils:list_packages(RR),
+            ExprPackages = caterpillar_utils:list_packages(RR),
+            ?assertEqual(RepoPackages, ExprPackages),
+            {ok, ListedPackages} = RepoPackages,
+            [?assertEqual(
+                caterpillar_utils:list_packages(filename:join(RR, Package)),
+                caterpillar_utils:list_packages(filename:join(ER, Package))
+            ) || Package <- ListedPackages],
+            Check()
         end}
-    end} || {Message, Setup, Packages, Check} <- [
+    end} || {Message, Setup, Packages, Check, Result} <- [
         {
-            "nothing archived",
+            "nothing exported",
+            ["__test"],
+            [],
+            fun() -> ok end,
+            {error, {export_packages, "nothing exported"}}
+        },
+        {
+            "export of new packages",
+            ["__test/package1/branch1"],
+            [#package{name= "package1", branch= "branch1", current_revno=rev}],
+            fun() -> ok end,
+            {ok, [#package{name= "package1", branch= "branch1", current_revno=rev}]}
+        },
+        {
+            "some branch not exported",
+            ["__test/package1/branch1", "__test/package2/no_export"],
+            [
+                #package{name= "package1", branch= "branch1", current_revno=rev},
+                #package{name= "package2", branch= "no_export", current_revno=rev}
+            ],
+            fun() -> ok end,
+            {ok, [
+                #package{name= "package1", branch= "branch1", current_revno=rev},
+                #package{
+                    name= "package2", branch= "no_export", status=error,
+                    failed_at=export_packages, reason=error, current_revno=rev
+                }
+            ]}
+        },
+        {
+            "checking package with error status ignored",
+            ["__test"],
+            [#package{name="ignore me", branch="some branch", status=error}],
+            fun() -> ok end,
+            {ok, [#package{name="ignore me", branch="some branch", status=error}]}
+        },
+        {
+            "checking previous version cleaned",
+            [
+                "__test/package1/branch1/some_data",
+                "__test_export/package1/branch1/some_data"
+            ],
+            [#package{name= "package1", branch= "branch1", current_revno=rev}],
+            fun() -> 
+                ?assertEqual(
+                    caterpillar_utils:list_packages("__test_export/package1/branch1/"),
+                    {ok, []}
+                )
+            end,
+            {ok, [#package{name= "package1", branch= "branch1", current_revno=rev}]}
+        }
+    ]
+]}.
+
+
+
+archive_packages_test_() ->
+{foreachx,
+    fun(Directories) ->
+        Dirs = Directories++["__test_archive/", "__test_export/", "__test_extract"],
+        [caterpillar_utils:ensure_dir(Dir) || Dir <- Dirs],
+        #state{archive_root="__test_archive", export_root="__test_export", vcs_plugin=test_vcs_plugin}
+    end,
+    fun(_, #state{archive_root=AR, export_root=ER}) ->
+        [caterpillar_utils:del_dir(D) || D <- [AR, ER, "__test_extract"]]
+    end,
+[
+    {Setup, fun(_, State) ->
+        {Message, fun() ->
+            ?assertEqual(Result, caterpillar_repository:archive_packages(Packages, State)),
+            Check()
+        end}
+    end} || {Message, Setup, Packages, Check, Result} <- [
+        {
+         %   "nothing archived",
             [], 
             [],
-            fun(Result) -> 
-                ?assertEqual({error, {export_archives, "nothing exported"}}, Result) 
-            end
+            fun() -> ok end,
+            {error, {archive_packages, "nothing archived"}}
         },
         {
-            "checking packages with bad status ignored",
+          %  "checking packages with bad status ignored",
             [],
             [#package{status=error}],
-            fun(Result) -> ?assertEqual({ok, [#package{status=error}]}, Result) end
+            fun() -> ok end,
+            {ok, [#package{status=error}]}
         },
         {
-            "package successfuly archived",
+           % "package successfuly archived",
             [
-                "__test_repo/package/branch/dir1/",
-                "__test_repo/package/branch/dir2/"
+                "__test_export/package/branch/dir1/",
+                "__test_export/package/branch/dir2/"
             ],
             [#package{name= "package", branch= "branch", current_revno=rev}],
-            fun(Result) ->
-                ?assertEqual(
-                    {ok, [#package{name= "package", branch= "branch", archive_name= "package__ARCHIVE__branch",
-                        archive_type= tgz, current_revno=rev
-                    }]},
-                    Result
-                ),
+            fun() ->
                 {ok, Names} = erl_tar:table("__test_archive/package__ARCHIVE__branch", [compressed]),
-                ?assertEqual(lists:sort(Names), ["dir1/", "dir2/"])
-            end
+                ?assertEqual(lists:sort(Names), ["dir1", "dir2"])
+            end,
+            {ok, [#package{
+                name= "package", branch= "branch",
+                archive_name= "package__ARCHIVE__branch",
+                current_revno=rev
+            }]}
         },
         {
             "testing archive consistency",
             [
-                "__test_repo/package/branch/dir/subdir",
-                "__test_repo/package/branch/dir/subdir2"
+                "__test_export/package/branch/dir/subdir",
+                "__test_export/package/branch/dir/subdir2"
             ],
             [#package{name= "package", branch= "branch", current_revno=rev}],
-            fun(Result) -> 
+            fun() -> 
                 ArchiveName = "__test_archive/package__ARCHIVE__branch",
                 UnArchivePath = "__test_extract",
-                ?assertEqual(ok, erl_tar:extract(ArchiveName, [{cwd, UnArchivePath}, compressed])),
-                ?assertEqual({ok, ["dir"]}, file:list_dir(UnArchivePath)),
                 ?assertEqual(
-                    {ok, ["subdir", "subdir2"]},
-                    (fun({ok, X}) -> {ok, lists:sort(X)};(O) -> O end)(file:list_dir(filename:join(UnArchivePath, "dir")))
+                    ok,
+                    caterpillar_tar:extract(ArchiveName, [{cwd, UnArchivePath}, compressed])
                 ),
                 ?assertEqual(
-                    {ok, [#package{
-                        name= "package", branch= "branch",
-                        archive_name= "package__ARCHIVE__branch",
-                        archive_type= tgz,
-                        current_revno=rev
-                    }]},
-                    Result
+                    {ok, ["dir"]}, file:list_dir(UnArchivePath)
+                ),
+                ?assertEqual(
+                    {ok, ["subdir", "subdir2"]},
+                    (fun({ok, X}) -> {ok, lists:sort(X)};(O) -> O end)(
+                        file:list_dir(filename:join(UnArchivePath, "dir"))
+                    )
                 )
-            end
+            end,
+            {ok, [#package{
+                name= "package", branch= "branch",
+                archive_name= "package__ARCHIVE__branch",
+                current_revno=rev
+            }]}
         },
         {
             "package successfuly archived(unicode symbols inside)",
             %FIXME:
             ignore_me,
             [
-                <<"__test_repo/package/branch/абв/">>,
-                <<"__test_repo/package/branch/бав/">>,
-                "__test_repo/package/branch/dir1/"
+                <<"__test_export/package/branch/абв/">>,
+                <<"__test_export/package/branch/бав/">>,
+                "__test_export/package/branch/dir1/"
                 
             ],
             [#package{name= "package", branch= "branch", current_revno=rev}],
-            fun(Result) ->
+            fun() ->
                 {ok, Names} = erl_tar:table("__test_archive/package__ARCHIVE__branch", [compressed]),
                 ?assertEqual(["dir1", "абв", "бав"], lists:sort(Names))
-                ?assertEqual(
-                    {ok, [#package{
-                        name= "package", branch= "branch", archive_name= "package__ARCHIVE__branch",
-                        archive_type= tgz, current_revno=rev
-                    }]},
-                    Result
-                )
-            end
+            end,
+            {ok, [#package{
+                name= "package", branch= "branch",
+                archive_name= "package__ARCHIVE__branch",
+                current_revno=rev
+            }]}
         }
     ]
 ]}.
@@ -805,35 +893,41 @@ limit_output_test_() ->
 ]}.
 
 
+
 clean_packages_test_() ->
 {foreachx,
     fun(Packages) ->
-        ArchiveRoot = "__test_archive",
-        [caterpillar_utils:ensure_dir(Dir) || Dir <- [ArchiveRoot]],
+        ER = "__test_export",
+        AR = "__test_archive",
+        [caterpillar_utils:ensure_dir(Dir) || Dir <- [ER, AR]],
         {ok, D} = dets:open_file("test.dets", [{access, read_write}]),
         [
             begin
-                caterpillar_utils:ensure_dir(filename:join([Name, Branch])),
-                Archive = filename:join(ArchiveRoot, caterpillar_utils:package_to_archive(Name, Branch)),
+                caterpillar_utils:ensure_dir(filename:join([ER, Name, Branch])),
+                Archive = filename:join(AR, caterpillar_utils:package_to_archive(Name, Branch)),
                 filelib:ensure_dir(Archive),
                 file:write_file(Archive, <<"h">>),
                 dets:insert(D, {{Name, Branch}, archive, last_revision, tag, work_id}) 
             end || #package{name=Name, branch=Branch} <- Packages
         ],
-        #state{dets=D, archive_root=ArchiveRoot, vcs_plugin=test_vcs_plugin}
+        #state{dets=D, export_root=ER, archive_root=AR, vcs_plugin=test_vcs_plugin}
     end,
-    fun(_Packages, #state{dets=D, archive_root=ArchiveRoot}) ->
+    fun(_Packages, #state{dets=D, archive_root=AR, export_root=ER}) ->
         dets:close(D),
         file:delete(D),
-        [caterpillar_utils:del_dir(Dir) || Dir <- [ArchiveRoot]]
+        [caterpillar_utils:del_dir(Dir) || Dir <- [AR, ER]]
     end,
 [
-    {Packages, fun(_, #state{dets=D}=State) ->
+    {Packages, fun(_, #state{dets=D, export_root=ER}=State) ->
         {Message, fun() ->
             PackageList = [{N, B} || #package{name=N, branch=B} <- Packages],
             ?assertEqual(
                 lists:sort([{Package, archive, last_revision, tag, work_id} || Package <- PackageList]),
                 lists:sort(dets:select(D, [{'$1', [], ['$1']}]))
+            ),
+            ?assertEqual(
+                {ok, lists:usort([N || {N, _} <- PackageList])},
+                caterpillar_utils:list_packages(ER)
             ),
             caterpillar_repository:clean_packages(State, CleanPackages),
             ?assertEqual(
@@ -841,6 +935,10 @@ clean_packages_test_() ->
                     [{{N, B}, archive, last_revision, tag, work_id} || #package{name=N, branch=B} <- AfterClean]
                 ),
                 lists:sort(dets:select(D, [{'$1', [], ['$1']}]))
+            ),
+            ?assertEqual(
+                {ok, [N || #package{name=N} <- AfterClean]},
+                caterpillar_utils:list_packages(ER)
             )
         end}
     end} || {Message, Packages, CleanPackages, AfterClean} <- [
@@ -921,8 +1019,8 @@ select_archives_by_work_id_test_() ->
         {
             "few archives, nothing selected",
             [
-                {{package1, branch1}, archive_name1, archive_type, last_revno, tag, 1},
-                {{package2, branch2}, archive_name1, archive_type, last_revno, tag, 1}
+                {{package1, branch1}, archive_name1, last_revno, tag, 1},
+                {{package2, branch2}, archive_name1, last_revno, tag, 1}
             ],
             1,
             []
@@ -930,22 +1028,22 @@ select_archives_by_work_id_test_() ->
         {
             "few archives, one of them selected",
             [
-                {{package1, branch1}, archive_name1, archive_type, last_revno, tag, 2},
-                {{package2, branch2}, archive_name1, archive_type, last_revno, tag, 1}
+                {{package1, branch1}, archive_name1, last_revno, tag, 2},
+                {{package2, branch2}, archive_name1, last_revno, tag, 1}
             ],
             1,
-            [#archive{name=package1, branch=branch1, archive_name=archive_name1, archive_type=archive_type, tag=tag}]
+            [#archive{name=package1, branch=branch1, archive_name=archive_name1, tag=tag}]
         },
         {
             "few archives, all of them selected",
             [
-                {{package1, branch1}, archive_name1, archive_type, last_revno, tag, 2},
-                {{package2, branch2}, archive_name2, archive_type, last_revno, tag, 2}
+                {{package1, branch1}, archive_name1, last_revno, tag, 2},
+                {{package2, branch2}, archive_name2, last_revno, tag, 2}
             ],
             1,
             [
-                #archive{name=package1, branch=branch1, archive_name=archive_name1, archive_type=archive_type, tag=tag},
-                #archive{name=package2, branch=branch2, archive_name=archive_name2, archive_type=archive_type, tag=tag}
+                #archive{name=package1, branch=branch1, archive_name=archive_name1, tag=tag},
+                #archive{name=package2, branch=branch2, archive_name=archive_name2, tag=tag}
             ]
         }
         
@@ -1172,12 +1270,12 @@ handle_call_get_packages_test_() ->
         },
         {
             "one package in dets",
-            [{{package, branch}, archive, type, current_revno, tag, work_id}],
+            [{{package, branch}, archive, current_revno, tag, work_id}],
             [{package, branch}]
         },
         {
             "few packages in dets",
-            [{{Package, Branch}, archive, type, current_revno, tag, work_id} || {Package, Branch} <- [{p, b}, {pp, bb}]],
+            [{{Package, Branch}, archive, current_revno, tag, work_id} || {Package, Branch} <- [{p, b}, {pp, bb}]],
             [{p, b}, {pp, bb}]
         }
     ]
@@ -1187,20 +1285,21 @@ handle_call_get_packages_test_() ->
 handle_info_scan_repository_test_() ->
 {foreachx,
     fun(Packages) -> 
-        RepoRoot = "__test",
-        ArchiveRoot = "__test_archive",
+        RR = "__test",
+        AR = "__test_archive",
+        ER = "__test_export",
         {ok, Dets} = dets:open_file("__test_dets.db", [{access, read_write}]),
-        [caterpillar_utils:ensure_dir(D) || D <- [RepoRoot, ArchiveRoot]],
-        [caterpillar_utils:ensure_dir(filename:join(RepoRoot, Package)) || Package <- Packages],
+        [caterpillar_utils:ensure_dir(D) || D <- [RR, AR, ER]],
+        [caterpillar_utils:ensure_dir(filename:join(RR, Package)) || Package <- Packages],
         #state{
-            repository_root=RepoRoot, vcs_plugin=test_vcs_plugin, dets=Dets,
-            archive_root=ArchiveRoot
+            repository_root=RR, vcs_plugin=test_vcs_plugin, dets=Dets,
+            export_root=ER, archive_root=AR
         }
     end,
-    fun(_Packages, #state{dets=Dets, repository_root=RepoRoot, archive_root=ArchiveRoot}) ->
+    fun(_Packages, #state{dets=Dets, repository_root=RR, export_root=ER, archive_root=AR}) ->
         dets:close(Dets),
         file:delete(Dets),
-        [caterpillar_utils:del_dir(D) || D <- [RepoRoot, ArchiveRoot]]
+        [caterpillar_utils:del_dir(D) || D <- [RR, ER, AR]]
     end,
 [   
     {Packages, fun(_, State) ->
@@ -1231,7 +1330,43 @@ handle_info_scan_repository_test_() ->
                     {messages, []}
                 )
             end
-        }
+        },
+        {
+            "some packages with some branches",
+            ["sleep", "package1/branch1"],
+            fun() ->
+                timer:sleep(1),
+                Pid = whereis(scan_pipe_caterpillar_repository),
+                ?assert(is_pid(Pid) andalso is_process_alive(Pid)),
+                timer:sleep(15),
+                ?assertMatch(
+                    {messages, [
+                        {'$gen_call', _, {changes, #changes{
+                            notify=#notify{
+                                subject = <<>>,
+                                body = <<
+                                    "\n\npackage1/branch1\nbranch1 changelog\nDiff contains 12 bytes"
+                                    "\nbranch1 diff\n"
+                                >>
+                            }, 
+                            packages = [
+                                #package{name= "package1", branch= "branch1", current_revno=1,
+                                    archive_name= "package1__ARCHIVE__branch1",
+                                    diff= <<>>, changelog= <<>>
+                                }
+                            ],
+                            archives = [
+                                #archive{
+                                    name= "package1", branch= "branch1",
+                                    archive_name= "package1__ARCHIVE__branch1"
+                                }
+                            ]
+                        }}}
+                    ]},
+                    process_info(self(), messages)
+                )
+            end
+        }            
     ]
 ]}.
 
@@ -1239,21 +1374,21 @@ handle_info_scan_repository_test_() ->
 handle_call_get_archive_test_() ->
 {foreachx,
     fun(Archives) ->
-        ArchiveRoot = "__test_archive",
-        caterpillar_utils:ensure_dir(ArchiveRoot),
+        AR = "__test_archive",
+        caterpillar_utils:ensure_dir(AR),
         {ok, D} = dets:open_file("__test.dets", [{access, read_write}]),
         lists:foreach(
             fun({Package, Branch, ArchiveName, ArchiveData}) ->
-                file:write_file(filename:join(ArchiveRoot, ArchiveName), ArchiveData),
-                dets:insert(D, {{Package, Branch}, ArchiveName, archive_type, last_revno, tag, work_id})
+                file:write_file(filename:join(AR, ArchiveName), ArchiveData),
+                dets:insert(D, {{Package, Branch}, ArchiveName, last_revno, tag, work_id})
             end,
             Archives
         ),
-        #state{archive_root=ArchiveRoot, dets=D}
+        #state{archive_root=AR, dets=D}
     end,
-    fun(_, #state{archive_root=ArchiveRoot, dets=D}) ->
+    fun(_, #state{archive_root=AR, dets=D}) ->
         dets:close(D), file:delete(D),
-        caterpillar_utils:del_dir(ArchiveRoot)
+        caterpillar_utils:del_dir(AR)
     end,
 [
     {Archives, fun(_, State) ->
@@ -1279,18 +1414,18 @@ handle_call_get_archive_test_() ->
         {
             "archive exists and copied",
             [{"test", "branch", "test_branch", "archive_data"}],
-            fun(#state{archive_root=ArchiveRoot}) -> 
-                {ok, Fd} = file:open(filename:join(ArchiveRoot, "copy_here"), [write]),
+            fun(#state{archive_root=AR}) -> 
+                {ok, Fd} = file:open(filename:join(AR, "copy_here"), [write]),
                 #archive{name="test", branch="branch", fd=Fd}
             end,
-            fun(#state{archive_root=ArchiveRoot}) ->
+            fun(#state{archive_root=AR}) ->
                 ?assertEqual(
                     {ref, ok},
                     receive Msg -> Msg after 100 -> timeout end
                 ),
                 ?assertEqual(
                     {ok, <<"archive_data">>},
-                    file:read_file(filename:join(ArchiveRoot, "copy_here"))
+                    file:read_file(filename:join(AR, "copy_here"))
                 )
             end
         }
@@ -1329,15 +1464,15 @@ handle_call_get_archives_test_() ->
         },
         {
             "archive avaiable, but not pushed",
-            [{{package, branch}, achive, type, last_revno, tag, 2}],
+            [{{package, branch}, achive, last_revno, tag, 2}],
             2,
             {ref, {ok, {changes, 3, []}}}
         },
         {
             "archive avaiable and pushed",
-            [{{package, branch}, archive, type, last_revno, tag, 2}],
+            [{{package, branch}, archive, last_revno, tag, 2}],
             1,
-            {ref, {ok, {changes, 3, [#archive{name=package, branch=branch, tag=tag, archive_name=archive, archive_type=type}]}}}
+            {ref, {ok, {changes, 3, [#archive{name=package, branch=branch, tag=tag, archive_name=archive}]}}}
         }
     ]
 ]}.
