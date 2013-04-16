@@ -1,12 +1,13 @@
 -module(caterpillar_archive).
 
 
--export([export/2]).
+-export([extract/2]).
 
 
 
--spec export(Archive::filelib:filename(), Options::proplists:property()) -> ok|{error, Reason::term()}.
-export(Archive, Options) ->
+-spec extract(Archive::filelib:filename(), Options::proplists:property()) -> ok|{error, Reason::term()}.
+extract(Archive___, Options) ->
+    Archive = filename:absname(Archive___),
     Cwd = caterpillar_utils:get_value_or_die(cwd, Options),
     Type = caterpillar_utils:get_value_or_die(type, Options),
     Command = get_command_by_type(Type, Archive),
