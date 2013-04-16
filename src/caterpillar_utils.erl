@@ -159,13 +159,14 @@ get_value_or_die(Key, PropList) ->
     end.
 
 
-command(Cmd) -> command(Cmd, "").
+command(Cmd) -> command(Cmd, []).
 
 
-command(Cmd, Dir) -> command(Cmd, Dir, [], ?DEFAULT_TIMEOUT).
+command(Cmd, Options) -> command(Cmd, Options, [], ?DEFAULT_TIMEOUT).
 
 
-command(Cmd, Dir, Env, Timeout) ->
+command(Cmd, Options, Env, Timeout) ->
+    Dir = ?GV(cwd, Options, ""),
     CD = if Dir =:= "" -> [];
 	    true -> [{cd, Dir}]
 	 end,
@@ -175,6 +176,12 @@ command(Cmd, Dir, Env, Timeout) ->
     Opt = CD ++ SetEnv ++ [stream, exit_status, use_stdio,
 			   stderr_to_stdout, in, eof],
     P = open_port({spawn, Cmd}, Opt),
+    case ?GV(fd, Options, '$undefined$') of
+        '$undefined$' ->
+            pass;
+        Fd ->
+            erlang:port_command(P, get_content(Fd, file:read(Fd), <<>>))
+    end,
     get_port_data(P, [], Timeout).
 
 
@@ -192,6 +199,13 @@ get_port_data(P, D, Timeout) ->
         {110, "timeout"}
     end.
 
+get_content(Fd, {ok, Recv}, Data) ->
+    get_content(Fd, file:read(Fd), <<Data/binary, Recv/binary>>);
+get_content(Fd, eof, Data) ->
+    Data;
+get_content(Fd, {error, Reason}, Data) ->
+    error_logger:error_msg("failed to read fd: ~p~n", [Reason]),
+    {error, Reason}.
 
 %FIXME? not tail recursive?
 normalize([$\r, $\n | Cs]) -> [$\n | normalize(Cs)];
@@ -254,5 +268,3 @@ filename_join_([], Accum) -> lists:flatten(lists:reverse(Accum));
 filename_join_([Name|Other], []) -> filename_join_(Other, ["/", to_list(Name)|[]]);
 filename_join_([Name|[]], Accum) -> filename_join_([], [to_list(Name)|Accum]);
 filename_join_([Name|Other], Accum) -> filename_join_(Other, ["/", to_list(Name)|Accum]).
-    
-    
