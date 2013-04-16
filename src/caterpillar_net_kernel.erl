@@ -67,7 +67,7 @@ handle_info({nodeup, Node}, #state{up_nodes=UpNodes, scan_nodes=ScanNodes, down_
     global:sync(),
     NewDown = lists:delete(Node, DownNodes),
     NewUp = case lists:member(Node, ScanNodes) of
-        true > [Node|UpNodes];
+        true -> [Node|UpNodes];
         false -> UpNodes
     end,
     {noreply, State#state{down_nodes=NewDown, up_nodes=NewUp}};
