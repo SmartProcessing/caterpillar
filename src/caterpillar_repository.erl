@@ -158,8 +158,8 @@ handle_call({changes, Changes}, _From, State) ->
     Packages = Changes#changes.packages,
     NewWorkId = WorkId + 1,
     InsertForeach = fun
-        (#package{name=Name, branch=Branch, archive_name=Archive, current_revno=Revno, tag=Tag}) ->
-            dets:insert(Dets, {{Name, Branch}, Archive, Revno, Tag, NewWorkId});
+        (#package{name=Name, branch=Branch, archive_name=Archive, archive_type=ArchiveType, current_revno=Revno, tag=Tag}) ->
+            dets:insert(Dets, {{Name, Branch}, Archive, ArchiveType, Revno, Tag, NewWorkId});
         (BadPackage) ->
             error_logger:error_mad("bad package at changes: ~p", [BadPackage])
     end,
