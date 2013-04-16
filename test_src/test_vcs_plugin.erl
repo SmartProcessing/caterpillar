@@ -17,12 +17,12 @@ init_plugin(_Args) -> {ok, state}.
 terminate_plugin(_State) -> ok.
 
 
-export_archive(_State, _Package, "no_export", _Revision, ArchivePath) -> {error, some_reason};
+export_archive(_State, _Package, "bad_return", _, _) -> 'wat?';
+export_archive(_State, _Package, "error", _, _) -> {error, some_reason};
 export_archive(_State, Package, Branch, _Revision, ArchivePath) ->
     AbsArchivePath = filename:absname(ArchivePath),
     ArchiveDir = filename:absname(filename:join(Package, Branch)),
     Cmd = lists:flatten(io_lib:format("cd ~s && tar -czf ~s *", [ArchiveDir, AbsArchivePath])),
-    %error_logger:info_msg("export_archive result: ~p~nCommand: ~s~n", [os:cmd(Cmd), Cmd]),
     os:cmd(Cmd),
     {ok, tgz}.
 

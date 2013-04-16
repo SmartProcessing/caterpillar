@@ -490,11 +490,16 @@ export_archives([Package|O], Accum, #state{archive_root=ArchiveRoot, repository_
     caterpillar_utils:ensure_dir(ArchiveRoot),
     NewAccum = case catch VCSPlugin:export_archive(VCSState, RepoPath, Branch, Revno, ArchivePath) of
         {ok, Type} -> [Package#package{archive_type=Type, archive_name=ArchiveName}|Accum];
-        Error ->
+        {error, Reason} ->
             error_logger:error_msg(
-                "export_archives error ~p~n at ~s/~s~n", [Error, Name, Branch]
+                "export_archives error ~p~n at ~p/~p~n", [Reason, Name, Branch]
             ),
-            [Package#package{status=error, failed_at=export_archives, reason=Error}|Accum]
+            [Package#package{status=error, failed_at=export_archives, reason=Reason}|Accum];
+        BadResponse ->
+            error_logger:error_msg(
+                "export_archive bad_return: ~p~n at ~p/~p~n", [BadResponse, Name, Branch]
+            ),
+            [Package#package{status=error, failed_at=export_archives, reason=bad_return}|Accum]
     end,
     export_archives(O, NewAccum, State).
 

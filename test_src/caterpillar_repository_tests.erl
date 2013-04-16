@@ -489,6 +489,28 @@ export_archives_test_() ->
             end
         },
         {
+            "some error while archive",
+            ["__test_repot/error/error"],
+            [#package{name="error", branch="error"}],
+            fun(Result) ->
+                ?assertEqual(
+                    {ok, [#package{name="error", branch="error", status=error, failed_at=export_archives, reason=some_reason}]},
+                    Result
+                )
+            end
+        },
+        {
+            "bad return",
+            ["__test_repot/error/error"],
+            [#package{name="error", branch="bad_return"}],
+            fun(Result) ->
+                ?assertEqual(
+                    {ok, [#package{name="error", branch="bad_return", status=error, failed_at=export_archives, reason=bad_return}]},
+                    Result
+                )
+            end
+        },
+        {
             "checking packages with bad status ignored",
             [],
             [#package{status=error}],
