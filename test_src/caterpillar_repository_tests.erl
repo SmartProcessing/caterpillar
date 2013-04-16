@@ -1135,7 +1135,7 @@ handle_call_changes_test_() ->
                     2
                 ),
                 ?assertEqual(
-                    [{{undefined, undefined}, undefined, undefined, undefined, 2}],
+                    [{{undefined, undefined}, undefined, undefined, undefined, undefined, 2}],
                     dets:select(D, [{'$1', [], ['$1']}])
                 )
             end,
