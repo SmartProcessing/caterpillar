@@ -14,9 +14,6 @@ tty_off() ->
 tty_on() ->
     error_logger:tty(true).
 
-wait_for_exit(Pid) ->
-    MRef = erlang:monitor(process, Pid),
-    receive {'DOWN', MRef, _, _, _} -> ok end.
 
 start_link_test_() ->
 {setup,
@@ -40,7 +37,7 @@ stop_test_() ->
         ?assert(is_pid(Pid)),
         ?assert(is_process_alive(Pid)),
         caterpillar_event:stop(),
-        wait_for_exit(Pid),
+        caterpillar_test_support:wait_for_exit(Pid),
         % timer:sleep(1),
         ?assert(not is_process_alive(Pid))
     end
@@ -256,7 +253,7 @@ events_test_() ->
     fun(_) ->
         Pid = global:whereis_name(caterpillar_event),
         ok = caterpillar_event:stop(),
-        wait_for_exit(Pid)
+        caterpillar_test_support:wait_for_exit(Pid)
         % timer:sleep(1)
     end,
 [

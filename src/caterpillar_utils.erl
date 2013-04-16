@@ -159,6 +159,7 @@ get_value_or_die(Key, PropList) ->
     end.
 
 
+-spec command(Cmd::string()) -> {Code::integer(), Result::string()}.
 command(Cmd) -> command(Cmd, []).
 
 
@@ -167,45 +168,34 @@ command(Cmd, Options) -> command(Cmd, Options, [], ?DEFAULT_TIMEOUT).
 
 command(Cmd, Options, Env, Timeout) ->
     Dir = ?GV(cwd, Options, ""),
-    CD = if Dir =:= "" -> [];
+    CD = if
+        Dir =:= "" -> [];
 	    true -> [{cd, Dir}]
-	 end,
-    SetEnv = if Env =:= [] -> []; 
-		true -> [{env, Env}]
-	     end,
-    Opt = CD ++ SetEnv ++ [stream, exit_status, use_stdio,
-			   stderr_to_stdout, in, eof],
-    P = open_port({spawn, Cmd}, Opt),
-    case ?GV(fd, Options, '$undefined$') of
-        '$undefined$' ->
-            pass;
-        Fd ->
-            erlang:port_command(P, get_content(Fd, file:read(Fd), <<>>))
     end,
-    get_port_data(P, [], Timeout).
+    SetEnv = if
+        Env =:= [] -> []; 
+		true -> [{env, Env}]
+    end,
+    %FIXME: binary?
+    DefaultOpts = [stream, exit_status, use_stdio, stderr_to_stdout, in, eof],
+    PortOptions = CD ++ SetEnv ++ DefaultOpts,
+    Port = open_port({spawn, Cmd}, PortOptions),
+    get_port_data(Port, [], Timeout).
 
 
-get_port_data(P, D, Timeout) ->
+get_port_data(Port, Accum, Timeout) ->
     receive
-	{P, {data, D1}} ->
-	    get_port_data(P, [D1|D], Timeout);
-	{P, eof} ->
-	    port_close(P),    
-	    receive
-		{P, {exit_status, N}} ->
-		    {N, normalize(lists:flatten(lists:reverse(D)))}
-	    end
+        {_Port, {data, Chunk}} ->
+            get_port_data(Port, [Chunk|Accum], Timeout); 
+        {_Port, eof} -> 
+            get_port_data(Port, Accum, Timeout);
+        {_Port, {exit_status, ExitStatus}} ->
+            {ExitStatus, lists:flatten(lists:reverse(Accum))}
     after Timeout ->
+        erlang:port_close(Port),
         {110, "timeout"}
     end.
 
-get_content(Fd, {ok, Recv}, Data) ->
-    get_content(Fd, file:read(Fd), <<Data/binary, Recv/binary>>);
-get_content(_Fd, eof, Data) ->
-    Data;
-get_content(_Fd, {error, Reason}, _Data) ->
-    error_logger:error_msg("failed to read fd: ~p~n", [Reason]),
-    {error, Reason}.
 
 %FIXME? not tail recursive?
 normalize([$\r, $\n | Cs]) -> [$\n | normalize(Cs)];
