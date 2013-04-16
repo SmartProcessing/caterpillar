@@ -201,9 +201,9 @@ get_port_data(P, D, Timeout) ->
 
 get_content(Fd, {ok, Recv}, Data) ->
     get_content(Fd, file:read(Fd), <<Data/binary, Recv/binary>>);
-get_content(Fd, eof, Data) ->
+get_content(_Fd, eof, Data) ->
     Data;
-get_content(Fd, {error, Reason}, Data) ->
+get_content(_Fd, {error, Reason}, _Data) ->
     error_logger:error_msg("failed to read fd: ~p~n", [Reason]),
     {error, Reason}.
 
