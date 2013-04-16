@@ -809,15 +809,14 @@ clean_packages_test_() ->
 {foreachx,
     fun(Packages) ->
         ArchiveRoot = "__test_archive",
-        [caterpillar_utils:ensure_dir(Dir) || Dir <- [ArchiveRoot]],
+        caterpillar_utils:ensure_dir(ArchiveRoot),
         {ok, D} = dets:open_file("test.dets", [{access, read_write}]),
         [
             begin
-                caterpillar_utils:ensure_dir(filename:join([Name, Branch])),
                 Archive = filename:join(ArchiveRoot, caterpillar_utils:package_to_archive(Name, Branch)),
                 filelib:ensure_dir(Archive),
                 file:write_file(Archive, <<"h">>),
-                dets:insert(D, {{Name, Branch}, archive, last_revision, tag, work_id}) 
+                dets:insert(D, {{Name, Branch}, archive, archive_type, last_revision, tag, work_id}) 
             end || #package{name=Name, branch=Branch} <- Packages
         ],
         #state{dets=D, archive_root=ArchiveRoot, vcs_plugin=test_vcs_plugin}
@@ -832,13 +831,13 @@ clean_packages_test_() ->
         {Message, fun() ->
             PackageList = [{N, B} || #package{name=N, branch=B} <- Packages],
             ?assertEqual(
-                lists:sort([{Package, archive, last_revision, tag, work_id} || Package <- PackageList]),
+                lists:sort([{Package, archive, archive_type, last_revision, tag, work_id} || Package <- PackageList]),
                 lists:sort(dets:select(D, [{'$1', [], ['$1']}]))
             ),
             caterpillar_repository:clean_packages(State, CleanPackages),
             ?assertEqual(
                 lists:sort(
-                    [{{N, B}, archive, last_revision, tag, work_id} || #package{name=N, branch=B} <- AfterClean]
+                    [{{N, B}, archive, archive_type, last_revision, tag, work_id} || #package{name=N, branch=B} <- AfterClean]
                 ),
                 lists:sort(dets:select(D, [{'$1', [], ['$1']}]))
             )
