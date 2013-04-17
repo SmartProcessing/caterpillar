@@ -74,6 +74,7 @@ handle_cast({changes, WorkId, Archives}, #state{worker_plugin=WP, worker_state=W
 %    NewWorkerState = WP:deploy(WorkId, Deploy),
 %    {noreply, State#state{worker_state=NewWorkerState}};
 handle_cast({clean_packages, Packages}, #state{worker_plugin=WP, worker_state=WS}=State) ->
+    error_logger:info_msg("cleaning ~p~n", [Packages]),
     catch WP:clean_packages(WS, Packages),
     {noreply, State};
 handle_cast(_Msg, State) ->

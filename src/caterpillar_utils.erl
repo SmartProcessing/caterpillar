@@ -105,6 +105,7 @@ archive_to_package(Archive) ->
 
 
 
+-spec list_packages(Path::filelib:dirname()) -> {ok, [filename:name()]}|{error, Reason::term()}.
 list_packages(Path) ->
     case file:list_dir(Path) of
         {ok, List} -> list_packages(List, []);
@@ -117,7 +118,7 @@ list_packages([], Accum) ->
 list_packages([ [$.|_]|O ], Accum) ->
     list_packages(O, Accum);
 list_packages([ H|O ], Accum) ->
-    list_packages(O, [unicode:characters_to_list(H)|Accum]).
+    list_packages(O, [H|Accum]).
 
 
 del_dir(Dir) ->
@@ -177,7 +178,7 @@ command(Cmd, Options, Env, Timeout) ->
 		true -> [{env, Env}]
     end,
     %FIXME: binary?
-    DefaultOpts = [stream, exit_status, use_stdio, stderr_to_stdout, in, eof],
+    DefaultOpts = [stream, exit_status, use_stdio, stderr_to_stdout, in],
     PortOptions = CD ++ SetEnv ++ DefaultOpts,
     Port = open_port({spawn, Cmd}, PortOptions),
     get_port_data(Port, [], Timeout).
@@ -187,21 +188,12 @@ get_port_data(Port, Accum, Timeout) ->
     receive
         {_Port, {data, Chunk}} ->
             get_port_data(Port, [Chunk|Accum], Timeout); 
-        {_Port, eof} -> 
-            get_port_data(Port, Accum, Timeout);
         {_Port, {exit_status, ExitStatus}} ->
             {ExitStatus, lists:flatten(lists:reverse(Accum))}
     after Timeout ->
         erlang:port_close(Port),
         {110, "timeout"}
     end.
-
-
-%FIXME? not tail recursive?
-normalize([$\r, $\n | Cs]) -> [$\n | normalize(Cs)];
-normalize([$\r | Cs]) -> [$\n | normalize(Cs)];
-normalize([C | Cs]) -> [C | normalize(Cs)];
-normalize([]) -> [].
 
 
 -spec recursive_copy(list(), list()) -> ok.                            

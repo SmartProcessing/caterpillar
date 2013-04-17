@@ -51,8 +51,18 @@ get_work_id(#state{work_id=WI}) -> {ok, WI}.
 
 
 
-clean_packages(#state{}, Packages) ->
-    ok.
+-spec clean_packages(#state{}, [#archive{}]) -> ok.
+clean_packages(_State, []) -> ok;
+clean_packages(#state{repository_root=RepositoryRoot}=State, [#archive{name=Name, branch=Branch}|Other]) ->
+    AbsBranchPath = filename:join([RepositoryRoot, Name, Branch]),
+    AbsRepoPath = filename:join([RepositoryRoot, Name]),
+    caterpillar_utils:del_dir(AbsBranchPath),
+    case caterpillar_utils:list_packages(AbsRepoPath) of
+        {ok, []} -> caterpillar_utils:del_dir(AbsRepoPath);
+        _ -> ok
+    end,
+    error_logger:info_msg("~p/~p cleaned~n", [Name, Branch]),
+    clean_packages(State, Other).
 
 
 
@@ -90,14 +100,14 @@ unarchive(Archives, State) ->
 
 unarchive([], Accum, _State) ->
     {ok, Accum};
-unarchive([ #archive{name=Name, branch=Branch, archive_name=AR}=A|T ], Accum, State) ->
+unarchive([ #archive{name=Name, branch=Branch, archive_name=AR, archive_type=ArchiveType}=A|T ], Accum, State) ->
     ArchiveRoot = State#state.archive_root,
     RepositoryRoot = State#state.repository_root,
     ArchivePath = caterpillar_utils:filename_join([ArchiveRoot, AR]),
     UnArchivePath = caterpillar_utils:filename_join([RepositoryRoot, Name, Branch]),
     caterpillar_utils:del_dir(UnArchivePath),
     caterpillar_utils:ensure_dir(UnArchivePath),
-    case caterpillar_tar:extract(ArchivePath, [{cwd, UnArchivePath}, compressed, verbose]) of
+    case caterpillar_archive:extract(ArchivePath, [{cwd, UnArchivePath}, {type, ArchiveType}]) of
         {error, Reason} ->
             error_logger:error_msg(
                 "Failed to unarchive ~p with reason ~p~n",
@@ -105,7 +115,7 @@ unarchive([ #archive{name=Name, branch=Branch, archive_name=AR}=A|T ], Accum, St
             ),
             file:delete(ArchivePath),
             error;
-        _ ->
+        ok ->
             file:delete(ArchivePath),
             error_logger:info_msg("~s/~s unarchived~n", [Name, Branch]),
             unarchive(T, [ A|Accum ], State)
