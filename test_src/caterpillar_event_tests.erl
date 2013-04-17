@@ -30,7 +30,9 @@ start_link_test_() ->
 
 stop_test_() ->
 {setup,
-    fun() -> caterpillar_event:start_link([]) end,
+    fun() ->
+        {ok, _Pid} = caterpillar_event:start_link([])
+    end,
     fun(_) -> ok end,
     fun() ->
         Pid = global:whereis_name(caterpillar_event),
