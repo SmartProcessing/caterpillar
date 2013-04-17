@@ -419,7 +419,7 @@ get_branches([Package|O], Accum, #state{repository_root=RepositoryRoot, vcs_plug
 
 
 cast_clean_packages(Branches, #state{dets=Dets}) -> 
-    DetsBranches = dets:select(Dets, [{{'$1', '_', '_', '_', '_'}, [], ['$1']}]),
+    DetsBranches = dets:select(Dets, [{{'$1', '_', '_', '_', '_', '_'}, [], ['$1']}]),
     case DetsBranches -- [{Name, Branch} || #package{name=Name, branch=Branch} <- Branches] of
         [] -> ok;
         ToClean ->
@@ -446,7 +446,7 @@ find_modified_packages([Package|O], Accum, State) ->
     #state{vcs_plugin=VCSPlugin, vcs_state=VCSState, repository_root=RepositoryRoot}=State,
     #package{name=PackageName, branch=PackageBranch} = Package,
     AbsPackage = caterpillar_utils:filename_join(RepositoryRoot, PackageName),
-    SelectPattern = [{{{'$1', '$2'}, '_', '$3', '_', '_'}, [{'==', '$1', PackageName}, {'==', '$2', PackageBranch}], ['$3']}],
+    SelectPattern = [{{{'$1', '$2'}, '_', '_', '$3', '_', '_'}, [{'==', '$1', PackageName}, {'==', '$2', PackageBranch}], ['$3']}],
     DetsResult = dets:select(State#state.dets, SelectPattern),
     DetsRevno = case DetsResult of
         [] -> none;
@@ -646,7 +646,7 @@ rebuild_package(Package, Branch, #state{dets=Dets}) ->
     case catch dets:lookup(Dets, {Package, Branch}) of
         [] ->
             error_logger:error_msg("no ~p/~p for rebuild~n", [Package, Branch]);
-        [{{Package, Branch}, ArchiveName, LastRevision, Tag, _WorkId}] ->
+        [{{Package, Branch}, ArchiveName, ArchiveType, LastRevision, Tag, _WorkId}] ->
             Pkg = #package{
                 name=Package, branch=Branch, tag=Tag, current_revno=LastRevision,
                 archive_name=ArchiveName, status=ok

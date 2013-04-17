@@ -426,10 +426,8 @@ get_build_candidate(both, State) ->
 %% ------------------------------------------------------------------
 -spec notify(list(), list()) -> ok.
 notify(Subject, Body) ->
-    Msg = {notify, #notify{
-            subject=list_to_binary(Subject), 
-            body=list_to_binary(Body)}},
-    caterpillar_event:sync_event(Msg).
+    Notify = #notify{subject=list_to_binary(Subject), body=list_to_binary(Body)},
+    caterpillar_event:sync_event({notify, Notify}).
 
 -spec check_build_deps(Candidate :: #rev_def{}, State :: #state{}) -> 
     independent|dependent|missing|{error, term()}.

@@ -343,7 +343,7 @@ cast_clean_packages_test_() ->
 {foreachx,
     fun(Setup) ->
         {ok, D} = dets:open_file("test.dets", [{access, read_write}]),
-        [dets:insert(D, {X, archive, revision, tag, work_id}) || X <- Setup],
+        [dets:insert(D, {X, archive, type, revision, tag, work_id}) || X <- Setup],
         #state{dets=D}
     end,
     fun(_, _) ->
@@ -404,7 +404,7 @@ find_modified_packages_test_() ->
 {foreachx,
     fun(Setup) ->
         {ok, D} = dets:open_file("test.dets", [{access, read_write}]),
-        [dets:insert(D, {X, archive, R, tag, work_id}) || {X, R} <- Setup],
+        [dets:insert(D, {X, archive, archive_type, R, tag, work_id}) || {X, R} <- Setup],
         #state{dets=D, vcs_plugin=test_vcs_plugin, repository_root="__test"}
     end,
     fun(_, _) ->
@@ -490,7 +490,7 @@ export_archives_test_() ->
         },
         {
             "some error while archive",
-            ["__test_repot/error/error"],
+            ["__test_repo/error/error"],
             [#package{name="error", branch="error"}],
             fun(Result) ->
                 ?assertEqual(
@@ -501,7 +501,7 @@ export_archives_test_() ->
         },
         {
             "bad return",
-            ["__test_repot/error/error"],
+            ["__test_repo/error/error"],
             [#package{name="error", branch="bad_return"}],
             fun(Result) ->
                 ?assertEqual(
@@ -1515,7 +1515,7 @@ rebuild_package_test_() ->
         },
         {
             "package marked for rebuild",
-            [{{package, branch}, archive_name, last_revno, tag, work_id}],
+            [{{package, branch}, archive_name, type, last_revno, tag, work_id}],
             {package, branch},
             fun() ->
                 Msg = receive A -> A after 50 -> timeout end,
