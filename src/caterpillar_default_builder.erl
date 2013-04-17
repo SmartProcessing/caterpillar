@@ -2,11 +2,12 @@
 
 -export([clean/2, test/2, prebuild/2]).
 
+-include("caterpillar_internal.hrl").
 -define(CMD, caterpillar_utils:command).
 
-clean(_Rev, Dir) ->
+clean(Rev, Dir) ->
     error_logger:info_msg("executing make clean in ~s:~n", [Dir]),
-    case ?CMD("make clean PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk PATH_PY_MK=../devel-tools/Makefile-py.mk", [{cwd, Dir}]) of
+    case ?CMD(get_command(Rev#rev_def.branch, "clean"), [{cwd, Dir}]) of
         {0, _Msg} ->
             {ok, ""};
         {110, Msg} ->
@@ -17,9 +18,9 @@ clean(_Rev, Dir) ->
             {ok, ""}
     end.
 
-test(_Rev, Dir) ->
+test(Rev, Dir) ->
     error_logger:info_msg("executing make test in ~s:~n", [Dir]),
-    case ?CMD("make test PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk PATH_PY_MK=../devel-tools/Makefile-py.mk", [{cwd, Dir}]) of
+    case ?CMD(get_command(Rev#rev_def.branch, "test"), [{cwd, Dir}]) of
         {0, _Msg} ->
             {ok, ""};
         {Code, Msg} when is_integer(Code) ->
@@ -29,3 +30,7 @@ test(_Rev, Dir) ->
 
 prebuild(_Rev, _Dir) ->
     {ok, ""}.
+
+get_command(Branch, Type) ->
+    lists:flatten("make ~s BRANCH=~s PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk PATH_PY_MK=../devel-tools/Makefile-py.mk",
+        [binary_to_list(Branch)]).
