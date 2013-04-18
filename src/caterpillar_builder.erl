@@ -141,7 +141,7 @@ handle_cast({clean_packages, Archives}, State) ->
         Version = {
             list_to_binary(Archive#archive.name),
             list_to_binary(Archive#archive.branch),
-            list_to_binary(Archive#archive.tag)
+            <<>>
         },
         ?CDEP:delete(State#state.deps, State#state.buckets, State#state.build_path, Version)
     end,
