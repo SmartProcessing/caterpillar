@@ -151,11 +151,11 @@ make_packages([ #package{name=Name, branch=Branch}=Package|T ], Accum, #state{ne
     NewPackage = case filelib:is_dir(UnArchivePath) of
         true ->
             Commands = lists:map(
-                fun(Command) -> lists:flatten(io_lib:format(Command, [UnArchivePath])) end,
+                fun(Command) -> lists:flatten(io_lib:format(Command, [UnArchivePath, Branch])) end,
                 [
-                    "make -C ~s clean &>/dev/null | exit 0 ", %exit status always 0
-                    "make -C ~s test DIST_DIR=dist",
-                    "make -C ~s package DIST_DIR=dist"
+                    "make PATH_MOD=../../* BRANCH=~s -C ~s clean &>/dev/null | exit 0 ", %exit status always 0
+                    "make PATH_MOD=../../* BRANCH=~s -C ~s test DIST_DIR=dist",
+                    "make PATH_MOD=../../* BRANCH=~s -C ~s package DIST_DIR=dist"
                 ]
             ),
             case catch make(Package, DistDir, Commands, State) of
