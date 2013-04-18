@@ -1529,7 +1529,7 @@ rebuild_package_test_() ->
                         packages = [
                             #package{
                                 name=package, branch=branch, tag=tag, archive_name=archive_name,
-                                current_revno = last_revno
+                                archive_type = type, current_revno = last_revno
                             }
                         ],
                         archives = [
