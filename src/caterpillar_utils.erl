@@ -167,7 +167,8 @@ command(Cmd) -> command(Cmd, []).
 command(Cmd, Options) -> command(Cmd, Options, [], ?DEFAULT_TIMEOUT).
 
 
-command(Cmd, Options, Env, Timeout) ->
+command(Cmd__, Options, Env, Timeout) ->
+    Cmd = lists:flatten(Cmd__),
     Dir = ?GV(cwd, Options, ""),
     CD = if
         Dir =:= "" -> [];

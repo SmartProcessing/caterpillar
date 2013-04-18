@@ -5,6 +5,7 @@
 -include("caterpillar_internal.hrl").
 -define(CMD, caterpillar_utils:command).
 
+
 clean(Rev, Dir) ->
     error_logger:info_msg("executing make clean in ~s:~n", [Dir]),
     case ?CMD(get_command(Rev#rev_def.branch, "clean"), [{cwd, Dir}]) of
@@ -18,6 +19,7 @@ clean(Rev, Dir) ->
             {ok, ""}
     end.
 
+
 test(Rev, Dir) ->
     error_logger:info_msg("executing make test in ~s:~n", [Dir]),
     case ?CMD(get_command(Rev#rev_def.branch, "test"), [{cwd, Dir}]) of
@@ -28,8 +30,10 @@ test(Rev, Dir) ->
             {error, io_lib:format("errors on test~n ~B: ~s", [Code, Msg])}
     end.
 
+
 prebuild(_Rev, _Dir) ->
     {ok, ""}.
+
 
 get_command(Branch, Type) ->
     lists:flatten("make ~s BRANCH=~s PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk PATH_PY_MK=../devel-tools/Makefile-py.mk",
