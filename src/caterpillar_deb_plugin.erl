@@ -27,7 +27,7 @@ submit(Rev, Dir) ->
             find_deb_file(filename:join([Dir, "dist"]));
         {Code, Msg} when is_integer(Code) ->
             error_logger:info_msg("make package failed with status ~B: ~s", [Code, Msg]),
-            {error, io_lib:format("make package returned ~B: ~s", [Code, Msg])}
+            {error, format("make package returned ~B: ~s", [Code, Msg])}
     end.
 
 find_deb_file(Dir) ->
@@ -44,3 +44,7 @@ find_deb_file(Dir) ->
 get_command(Branch, Type) ->
     lists:flatten(io_lib:format("make ~s BRANCH=~s PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk PATH_PY_MK=../devel-tools/Makefile-py.mk",
         [Type, binary_to_list(Branch)])).
+
+
+format(Format, Attrs) ->
+    lists:flatten(io_lib:format(Format, Attrs)).
