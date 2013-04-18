@@ -260,15 +260,12 @@ events_test_() ->
     end,
 [
     {Message, fun() ->
-        Event(),
         Check()
-    end} || {Message, Event, Check} <- [
+    end} || {Message, Check} <- [
         {
             "register worker event",
             fun() ->
-                caterpillar_event:register_worker(test, work_id)
-            end,
-            fun() ->
+                caterpillar_event:register_worker(test, work_id),
                 ?assertEqual(
                     [{worker, test}],
                     caterpillar_event:get_info()
@@ -279,9 +276,7 @@ events_test_() ->
             "register worker event, checking repository service got event about new worker",
             fun() ->
                 caterpillar_event:register_service(repository),
-                caterpillar_event:register_worker(test, work_id)
-            end,
-            fun() ->
+                caterpillar_event:register_worker(test, work_id),
                 ?assertEqual(
                     [{service, repository}, {worker, test}],
                     lists:sort(caterpillar_event:get_info())
@@ -296,9 +291,7 @@ events_test_() ->
         {
             "register service event",
             fun() ->
-                caterpillar_event:register_service(test)
-            end,
-            fun() ->
+                caterpillar_event:register_service(test),
                 ?assertEqual(
                     [{service, test}],
                     caterpillar_event:get_info()
@@ -313,17 +306,11 @@ events_test_() ->
                 caterpillar_event:register_worker(worker2, work_id),
                 caterpillar_event:register_service(test1),
                 caterpillar_event:register_service(test1),
-                caterpillar_event:register_service(test2)
-            end,
-            fun() ->
+                caterpillar_event:register_service(test2),
                 ?assertEqual(
                     [
-                        {service,test1},
-                        {service,test1},
-                        {service,test2},
-                        {worker,worker1},
-                        {worker,worker1},
-                        {worker,worker2}
+                        {service,test1}, {service,test1}, {service,test2},
+                        {worker,worker1}, {worker,worker1}, {worker,worker2}
                     ],
                     lists:sort(caterpillar_event:get_info())
                 )
@@ -332,48 +319,31 @@ events_test_() ->
         {
             "registered worker down",
             fun() ->
-                spawn(fun() ->
+                Pid = spawn(fun() ->
                     caterpillar_event:register_worker(worker1, work_id),
                     timer:sleep(10)
-                end)
-            end,
-            fun() ->
+                end),
                 timer:sleep(5),
-                ?assertEqual(
-                    [{worker, worker1}],
-                    caterpillar_event:get_info()
-                ),
-                timer:sleep(10),
-                ?assertEqual(
-                    [],
-                    caterpillar_event:get_info()
-                )
+                ?assertEqual([{worker, worker1}], caterpillar_event:get_info()),
+                caterpillar_test_support:wait_for_exit(Pid),
+                ?assertEqual([], caterpillar_event:get_info())
             end
         },
         {
             "registered service down",
             fun() ->
-                spawn(fun() ->
+                Pid = spawn(fun() ->
                     caterpillar_event:register_service(service1),
-                    timer:sleep(5)
-                end)
-            end,
-            fun() ->
-                timer:sleep(2),
-                ?assertEqual(
-                    [{service, service1}],
-                    caterpillar_event:get_info()
-                ),
-                timer:sleep(8),
-                ?assertEqual(
-                    [],
-                    caterpillar_event:get_info()
-                )
+                    timer:sleep(10)
+                end),
+                timer:sleep(5),
+                ?assertEqual([{service, service1}], caterpillar_event:get_info()),
+                caterpillar_test_support:wait_for_exit(Pid),
+                ?assertEqual([], caterpillar_event:get_info())
             end
         },
         {
             "sync event, notify, not notifier available",
-            fun() -> ok end,
             fun() ->
                 ?assertEqual(
                     {error, no_service},
@@ -391,9 +361,7 @@ events_test_() ->
                     after 10 ->
                         timeout
                     end
-                end)
-            end,
-            fun() ->
+                end),
                 ?assertEqual(
                     {ok, done},
                     caterpillar_event:sync_event({notify, #notify{}})
@@ -402,7 +370,6 @@ events_test_() ->
         },
         {
             "sync event, get_archive, no repository available",
-            fun() -> ok end,
             fun() ->
                 ?assertEqual(
                     {error, no_service},
@@ -420,9 +387,7 @@ events_test_() ->
                     after 10 ->
                         timeout
                     end
-                end)
-            end,
-            fun() ->
+                end),
                 timer:sleep(1),
                 ?assertEqual(
                     [{service, repository}],
@@ -444,9 +409,7 @@ events_test_() ->
                     after 10 ->
                         timeout
                     end
-                end)
-            end,
-            fun() ->
+                end),
                 timer:sleep(1),
                 ?assertEqual(
                     [{service, repository}],
@@ -468,9 +431,7 @@ events_test_() ->
                     after 10 ->
                         timeout
                     end
-                end)
-            end,
-            fun() ->
+                end),
                 timer:sleep(1),
                 ?assertEqual(
                     [{service, repository}],
@@ -484,7 +445,7 @@ events_test_() ->
         }, 
         {
             "sync event repository custom command",
-                        fun() -> 
+            fun() -> 
                 spawn(fun() ->
                     caterpillar_event:register_service(repository),
                     receive {_, From, {repository_custom_command, command, args}} ->
@@ -492,9 +453,7 @@ events_test_() ->
                     after 10 ->
                         timeout
                     end
-                end)
-            end,
-            fun() ->
+                end),
                 timer:sleep(1),
                 ?assertEqual(
                     [{service, repository}],
@@ -509,9 +468,7 @@ events_test_() ->
         {
             "event 'changes', few workers registered",
             fun() ->
-                [caterpillar_event:register_worker(W, work_id) || W <- [w1, w2]]
-            end,
-            fun() ->
+                [caterpillar_event:register_worker(W, work_id) || W <- [w1, w2]],
                 ?assertEqual(
                     [{worker, w1}, {worker, w2}],
                     lists:sort(caterpillar_event:get_info())
@@ -533,9 +490,7 @@ events_test_() ->
         {
             "event 'clean_packages', few workers registered",
             fun() ->
-                [caterpillar_event:register_worker(W, work_id) || W <- [w1, w2]]
-            end,
-            fun() ->
+                [caterpillar_event:register_worker(W, work_id) || W <- [w1, w2]],
                 ?assertEqual(
                     [{worker, w1}, {worker, w2}],
                     lists:sort(caterpillar_event:get_info())
