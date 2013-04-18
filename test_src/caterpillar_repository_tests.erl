@@ -1533,7 +1533,7 @@ rebuild_package_test_() ->
                             }
                         ],
                         archives = [
-                            #archive{name=package, branch=branch, tag=tag, archive_name=archive_name}
+                            #archive{name=package, branch=branch, tag=tag, archive_name=archive_name, archive_type=type}
                         ],
                         notify = #notify{body = <<"rebuild request for package/branch\n">>}
                     }},

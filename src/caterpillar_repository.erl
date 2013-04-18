@@ -168,6 +168,7 @@ handle_call({changes, Changes}, _From, State) ->
     NewState = State#state{work_id=NewWorkId},
     spawn(fun() ->
         Archives = Changes#changes.archives,
+        error_logger:info_msg("archives: ~p~n", [Archives]),
         case Archives of
             [] -> ok;
             _ -> caterpillar_event:event({changes, NewWorkId, Archives})
@@ -652,7 +653,8 @@ rebuild_package(Package, Branch, #state{dets=Dets}) ->
                 archive_name=ArchiveName, status=ok
             },
             Archive = #archive{
-                name=Package, branch=Branch, archive_name=ArchiveName, tag=Tag 
+                name=Package, branch=Branch, archive_name=ArchiveName, tag=Tag,
+                archive_type=ArchiveType
             },
             Body = io_lib:format("rebuild request for ~s/~s~n", [Package, Branch]),
             Notify = #notify{body = list_to_binary(Body)},
