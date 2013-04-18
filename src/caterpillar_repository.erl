@@ -650,7 +650,7 @@ rebuild_package(Package, Branch, #state{dets=Dets}) ->
         [{{Package, Branch}, ArchiveName, ArchiveType, LastRevision, Tag, _WorkId}] ->
             Pkg = #package{
                 name=Package, branch=Branch, tag=Tag, current_revno=LastRevision,
-                archive_name=ArchiveName, status=ok
+                archive_name=ArchiveName, archive_type=ArchiveType, status=ok
             },
             Archive = #archive{
                 name=Package, branch=Branch, archive_name=ArchiveName, tag=Tag,
