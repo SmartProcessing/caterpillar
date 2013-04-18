@@ -15,6 +15,7 @@
 -record(state, {
         master_state=false,
         deps,
+        buckets,
         main_queue,
         wait_queue,
         next_to_build,
@@ -36,9 +37,12 @@ start_link(Settings) ->
 
 init(Settings) ->
     error_logger:info_msg("starting caterpillar_builder~n", []),
-    DetsFile = ?GV(deps, Settings, ?DEFAULT_DEPENDENCIES_DETS),
-    filelib:ensure_dir(DetsFile),
-    {ok, Deps} = dets:open_file(deps, [{file, DetsFile}]),
+    DepsFile = ?GV(deps, Settings, ?DEFAULT_DEPENDENCIES_DETS),
+    BucketsFile = ?GV(buckets, Settings, ?DEFAULT_BUCKETS_DETS),
+    filelib:ensure_dir(DepsFile),
+    filelib:ensure_dir(BucketsFile),
+    {ok, Buckets} = dets:open_file(buckets, [{file, BucketsFile}]),
+    {ok, Deps} = dets:open_file(deps, [{file, DepsFile}]),
     PollTime = ?GV(poll_time, Settings, 10000),
     BuildQueue = queue:new(),
     WaitQueue = queue:new(),
@@ -53,6 +57,7 @@ init(Settings) ->
     schedule_poller(PollTime),
     {ok, #state{
             deps=Deps,
+            buckets=Buckets,
             main_queue=BuildQueue,
             wait_queue=WaitQueue,
             workers=WorkerList,
@@ -126,10 +131,22 @@ handle_call(_Request, _From, State) ->
     {reply, unknown, State}.
 
 handle_cast({changes, WorkId, Archives}, State) ->
+    error_logger:info_msg("Changes: ~p~n", [Archives]),
     update_work_id(State#state.work_id, WorkId),
     ToPreprocess = lists:usort(Archives),
     {ok, NewState} = process_archives(ToPreprocess, State, WorkId),
     {noreply, NewState};
+handle_cast({clean_packages, Archives}, State) ->
+    Fun = fun(Archive) ->
+        Version = {
+            list_to_binary(Archive#archive.name),
+            list_to_binary(Archive#archive.branch),
+            list_to_binary(Archive#archive.tag)
+        },
+        ?CDEP:delete(State#state.deps, State#state.buckets, State#state.build_path, Version)
+    end,
+    lists:map(Fun, Archives),
+    {noreply, State};
 handle_cast({rebuild_deps, WorkId, Version}, State) ->
     DepArchives = case ?CDEP:fetch_dependencies(State#state.deps, Version) of
         {ok, []} ->
@@ -215,12 +232,12 @@ process_archive(BuildPath, Archive, UnpackState, WorkId) ->
 
 
 prepare(BuildPath, Archive, WorkId) ->
-    error_logger:info_msg("queued archive: ~p~n", [Archive]),
     TempName = io_lib:format(
         "~s-~s~s",
         [Archive#archive.name, Archive#archive.branch, Archive#archive.tag]
     ),
     Type = Archive#archive.archive_type,
+    error_logger:info_msg("==============================ARCHIVE TYPE: ~p~n", [Type]),
     TempArch = filename:join([BuildPath, "temp", TempName]) ++ "." ++ atom_to_list(Type),
     filelib:ensure_dir(TempArch),
     {ok, Fd} = file:open(TempArch, [read, write]),

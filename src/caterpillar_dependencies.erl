@@ -2,9 +2,12 @@
 -include_lib("caterpillar_internal.hrl").
 -export([check_intersection/2, list_unresolved_dependencies/3]).
 -export([update_dependencies/3, fetch_dependencies/2, create_dependencie/2]).
+-export([delete/4]).
 
 -define(LOCK(X), gen_server:call(caterpillar_lock, {lock, X}, infinity)).
 -define(UNLOCK(X), gen_server:call(caterpillar_lock, {unlock, X})).
+-define(CPU, caterpillar_package_utils).
+-define(CU, caterpillar_utils).
 
 -spec list_unresolved_dependencies(reference(), #rev_def{}, [version()]) ->
     {ok, Unresolved :: [version()]}.
@@ -125,3 +128,22 @@ update_subjects(Deps, [Version|Other], NewRef) ->
     end,
     ?UNLOCK(Version),
     update_subjects(Deps, Other, NewRef).
+
+delete(Deps, Buckets, Path, Version) ->
+    {Name, _, _} = Version,
+    ?LOCK(Version),
+    InBuckets = case fetch_dependencies(Deps, Version) of
+        {ok, [{Vesion, {_, Buckets}, _, _}|_]} ->
+            Buckets;
+        _Other ->
+            []
+    end,
+    ?UNLOCK(Version),
+    BucketDel = fun(X) ->
+        ?LOCK(X),
+        [{BName, BPath, BContain}] = dets:lookup(Buckets, X), 
+        dets:insert(Buckets, {BName, BPath, lists:delete(Version, BContain)}),
+        ?UNLOCK(X),
+        ?CU:del_dir(filename:join([Path, BPath, binary_to_list(Name)]))
+    end,
+    ?CU:del_dir(filename:join([Path, "temp", ?CPU:get_dir_name(Version)])).
