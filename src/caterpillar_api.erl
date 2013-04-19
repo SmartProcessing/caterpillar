@@ -38,6 +38,7 @@ handle_info(_, State) ->
 
 
 handle_call({execute, Key}, _From, #state{ets=Ets}=State) ->
+    %FIXME: insert_new, lookup - race
     Response = case ets:lookup(Ets, Key) of
         [] -> 
             Msg = Key,
@@ -83,11 +84,11 @@ init({tcp, http}, #http_req{path=Path}=Req, State) ->
 handle(#http_req{path=[Cmd, Package, Branch]}=Req, State)
   when Cmd == <<"rescan">>; Cmd == <<"rebuild">>
 ->
+    error_logger:info_msg("handling ~s~n", [Cmd]),
     AtomCmd = binary_to_atom(<<Cmd/binary, "_package">>, latin1),
+    Message = {execute,  {AtomCmd, {binary_to_list(Package), binary_to_list(Branch)}}}, infinity) of
+    
     Response = case gen_server:call(?MODULE, 
-            {execute, 
-                {AtomCmd, {binary_to_list(Package), binary_to_list(Branch)}}}, 
-            infinity) of
         true ->
             {ok, Req2} = cowboy_http_req:reply(200, [], <<"ok\n">>, Req),
             Req2;
