@@ -6,7 +6,7 @@
 
 -define(LOCK(X), gen_server:call(caterpillar_lock, {lock, X}, infinity)).
 -define(UNLOCK(X), gen_server:call(caterpillar_lock, {unlock, X})).
--define(CPU, caterpillar_package_utils).
+-define(CPU, caterpillar_pkg_utils).
 -define(CU, caterpillar_utils).
 
 -spec list_unresolved_dependencies(reference(), #rev_def{}, [version()]) ->
@@ -131,14 +131,14 @@ update_subjects(Deps, [Version|Other], NewRef) ->
 
 delete(Deps, Buckets, Path, Version) ->
     {Name, _, _} = Version,
-    ?LOCK(Version),
     InBuckets = case fetch_dependencies(Deps, Version) of
-        {ok, [{Vesion, {_, Buckets}, _, _}|_]} ->
-            Buckets;
+        {ok, {Version, {_, In}, _, _}} ->
+            dets:delete(Deps, Version),
+            In;
         _Other ->
             []
     end,
-    ?UNLOCK(Version),
+    error_logger:info_msg("removing from buckets: ~p~n", [InBuckets]),
     BucketDel = fun(X) ->
         ?LOCK(X),
         [{BName, BPath, BContain}] = dets:lookup(Buckets, X), 
@@ -146,4 +146,5 @@ delete(Deps, Buckets, Path, Version) ->
         ?UNLOCK(X),
         ?CU:del_dir(filename:join([Path, BPath, binary_to_list(Name)]))
     end,
+    lists:map(BucketDel, InBuckets),
     ?CU:del_dir(filename:join([Path, "temp", ?CPU:get_dir_name(Version)])).

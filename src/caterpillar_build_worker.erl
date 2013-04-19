@@ -289,10 +289,10 @@ get_new_bucket(Dets) ->
     Res = case LastBucket of
         [{last_bucket, Num}|_] ->
             ok = dets:insert(Dets, {last_bucket, Num+1}),
-            io_lib:format("~4..0B", [Num + 1]);
+            lists:flatten(io_lib:format("~4..0B", [Num + 1]));
         [] ->
             ok = dets:insert(Dets, {last_bucket, 0}),
-            io_lib:format("~4..0B", [0])
+            lists:flatten(io_lib:format("~4..0B", [0]))
     end,
     ?UNLOCK(last_bucket),
     Res.
@@ -323,7 +323,7 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
                     ?LOCK(Dep),
                     [{Dep, {NewState, NewDepBuckets}, NewDepOn, NewHasInDep}|_] = dets:lookup(Deps, Dep),
                     ok = dets:insert(Deps, {Dep, {NewState, lists:usort([BName|NewDepBuckets])}, NewDepOn, NewHasInDep}),
-                    ok = dets:insert(BucketsDets, {BName, BPath, [Dep|BPackages]}),
+                    ok = dets:insert(BucketsDets, {BName, BPath, lists:usort([Dep|BPackages])}),
                     ?UNLOCK(Dep);
                 [] ->
                     DepPath = get_temp_path(BuildPath, Dep),
@@ -331,11 +331,11 @@ arm_build_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
                     ?LOCK(Dep),
                     [{Dep, {NewState, NewDepBuckets}, NewDepOn, NewHasInDep}|_] = dets:lookup(Deps, Dep),
                     ok = dets:insert(Deps, {Dep, {NewState, lists:usort([BName|NewDepBuckets])}, NewDepOn, NewHasInDep}),
-                    ok = dets:insert(BucketsDets, {BName, BPath, [Dep|BPackages]}),
+                    ok = dets:insert(BucketsDets, {BName, BPath, lists:usort([Dep|BPackages])}),
                     ?UNLOCK(Dep),
                     ?LOCK(BName),
                     [{BName, BPath, OldContain}] = dets:lookup(BucketsDets, BName),
-                    ok = dets:insert(BucketsDets, {BName, BPath, [Dep|OldContain]}),
+                    ok = dets:insert(BucketsDets, {BName, BPath, lists:usort([Dep|OldContain])}),
                     ?UNLOCK(BName)
             end
     end,
