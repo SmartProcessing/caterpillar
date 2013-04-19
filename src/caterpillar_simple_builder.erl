@@ -150,12 +150,13 @@ make_packages([ #package{name=Name, branch=Branch}=Package|T ], Accum, #state{ne
     caterpillar_utils:del_dir(DistDir),
     NewPackage = case filelib:is_dir(UnArchivePath) of
         true ->
+            EnvHardCode = "PATH_MK=../../devel-tools/Makefile.mk PATH_PY_MK=../../smprc.setup/Makefile.mk",
             Commands = lists:map(
-                fun(Command) -> lists:flatten(io_lib:format(Command, [Branch, UnArchivePath])) end,
+                fun(Command) -> lists:flatten(io_lib:format(Command, [EnvHardCode, Branch, UnArchivePath])) end,
                 [
-                    "make PATH_MOD=../../* BRANCH=~s -C ~s clean &>/dev/null | exit 0 ", %exit status always 0
-                    "make PATH_MOD=../../* BRANCH=~s -C ~s test DIST_DIR=dist",
-                    "make PATH_MOD=../../* BRANCH=~s -C ~s package DIST_DIR=dist"
+                    "make ~s BRANCH=~s -C ~s clean &>/dev/null | exit 0 ", %exit status always 0
+                    "make ~s BRANCH=~s -C ~s test DIST_DIR=dist",
+                    "make ~s BRANCH=~s -C ~s package DIST_DIR=dist"
                 ]
             ),
             case catch make(Package, DistDir, Commands, State) of
