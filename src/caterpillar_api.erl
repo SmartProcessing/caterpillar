@@ -74,7 +74,8 @@ terminate(_Req, _State) ->
 %--------- cowboy 
 
 
-init({tcp, http}, Req, State) ->
+init({tcp, http}, #http_req{path=Path], State) ->
+    error_logger:info_msg("api request: ~ts~n", [string:join([binary_to_list(X) || X <- Path], "/")]),
     {ok, Req, State}.
 
 
