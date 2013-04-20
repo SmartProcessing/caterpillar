@@ -86,9 +86,8 @@ handle(#http_req{path=[Cmd, Package, Branch]}=Req, State)
 ->
     error_logger:info_msg("handling ~s~n", [Cmd]),
     AtomCmd = binary_to_atom(<<Cmd/binary, "_package">>, latin1),
-    Message = {execute,  {AtomCmd, {binary_to_list(Package), binary_to_list(Branch)}}}, infinity) of
-    
-    Response = case gen_server:call(?MODULE, 
+    Message = {execute,  {AtomCmd, {binary_to_list(Package), binary_to_list(Branch)}}}, 
+    Response = case gen_server:call(?MODULE, Message, infinity) of
         true ->
             {ok, Req2} = cowboy_http_req:reply(200, [], <<"ok\n">>, Req),
             Req2;

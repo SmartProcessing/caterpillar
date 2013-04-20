@@ -131,7 +131,7 @@ clean_deploy_root(Archives, #state{deploy_root=DR}) ->
 make_packages(Archives, State) ->
     error_logger:info_msg("making packages ~n"),
     Packages = [
-        #package{name=Name, branch=Branch, tag=Tag} || 
+        #build_package{name=Name, branch=Branch, tag=Tag} || 
         #archive{name=Name, branch=Branch, tag=Tag} <- Archives
     ],
     make_packages(Packages, [], State).
@@ -139,7 +139,7 @@ make_packages(Archives, State) ->
 
 make_packages([], Accum, _State) ->
     {ok, Accum};
-make_packages([ #package{name=Name, branch=Branch}=Package|T ], Accum, #state{next_work_id=WorkId}=State) ->
+make_packages([ #build_package{name=Name, branch=Branch}=Package|T ], Accum, #state{next_work_id=WorkId}=State) ->
     UnArchivePath = caterpillar_utils:filename_join([State#state.repository_root, Name, Branch]),
     ControlFile = caterpillar_utils:filename_join(UnArchivePath, "control"),
     case filelib:is_regular(ControlFile) of
@@ -161,16 +161,16 @@ make_packages([ #package{name=Name, branch=Branch}=Package|T ], Accum, #state{ne
             ),
             case catch make(Package, DistDir, Commands, State) of
                 {ok, PackageResult} ->
-                    Package#package{build_status=ok, package=PackageResult};
+                    Package#build_package{build_status=ok, package=PackageResult};
                 {error, Log} ->
-                    Package#package{build_status=error, log=Log};
+                    Package#build_package{build_status=error, log=Log};
                 Error ->
                     error_logger:error_msg("make unknown error: ~p~n", [Error]),
                     {error, make_packages}
             end;
         _ ->
             error_logger:error_msg("not dir ~p~n", [UnArchivePath]),
-            Package#package{build_status=error, log= <<"unarchive path not directory">>}
+            Package#build_package{build_status=error, log= <<"unarchive path not directory">>}
     end,
     make_packages(T, [ NewPackage|Accum ], State).
 
@@ -194,7 +194,7 @@ make(Package, DistDir, Commands, #state{deploy_root=DeployRoot}) ->
 
 make(_, []) ->
     {ok, done};
-make(#package{name=Name, branch=Branch}=Package, [ Cmd|T ]) ->
+make(#build_package{name=Name, branch=Branch}=Package, [ Cmd|T ]) ->
     P = open_port({spawn, Cmd}, [binary, use_stdio, stderr_to_stdout, exit_status]),
     case receive_data_from_port() of
         {ok, 0, _Log} ->
@@ -235,7 +235,7 @@ pre_deploy(Packages, #state{deploy_root=DR, next_work_id=NWI, ident=Ident}) ->
         body = <<>>
     },
     DeployFold = fun
-        (#package{name=N, branch=B, build_status=ok, package=Package}, {Deploy, Notify}) ->
+        (#build_package{name=N, branch=B, build_status=ok, package=Package}, {Deploy, Notify}) ->
             error_logger:info_msg("openning ~p~n", [Package]),
             {ok, Fd} = file:open(caterpillar_utils:filename_join(DR, Package), [read, binary]),
             NewDeploy = Deploy#deploy{
@@ -248,7 +248,7 @@ pre_deploy(Packages, #state{deploy_root=DR, next_work_id=NWI, ident=Ident}) ->
             OldBody = Notify#notify.body,
             NewNotify = Notify#notify{body = <<OldBody/binary, Body/binary>>},
             {NewDeploy, NewNotify};
-        (#package{name=N, branch=B, log = Log}, {Deploy, Notify}) ->
+        (#build_package{name=N, branch=B, log = Log}, {Deploy, Notify}) ->
             Body = list_to_binary(io_lib:format("error ~s/~s~n", [N, B])),
             OldBody = Notify#notify.body,
             NewNotify = Notify#notify{body = <<OldBody/binary, Body/binary, Log/binary, $\n>>},
