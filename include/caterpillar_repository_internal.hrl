@@ -31,7 +31,7 @@
 }).
 
 
--record(package, {
+-record(repository_package, {
     name :: string(),
     branch :: string(),
     tag :: term(),
