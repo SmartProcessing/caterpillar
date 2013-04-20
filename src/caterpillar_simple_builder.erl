@@ -155,7 +155,7 @@ make_packages([ #build_package{name=Name, branch=Branch}=Package|T ], Accum, #st
                 "PATH_PY_MK=../../smprc.setup/trunk/Makefile.mk "
                 "PATH_MOD=../../*/~s",
                 [Branch]
-            ),
+            )),
             Commands = lists:map(
                 fun(Command) -> lists:flatten(io_lib:format(Command, [EnvHardCode, Branch, UnArchivePath])) end,
                 [
