@@ -84,7 +84,7 @@ handle_info({nodedown, Node}, #state{down_nodes=DownNodes, up_nodes=UpNodes}=Sta
 handle_info(scan_nodes, #state{down_nodes=DownNodes}=State) ->
     Foreach = fun(Node) ->
         catch case net_adm:ping(Node) of
-            pong ->  error_logger:info_msg("Node ~p up~n", [Node]);
+            pong -> ok;
             pang -> error_logger:info_msg("Node ~p still down~n", [Node]);
             Other ->
                 error_logger:error_msg("ping error: ~p~n", [Other]), 
