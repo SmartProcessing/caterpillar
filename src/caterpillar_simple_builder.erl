@@ -153,7 +153,7 @@ make_packages([ #build_package{name=Name, branch=Branch}=Package|T ], Accum, #st
             EnvHardCode = lists:flatten(io_lib:format(
                 "PATH_MK=../../devel-tools/trunk/Makefile.mk "
                 "PATH_PY_MK=../../smprc.setup/trunk/Makefile.mk "
-                "PATH_MOD=../../~s/* ",
+                "PATH_MOD=../../*/~s",
                 [Branch]
             )),
             Commands = lists:map(
