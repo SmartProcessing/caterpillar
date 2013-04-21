@@ -160,8 +160,8 @@ make_packages([ #build_package{name=Name, branch=Branch}=Package|T ], Accum, #st
                 fun(Command) -> lists:flatten(io_lib:format(Command, [EnvHardCode, Branch, UnArchivePath])) end,
                 [
                     "make ~s BRANCH=~s -C ~s clean &>/dev/null | exit 0 ", %exit status always 0
-                    "make ~s BRANCH=~s -C ~s test DIST_DIR=dist",
-                    "make ~s BRANCH=~s -C ~s package DIST_DIR=dist"
+                    "make ~s BRANCH=~s -C ~s DIST_DIR=dist test",
+                    "make ~s BRANCH=~s -C ~s DIST_DIR=dist package"
                 ]
             ),
             case catch make(Package, DistDir, Commands, State) of
