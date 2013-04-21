@@ -18,7 +18,11 @@ tty_on() ->
 start_link_test_() ->
 {setup,
     fun() -> ok end,
-    fun(_) -> catch caterpillar_event:stop() end,
+    fun(_) -> 
+        Pid = global:whereis_name(caterpillar_event),
+        caterpillar_event:stop(),
+        caterpillar_test_support:wait_for_exit(Pid)
+    end,
     fun() ->
         Res = caterpillar_event:start_link([]),
         ?assertMatch({ok, _}, Res),
