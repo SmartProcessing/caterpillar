@@ -259,8 +259,8 @@ events_test_() ->
     fun(_) ->
         Pid = global:whereis_name(caterpillar_event),
         ok = caterpillar_event:stop(),
-        caterpillar_test_support:wait_for_exit(Pid)
-        % timer:sleep(1)
+        caterpillar_test_support:wait_for_exit(Pid),
+        timer:sleep(1)
     end,
 [
     {Message, fun() ->
@@ -362,7 +362,7 @@ events_test_() ->
                     caterpillar_event:register_service(notifier),
                     receive {_, From, {notify, #notify{}}} ->
                         gen_server:reply(From, {ok, done})
-                    after 10 ->
+                    after 50 ->
                         timeout
                     end
                 end),
