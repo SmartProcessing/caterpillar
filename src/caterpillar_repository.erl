@@ -9,7 +9,6 @@
 -export([init/1, handle_info/2, handle_cast/2, handle_call/3, terminate/2, code_change/3]).
 
 
-
 start_link(Args) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, Args, []).
 
@@ -27,6 +26,7 @@ init(Args) ->
             error_logger:error_msg("caterpillar_repository dets initialization error: ~p~n", [Error]),
             throw({caterpillar_repository, {dets, Error}})
     end,
+    check_repository_db_version(Dets),
     WorkIdFile = ?GV(work_id_file, Args, ?WORK_ID_FILE),
     filelib:ensure_dir(WorkIdFile),
     State = vcs_init(
@@ -305,6 +305,24 @@ notify(#state{notify_root=NR}, #notify{}=Notify) ->
             file:write_file(FileName, term_to_binary(Notify)) 
     end,
     ok.
+
+
+%-----------
+
+
+-spec check_repository_db_version(dets:tab()) -> ok.
+check_repository_db_version(Dets) ->
+    case dets:match(Dets, {version, '$1'}) of
+        [[?REPOSITORY_DB_VERSION]] ->
+            ok;
+        Other ->
+            error_logger:info_msg("check_repository_db_version failed: ~p~n", [Other]),
+            ok = dets:delete_all_objects(Dets),
+            dets:insert(Dets, {version, ?REPOSITORY_DB_VERSION})
+    end,
+    dets:sync(Dets),
+    ok.
+
 
 %-----------
 

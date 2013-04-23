@@ -1112,7 +1112,52 @@ notify_test_() ->
         }
     ]
 ]}.
-        
+
+
+check_repository_db_version_test_() ->
+{foreach,
+    fun() ->
+        {ok, Dets} = dets:open_file("__test.dets", [{access, read_write}]),
+        Dets
+    end,
+    fun(Dets) ->
+        dets:close(Dets),
+        file:delete(Dets)
+    end,
+[
+    fun(Dets) ->
+        {Message, fun() ->
+            dets:insert(Dets, Version),
+            caterpillar_repository:check_repository_db_version(Dets),
+            Check(Dets)
+        end}
+    end || {Message, Version, Check} <- [
+        {
+            "no version in dets, data purged, new version writed",
+            [{purge_me}], 
+            fun(Dets) ->
+                ?assertEqual([[{version, ?REPOSITORY_DB_VERSION}]], dets:match(Dets, '$1'))
+            end
+        },
+        {
+            "already got valid version in dets",
+            [{do_not_purge_me}, {version, ?REPOSITORY_DB_VERSION}],
+            fun(Dets) ->
+                ?assertEqual(
+                    [{do_not_purge_me}, {version, ?REPOSITORY_DB_VERSION}],
+                    lists:sort([X || [X] <- dets:match(Dets, '$1')])
+                )
+            end
+        },
+        {
+            "older version in dets",
+            [{purge_me}, {version, -100}],
+            fun(Dets) ->
+                ?assertEqual([[{version, ?REPOSITORY_DB_VERSION}]], dets:match(Dets, '$1'))
+            end
+        }
+    ]
+]}.
 
 
 %%
