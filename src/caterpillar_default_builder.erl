@@ -2,7 +2,7 @@
 
 -export([clean/2, test/2, prebuild/2]).
 
--include("caterpillar_internal.hrl").
+-include("caterpillar_builder_internal.hrl").
 -define(CMD, caterpillar_utils:command).
 
 
@@ -38,7 +38,7 @@ prebuild(_Rev, _Dir) ->
 get_command(Branch, Type) ->
     lists:flatten(
         io_lib:format(
-            "make ~s BRANCH=~s PATH_MOD=../* PATH_MK=../devel-tools/Makefile.mk PATH_PY_MK=../devel-tools/Makefile-py.mk",
+            "make ~s BRANCH=~s PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk",
             [Type, binary_to_list(Branch)]
         )
     ).

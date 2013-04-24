@@ -1,7 +1,7 @@
 -module(caterpillar_build_worker).
 
 -include_lib("caterpillar.hrl").
--include_lib("caterpillar_internal.hrl").
+-include_lib("caterpillar_builder_internal.hrl").
 
 -behaviour(gen_server).
 

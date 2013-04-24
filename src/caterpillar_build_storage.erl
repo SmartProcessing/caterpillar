@@ -1,5 +1,5 @@
 -module(caterpillar_build_storage).
--include_lib("caterpillar_internal.hrl").
+-include_lib("caterpillar_builder_internal.hrl").
 -export([check_isect/2, list_unres_deps/3, list_buckets/2]).
 -export([update_dep_state/3, fetch_dep/2, create_dep/2]).
 -export([create_bucket/2, find_bucket/2, arm_bucket/5, get_temp_path/2]).

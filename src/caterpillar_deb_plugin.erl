@@ -3,7 +3,7 @@
 -export([check/2, prepare/2, submit/2]).
 
 -define(CMD, caterpillar_utils:command).
--include("caterpillar_internal.hrl").
+-include("caterpillar_builder_internal.hrl").
 
 check(_Rev, _Dir) ->
     {ok, ""}.
@@ -42,7 +42,7 @@ find_deb_file(Dir) ->
     end.
 
 get_command(Branch, Type) ->
-    lists:flatten(io_lib:format("make ~s BRANCH=~s PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk PATH_PY_MK=../devel-tools/Makefile-py.mk",
+    lists:flatten(io_lib:format("make ~s BRANCH=~s PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk",
         [Type, binary_to_list(Branch)])).
 
 
