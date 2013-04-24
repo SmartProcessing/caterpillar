@@ -9,7 +9,7 @@
 
 -define(CPU, caterpillar_pkg_utils).
 -define(CU, caterpillar_utils).
--define(CDEP, caterpillar_dependencies).
+-define(CBS, caterpillar_build_storage).
 -define(UNPACK_RETRY_LIMIT, 15).
 
 -record(state, {
@@ -74,7 +74,7 @@ init(Settings) ->
 
 handle_call({newref, RevDef}, _From, State) ->
     error_logger:info_msg("received new revision: ~p~n", [?VERSION(RevDef)]),
-    ?CDEP:create_dependencie(State#state.deps, RevDef),
+    ?CBS:create_dep(State#state.deps, RevDef),
     Queue = queue:in(RevDef, State#state.main_queue),
     QueuedState = State#state{main_queue=Queue},
     case State#state.next_to_build of
@@ -85,7 +85,7 @@ handle_call({newref, RevDef}, _From, State) ->
     end,
     {reply, ok, NewState};
 handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
-    ?CDEP:update_dependencies(State#state.deps, RevDef, <<"built">>),
+    ?CBS:update_dep_state(State#state.deps, RevDef, <<"built">>),
     DeployPkg = #deploy_package{
         name = binary_to_list(RevDef#rev_def.name),
         branch = binary_to_list(RevDef#rev_def.branch),
@@ -120,7 +120,7 @@ handle_call({err_built, Worker, RevDef, BuildInfo}, _From, State) ->
         ]),
     notify(Subj, BuildInfo#build_info.description),
     BuildState = BuildInfo#build_info.state,
-    ?CDEP:update_dependencies(State#state.deps, RevDef, BuildState),
+    ?CBS:update_dep_state(State#state.deps, RevDef, BuildState),
     NewWorkers = release_worker(Worker, State#state.workers),
     {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
     {ok, NewState} = try_build(ScheduledState),
@@ -143,12 +143,12 @@ handle_cast({clean_packages, Archives}, State) ->
             list_to_binary(Archive#archive.branch),
             <<>>
         },
-        ?CDEP:delete(State#state.deps, State#state.buckets, State#state.build_path, Version)
+        ?CBS:delete(State#state.deps, State#state.buckets, State#state.build_path, Version)
     end,
     lists:map(Fun, Archives),
     {noreply, State};
 handle_cast({rebuild_deps, WorkId, Version}, State) ->
-    DepArchives = case ?CDEP:fetch_dependencies(State#state.deps, Version) of
+    DepArchives = case ?CBS:fetch_dep(State#state.deps, Version) of
         {ok, []} ->
             [];
         {ok, {_, {St, _}, _Object, Subject}} when St == built; St == tested ->
@@ -375,7 +375,7 @@ get_build_candidate(main_queue, State) ->
     case check_build_deps(Candidate, State) of
         independent ->
             error_logger:info_msg("next candidate: ~p~n", [?VERSION(Candidate)]),
-            ?CDEP:update_dependencies(State#state.deps, Candidate, <<"in_progress">>),
+            ?CBS:update_dep_state(State#state.deps, Candidate, <<"in_progress">>),
             {ok, State#state{
                     main_queue=MainQueue, 
                     next_to_build=Candidate,
@@ -398,7 +398,7 @@ get_build_candidate(wait_queue, State) ->
     {{value, Candidate}, WaitQueue} = queue:out(State#state.wait_queue),
     case check_build_deps(Candidate, State) of
         independent ->
-            ?CDEP:update_dependencies(State#state.deps, Candidate, <<"in_progress">>),
+            ?CBS:update_dep_state(State#state.deps, Candidate, <<"in_progress">>),
             {ok, State#state{
                     wait_queue=WaitQueue, 
                     queued=lists:delete(?VERSION(Candidate), State#state.queued),
@@ -420,7 +420,7 @@ get_build_candidate(both, State) ->
     {{value, Candidate}, WaitQueue} = queue:out(State#state.wait_queue),
     case check_build_deps(Candidate, State) of
         independent ->
-            ?CDEP:update_dependencies(State#state.deps, Candidate, <<"in_progress">>),
+            ?CBS:update_dep_state(State#state.deps, Candidate, <<"in_progress">>),
             {ok, State#state{
                     queued=lists:delete(?VERSION(Candidate), State#state.queued),
                     wait_queue=WaitQueue, 
@@ -450,11 +450,11 @@ notify(Subject, Body) ->
     independent|dependent|missing|{error, term()}.
 check_build_deps(Candidate, State) ->
     Preparing = State#state.queued,
-    case ?CDEP:list_unresolved_dependencies(
+    case ?CBS:list_unres_deps(
             State#state.deps, Candidate, Preparing) of
         {ok, [], []} ->
             {ok, NowBuilding} = list_building_revs(State),
-            {ok, Res} = ?CDEP:check_intersection(
+            {ok, Res} = ?CBS:check_isect(
                 Candidate,
                 NowBuilding),
             Res;

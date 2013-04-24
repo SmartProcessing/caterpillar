@@ -1,4 +1,4 @@
--module(caterpillar_dependencies_tests).
+-module(caterpillar_build_storage_tests).
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("caterpillar.hrl").
 -include_lib("caterpillar_internal.hrl").
@@ -57,7 +57,7 @@ list_unresolved_dependencies_test_() ->
         fun cleanup/1,
         fun() ->
             ?assertEqual(
-                caterpillar_dependencies:list_unresolved_dependencies('test',
+                caterpillar_build_storage:list_unres_deps('test',
                     #rev_def{
                         name = <<"test_package">>,
                         branch = <<"trunk">>,
@@ -70,7 +70,7 @@ list_unresolved_dependencies_test_() ->
                 ),
                 {ok, [], []}),
             ?assertEqual(
-                caterpillar_dependencies:list_unresolved_dependencies('test',
+                caterpillar_build_storage:list_unres_deps('test',
                     #rev_def{
                         name = <<"test_package">>,
                         branch = <<"trunk">>,
@@ -84,7 +84,7 @@ list_unresolved_dependencies_test_() ->
         end
     }.
 
-check_intersection_test() ->
+check_isect_test() ->
     Rev1 = #rev_def{
         name = <<"caterpillar">>, 
         branch = <<"trunk">>,
@@ -109,5 +109,5 @@ check_intersection_test() ->
         tag = <<>>,
         pkg_config={},
         dep_object = [{{<<"destiny">>, <<"trunk">>, <<>>}, <<"built">>}, {{<<"smprc-test">>, <<"trunk">>, <<>>}, <<"built">>}]},
-    ?assertEqual({ok, independent}, caterpillar_dependencies:check_intersection(Rev4, [])),
-    ?assertEqual({ok, dependent}, caterpillar_dependencies:check_intersection(Rev4, [Rev3, Rev2, Rev1])).
+    ?assertEqual({ok, independent}, caterpillar_build_storage:check_isect(Rev4, [])),
+    ?assertEqual({ok, dependent}, caterpillar_build_storage:check_isect(Rev4, [Rev3, Rev2, Rev1])).
