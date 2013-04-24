@@ -1,7 +1,7 @@
 -module(caterpillar_build_storage_tests).
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("caterpillar.hrl").
--include_lib("caterpillar_internal.hrl").
+-include_lib("caterpillar_builder_internal.hrl").
 
 -on_load(tty_off/0).
 
