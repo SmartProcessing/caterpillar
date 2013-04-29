@@ -103,12 +103,12 @@ handle_call(rescan_repository, _From, State) ->
     scan_repository(0),
     {reply, ok, State};
 
-handle_call({rescan_package, Request}, _From, State) ->
-    Pid = spawn(fun() -> scan_pipe(Request, State) end),
+handle_call({rescan_package, #package{}=Package}, _From, State) ->
+    Pid = spawn(fun() -> scan_pipe(Package, State) end),
     {reply, {ok, Pid}, State};
 
-handle_call({rebuild_package, {Package, Branch}}, _From, State) ->
-    Pid = spawn(fun() -> rebuild_package(Package, Branch, State) end),
+handle_call({rebuild_package, #package{}=Package}, _From, State) ->
+    Pid = spawn(fun() -> rebuild_package(Package, State) end),
     {reply, {ok, Pid}, State};
 
 %copying archive to remote fd
@@ -234,8 +234,6 @@ scan_repository(Delay) when is_integer(Delay), Delay >= 0 ->
     erlang:send_after(Delay, self(), scan_repository).
 
 
-
-
 -spec clean_packages(#state{}, [{ArchiveName::term(), Branch::term()}]) -> ok.
 clean_packages(_State, []) -> ok;
 clean_packages(#state{dets=Dets, archive_root=ArchiveRoot}=State, [{Name, Branch}|O]) ->
@@ -244,15 +242,14 @@ clean_packages(#state{dets=Dets, archive_root=ArchiveRoot}=State, [{Name, Branch
     clean_packages(State, O).
 
 
-
 -spec select_archives_by_work_id(#state{}, WorkId::pos_integer()) -> [#archive{}].
 select_archives_by_work_id(#state{dets=Dets}, WorkId) ->
-    ArchiveList = dets:select(Dets, [{{'$1', '$2', '$3', '_', '$4', '$5'}, [{'<', WorkId, '$5'}], [['$1', '$2', '$3', '$4']]}]),
+    Select = [{{'$1', '$2', '$3', '_', '$4', '$5'}, [{'<', WorkId, '$5'}], [['$1', '$2', '$3', '$4']]}],
+    ArchiveList = dets:select(Dets, Select),
     MapFun = fun([{Name, Branch}, ArchiveName, ArchiveType, Tag]) ->
         #archive{name=Name, branch=Branch, archive_name=ArchiveName, archive_type=ArchiveType, tag=Tag}
     end,
     lists:map(MapFun, ArchiveList).
-
 
 
 -spec async_notify() -> Timer::reference().
@@ -260,7 +257,6 @@ async_notify() -> erlang:send_after(5000, self(), async_notify).
 
 
 %---------------
-
 
 
 -spec async_notify(State::#state{}) -> no_return().
@@ -332,21 +328,17 @@ scan_pipe(State) ->
     scan_pipe([], State).
 
 
-scan_pipe({Package, nobranch}, State) ->
-    {ok, WBranches} = get_branches([#repository_package{name=Package}], State),
-    scan_pipe(WBranches, State);
-
-scan_pipe({Package, Branch}, State) ->
-    scan_pipe([#repository_package{name=Package, branch=Branch}], State);
+scan_pipe(#package{name=Name, branch=Branch}, State) ->
+    scan_pipe([#repository_package{name=Name, branch=Branch}], State);
 
 scan_pipe(Packages, State) ->
-    ScanPackages = [
+    FindModifiedPackages = [
         {register_scan_pipe, fun register_scan_pipe/2},
         {get_packages, fun get_packages/2},
         {get_branches, fun get_branches/2},
         {cast_clean_packages, fun cast_clean_packages/2}
     ],
-    CommonFunList = [
+    ScanSelectedPackages = [
         {find_modified_packages, fun find_modified_packages/2},
         {export_archives, fun export_archives/2},
         {get_diff, fun get_diff/2},
@@ -356,8 +348,8 @@ scan_pipe(Packages, State) ->
         {send_changes, fun send_changes/2}
     ],
     FunList = case Packages of 
-        [] -> ScanPackages ++ CommonFunList;
-        _ -> CommonFunList
+        [] -> FindModifiedPackages ++ ScanSelectedPackages;
+        _ -> ScanSelectedPackages
     end,
     caterpillar_utils:pipe(FunList, Packages, State).
 
@@ -661,25 +653,25 @@ limit_output(Bin, Size) when is_binary(Bin), is_integer(Size), Size > 0 ->
 %----------
 
 
-rebuild_package(Package, Branch, #state{dets=Dets}) ->
-    case catch dets:lookup(Dets, {Package, Branch}) of
-        [] ->
-            error_logger:error_msg("no ~p/~p for rebuild~n", [Package, Branch]);
-        [{{Package, Branch}, ArchiveName, ArchiveType, LastRevision, Tag, _WorkId}] ->
-            Pkg = #repository_package{
-                name=Package, branch=Branch, tag=Tag, current_revno=LastRevision,
+-spec rebuild_package(#package{}, #state{}) -> ok.
+rebuild_package(#package{name=Name, branch=Branch}, #state{dets=Dets}) ->
+    case catch dets:lookup(Dets, {Name, Branch}) of
+        [] -> error_logger:error_msg("no ~p/~p for rebuild~n", [Name, Branch]);
+        [{{Name, Branch}, ArchiveName, ArchiveType, LastRevision, Tag, _WorkId}] ->
+            Package = #repository_package{
+                name=Name, branch=Branch, tag=Tag, current_revno=LastRevision,
                 archive_name=ArchiveName, archive_type=ArchiveType, status=ok
             },
             Archive = #archive{
-                name=Package, branch=Branch, archive_name=ArchiveName, tag=Tag,
+                name=Name, branch=Branch, archive_name=ArchiveName, tag=Tag,
                 archive_type=ArchiveType
             },
-            Body = io_lib:format("rebuild request for ~s/~s~n", [Package, Branch]),
+            Body = io_lib:format("rebuild request for ~s/~s~n", [Name, Branch]),
             Notify = #notify{body = list_to_binary(Body)},
             Changes = #changes{
                 notify = Notify,
                 archives = [Archive],
-                packages = [Pkg]
+                packages = [Package]
             },
             gen_server:call(?MODULE, {changes, Changes}, infinity);
         Error ->

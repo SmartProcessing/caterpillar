@@ -1428,25 +1428,10 @@ handle_call_rescan_n_rebuild_package_test_() ->
         Check(caterpillar_repository:handle_call(Request, from, state))
     end} || {Message, Request, Check} <- [
         {
-            "rescan package test",
-            {rescan_package, {package, branch}},
-            fun(Match) ->
-                ?assertMatch(
-                    {reply, {ok, _}, state},
-                    Match
-                ),
-                {reply, {ok, Pid}, state} = Match,
-                ?assert(is_pid(Pid))
-            end
-        },
-        {
             "rebuild package test",
-            {rebuild_package, {package, branch}},
+            {rebuild_package, #package{}},
             fun(Match) ->
-                ?assertMatch(
-                    {reply, {ok, _}, state},
-                    Match
-                ),
+                ?assertMatch({reply, {ok, _}, state}, Match),
                 {reply, {ok, Pid}, state} = Match,
                 ?assert(is_pid(Pid))
             end
@@ -1538,49 +1523,36 @@ rebuild_package_test_() ->
         {Message, fun() ->
             register(caterpillar_repository, self()),
             spawn(fun() ->
-                ?assertEqual(
-                    ok,
-                    caterpillar_repository:rebuild_package(Package, Branch, State)
-                )
+                ?assertEqual(ok, caterpillar_repository:rebuild_package(Package, State))
             end),
             timer:sleep(1),
             Check()
         end}
-    end} || {Message, Setup, {Package, Branch}, Check} <- [
+    end} || {Message, Setup, Package, Check} <- [
         {
             "no packages in dets",
             [],
-            {package, branch},
-            fun() ->
-                ?assertEqual(
-                    timeout,
-                    receive _ -> ok after 10 -> timeout end
-                )
-            end
+            #package{name=name, branch=branch},
+            fun() -> ?assertEqual(timeout, caterpillar_test_support:recv(10)) end
         },
         {
             "package marked for rebuild",
-            [{{package, branch}, archive_name, type, last_revno, tag, work_id}],
-            {package, branch},
+            [{{name, branch}, archive_name, type, last_revno, tag, work_id}],
+            #package{name=name, branch=branch},
             fun() ->
-                Msg = receive A -> A after 50 -> timeout end,
-                ?assertMatch(
-                    {_, _, {changes, #changes{}}},
-                    Msg
-                ),
+                Msg = caterpillar_test_support:recv(50),
+                ?assertMatch({_, _, {changes, #changes{}}}, Msg),
                 {_, From, Changes} = Msg,
                 ?assertEqual(
                     {changes, #changes{
-                        packages = [
-                            #repository_package{
-                                name=package, branch=branch, tag=tag, archive_name=archive_name,
-                                archive_type = type, current_revno = last_revno
-                            }
-                        ],
+                        packages = [#repository_package{
+                            name=name, branch=branch, tag=tag, archive_name=archive_name,
+                            archive_type = type, current_revno = last_revno
+                        }],
                         archives = [
-                            #archive{name=package, branch=branch, tag=tag, archive_name=archive_name, archive_type=type}
+                            #archive{name=name, branch=branch, tag=tag, archive_name=archive_name, archive_type=type}
                         ],
-                        notify = #notify{body = <<"rebuild request for package/branch\n">>}
+                        notify = #notify{body = <<"rebuild request for name/branch\n">>}
                     }},
                     Changes
                 )
