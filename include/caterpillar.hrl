@@ -1,4 +1,7 @@
+-ifndef(caterpillar_hrl).
+-define(caterpillar_hrl, true).
 -define(GV, proplists:get_value).
+
 
 -record(archive, {
     name            :: string(), %name of package
@@ -38,3 +41,6 @@
     pre_deploy_actions = [],
     post_deploy_actions = []
 }).
+
+
+-endif.
