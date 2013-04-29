@@ -1,7 +1,7 @@
 -module(caterpillar_pkg_utils_tests).
 -include_lib("eunit/include/eunit.hrl").
 -include("caterpillar.hrl").
--include("caterpillar_internal.hrl").
+-include("caterpillar_builder_internal.hrl").
 -define(CPU, caterpillar_pkg_utils).
 
 -on_load(tty_off/0).

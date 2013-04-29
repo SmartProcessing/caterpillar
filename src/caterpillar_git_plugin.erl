@@ -22,13 +22,10 @@ terminate_plugin(_State) ->
 
 
 
-export(_State, Package, Branch, _Revno, ExportPath) ->
-    ExportBranch = format(
-        "git archive heads/~s |tar -x -C ~s",
-        [Branch, ExportPath]
-    ),
+export_archive(_State, Package, Branch, _Revno, ExportPath) ->
+    ExportBranch = format("git archive  heads/~s | gzip > ~ts", [Branch, ExportPath]),
     case command(ExportBranch, [{cd, Package}]) of
-        {ok, <<>>} -> ok;
+        {ok, _} -> {ok, tgz};
         Error -> {error, Error}
     end.
 

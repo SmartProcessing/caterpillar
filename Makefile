@@ -8,7 +8,6 @@ INITD = etc/init.d
 SBIN_DIR = usr/sbin
 
 PRIV_PATH = $(LIB_PATH)/priv
-REBAR = rebar
 BEAMS = $(patsubst src/%.erl, ebin/%.beam, $(wildcard src/*.erl))
 TEST_BEAMS = $(patsubst test_src/%.erl, ebin/%.beam, $(wildcard test_src/*.erl))
 
@@ -35,24 +34,15 @@ clean:
 	rm -f $(EBIN)/*.beam
 
 
-compile:
-	@echo $(PWD)
-ifeq ($(PATH_MK), ../../devel-tools/Makefile.mk)
-	$(REBAR) compile
-else
-	$(REBAR) -C new.rebar.config compile
-endif
+compile: $(BEAMS)
 
 
 
-export_all:
-	$(MAKE) EXPORT_ALL=true test_compile
-
-
+test_compile: ERLC_FLAGS += +export_all
 test_compile: $(BEAMS) $(TEST_BEAMS)
 
 
-test: export_all
+test: test_compile 
 	$(ERL) -pa ebin/ -env ERL_LIBS "$(NORMALIZED_LIBS)" -noshell \
     	-eval 'test_runner:start({dir, "ebin"}, [{test_timeout, 15000}])' \
     	-s init stop 

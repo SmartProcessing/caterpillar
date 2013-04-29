@@ -207,7 +207,7 @@ run_deploy_script(Deploy, #state{deploy_script=DS}) ->
 
 
 rotate(#deploy{packages=Packages, ident=Ident}, #state{dets=Dets, rotate=Rotate}) ->
-    error_logger:info_msg("rotating packages"),
+    error_logger:info_msg("rotating packages~n"),
     Fun = fun(#deploy_package{name=Name, branch=Branch}) ->
         Select = [{
             {{'$1', '$2'}, {'$3', '$4'}, '$5'},

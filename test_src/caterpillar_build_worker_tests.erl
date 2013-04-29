@@ -2,9 +2,9 @@
 
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("caterpillar.hrl").
--include_lib("caterpillar_internal.hrl").
+-include_lib("caterpillar_builder_internal.hrl").
 
--define(CBW, caterpillar_build_worker).
+-define(CBS, caterpillar_build_storage).
 -define(CU, caterpillar_utils).
 
 -on_load(tty_off/0).
@@ -129,12 +129,12 @@ list_unresolved_dependencies_test_() ->
     }.
 
 validate_bucket_test() ->
-    ?assertEqual(?CBW:validate_bucket([{<<"1">>, <<"1">>, <<"1">>}], []), true),
-    ?assertEqual(?CBW:validate_bucket([{<<"1">>, <<"1">>, <<"1">>}], [{<<"1">>, <<"1">>, <<"1">>}]), true),
-    ?assertEqual(?CBW:validate_bucket([{<<"1">>, <<"1">>, <<"1">>}], [{<<"1">>, <<"2">>, <<"1">>}]), false),
-    ?assertEqual(?CBW:validate_bucket([{<<"1">>, <<"1">>, <<"1">>}], [{<<"1">>, <<"1">>, <<"2">>}]), false),
-    ?assertEqual(?CBW:validate_bucket([{<<"1">>, <<"1">>, <<"1">>}, {<<"2">>, <<"2">>, <<"2">>}], [{<<"1">>, <<"1">>, <<"1">>}]), true),
-    ?assertEqual(?CBW:validate_bucket([{<<"1">>, <<"1">>, <<"1">>}, {<<"2">>, <<"4">>, <<"2">>}], [{<<"1">>, <<"1">>, <<"1">>}, {<<"2">>, <<"2">>, <<"2">>}]), false).
+    ?assertEqual(?CBS:validate_bucket([{<<"1">>, <<"1">>, <<"1">>}], []), true),
+    ?assertEqual(?CBS:validate_bucket([{<<"1">>, <<"1">>, <<"1">>}], [{<<"1">>, <<"1">>, <<"1">>}]), true),
+    ?assertEqual(?CBS:validate_bucket([{<<"1">>, <<"1">>, <<"1">>}], [{<<"1">>, <<"2">>, <<"1">>}]), false),
+    ?assertEqual(?CBS:validate_bucket([{<<"1">>, <<"1">>, <<"1">>}], [{<<"1">>, <<"1">>, <<"2">>}]), false),
+    ?assertEqual(?CBS:validate_bucket([{<<"1">>, <<"1">>, <<"1">>}, {<<"2">>, <<"2">>, <<"2">>}], [{<<"1">>, <<"1">>, <<"1">>}]), true),
+    ?assertEqual(?CBS:validate_bucket([{<<"1">>, <<"1">>, <<"1">>}, {<<"2">>, <<"4">>, <<"2">>}], [{<<"1">>, <<"1">>, <<"1">>}, {<<"2">>, <<"2">>, <<"2">>}]), false).
 
 find_bucket1_test_() ->
     {setup,
@@ -142,7 +142,7 @@ find_bucket1_test_() ->
         fun cleanup/1,
         fun() ->
             Bucket1 = dets:lookup('buckets', <<"0001">>),
-            ?assertEqual(?CBW:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, [{<<"caterpillar">>, <<"trunk">>, <<>>}]), Bucket1)
+            ?assertEqual(?CBS:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, [{<<"caterpillar">>, <<"trunk">>, <<>>}]), Bucket1)
         end
     }.
 
@@ -152,7 +152,7 @@ find_bucket2_test_() ->
         fun cleanup/1,
         fun() ->
             Bucket2 = dets:lookup('buckets', <<"0002">>),
-            ?assertEqual(?CBW:find_bucket('buckets', {<<"caterpillar">>, <<"test">>, <<>>}, []), Bucket2)
+            ?assertEqual(?CBS:find_bucket('buckets', {<<"caterpillar">>, <<"test">>, <<>>}, []), Bucket2)
         end
     }.
 
@@ -162,7 +162,7 @@ find_bucket3_test_() ->
         fun cleanup/1,
         fun() ->
             Bucket3 = dets:lookup('buckets', <<"0003">>),
-            ?assertEqual(?CBW:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, [{<<"smprc-test">>, <<"stable">>, <<"1.2">>}]), Bucket3)
+            ?assertEqual(?CBS:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, [{<<"smprc-test">>, <<"stable">>, <<"1.2">>}]), Bucket3)
         end
     }.
 
@@ -172,7 +172,7 @@ find_bucket4_test_() ->
         fun cleanup/1,
         fun() ->
             Bucket1 = dets:lookup('buckets', <<"0001">>),
-            ?assertEqual(?CBW:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, 
+            ?assertEqual(?CBS:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, 
                     [
                         {<<"smprc-test">>, <<"trunk">>, <<>>},
                         {<<"caterpillar">>, <<"trunk">>, <<>>}
@@ -186,12 +186,12 @@ find_bucket5_test_() ->
         fun setup/0,
         fun cleanup/1,
         fun() ->
-            ?assertMatch([_Buck], ?CBW:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, []))
+            ?assertMatch([_Buck], ?CBS:find_bucket('buckets', {<<"perceptron">>, <<"trunk">>, <<"1.0.1">>}, []))
         end
     }.
 
 get_temp_path_test() ->
-    Path = ?CBW:get_temp_path("/test", 
+    Path = ?CBS:get_temp_path("/test", 
             #rev_def{
                 name = <<"name">>, 
                 branch = <<"trunk">>, 
@@ -214,7 +214,7 @@ update_bucket_test_() ->
                 dep_object = [], 
                 pkg_config=#pkg_config{name = "name"}
             },
-            ?CBW:update_buckets('buckets', "./test", "./test/temp/newpkg-trunk1.0.1", Rev, [
+            ?CBS:update_buckets('buckets', "./test", "./test/temp/newpkg-trunk1.0.1", Rev, [
                     {<<"0001">>, "0001", []}, 
                     {<<"0002">>, "0002", []}, 
                     {<<"0003">>, "0003", []}], []),
@@ -236,7 +236,7 @@ update_package_buckets_test_() ->
                 dep_object = [], 
                 pkg_config=#pkg_config{name = "name"}
             },
-            ?CBW:update_package_buckets('buckets', 'deps', [{<<"0001">>, "0001", []}], "./test", "./test/temp/newpkg-trunk1.0.1",  Rev),
+            ?CBS:update_dep_buckets('buckets', 'deps', [{<<"0001">>, "0001", []}], "./test", "./test/temp/newpkg-trunk1.0.1",  Rev),
             ?assertEqual(file:consult("./test/0001/newpkg/sample"), {ok, [{test, 1}]}),
             [{BName, BPath, BContain}] = dets:lookup('buckets', <<"0001">>),
             ?assertEqual(<<"0001">>, BName),
@@ -252,7 +252,7 @@ arm_build_bucket_test_() ->
         fun cleanup/1,
         fun() ->
             Vsn = {<<"newpkg_dep">>, <<"test">>, <<>>},
-            ?CBW:arm_build_bucket('buckets', 'deps', {<<"0001">>, "0001", []}, "./test", [Vsn]),
+            ?CBS:arm_bucket('buckets', 'deps', {<<"0001">>, "0001", []}, "./test", [Vsn]),
             ?assertEqual(file:consult("./test/0001/newpkg_dep/dep_test"), {ok, [{test, 2}]})
         end
     }.

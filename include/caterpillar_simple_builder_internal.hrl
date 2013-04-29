@@ -12,7 +12,7 @@
 }).
 
 
--record(package, {
+-record(build_package, {
     name :: string(),
     branch :: string(),
     tag :: term(),

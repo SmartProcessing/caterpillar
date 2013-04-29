@@ -35,8 +35,14 @@ init_plugin(_Args) -> {ok, state}.
 terminate_plugin(_State) -> ok.
 
 
-export(_State, _Package, "no_export", _Revision, _ExportPath) -> error;
-export(_State, _Package, _Branch, _Revision, ExportPath) -> caterpillar_utils:ensure_dir(ExportPath), ok.
+export_archive(_State, _Package, "bad_return", _, _) -> 'wat?';
+export_archive(_State, _Package, "error", _, _) -> {error, some_reason};
+export_archive(_State, Package, Branch, _Revision, ArchivePath) ->
+    AbsArchivePath = filename:absname(ArchivePath),
+    ArchiveDir = filename:absname(filename:join(Package, Branch)),
+    Cmd = lists:flatten(io_lib:format("cd ~s && tar -czf ~s *", [ArchiveDir, AbsArchivePath])),
+    os:cmd(Cmd),
+    {ok, tgz}.
 
 
 get_branches(_State, "test_repo/sleep") -> timer:sleep(12000), {ok, []};

@@ -1,7 +1,7 @@
 -module(caterpillar_utils).
 
 -include_lib("caterpillar.hrl").
--include_lib("caterpillar_internal.hrl").
+-include_lib("caterpillar_builder_internal.hrl").
 -include_lib("kernel/include/file.hrl").
 
 -export([get_version_by_revdef/1, build_pipe/2]).
@@ -105,6 +105,7 @@ archive_to_package(Archive) ->
 
 
 
+-spec list_packages(Path::filelib:dirname()) -> {ok, [filename:name()]}|{error, Reason::term()}.
 list_packages(Path) ->
     case file:list_dir(Path) of
         {ok, List} -> list_packages(List, []);
@@ -117,7 +118,7 @@ list_packages([], Accum) ->
 list_packages([ [$.|_]|O ], Accum) ->
     list_packages(O, Accum);
 list_packages([ H|O ], Accum) ->
-    list_packages(O, [unicode:characters_to_list(H)|Accum]).
+    list_packages(O, [H|Accum]).
 
 
 del_dir(Dir) ->
@@ -159,45 +160,41 @@ get_value_or_die(Key, PropList) ->
     end.
 
 
-command(Cmd) -> command(Cmd, "").
+-spec command(Cmd::string()) -> {Code::integer(), Result::string()}.
+command(Cmd) -> command(Cmd, []).
 
 
-command(Cmd, Dir) -> command(Cmd, Dir, [], ?DEFAULT_TIMEOUT).
+command(Cmd, Options) -> command(Cmd, Options, [], ?DEFAULT_TIMEOUT).
 
 
-command(Cmd, Dir, Env, Timeout) ->
-    CD = if Dir =:= "" -> [];
+command(Cmd__, Options, Env, Timeout) ->
+    Cmd = lists:flatten(Cmd__),
+    Dir = ?GV(cwd, Options, ""),
+    CD = if
+        Dir =:= "" -> [];
 	    true -> [{cd, Dir}]
-	 end,
-    SetEnv = if Env =:= [] -> []; 
+    end,
+    SetEnv = if
+        Env =:= [] -> []; 
 		true -> [{env, Env}]
-	     end,
-    Opt = CD ++ SetEnv ++ [stream, exit_status, use_stdio,
-			   stderr_to_stdout, in, eof],
-    P = open_port({spawn, Cmd}, Opt),
-    get_port_data(P, [], Timeout).
+    end,
+    %FIXME: binary?
+    DefaultOpts = [stream, exit_status, use_stdio, stderr_to_stdout, in],
+    PortOptions = CD ++ SetEnv ++ DefaultOpts,
+    Port = open_port({spawn, Cmd}, PortOptions),
+    get_port_data(Port, [], Timeout).
 
 
-get_port_data(P, D, Timeout) ->
+get_port_data(Port, Accum, Timeout) ->
     receive
-	{P, {data, D1}} ->
-	    get_port_data(P, [D1|D], Timeout);
-	{P, eof} ->
-	    port_close(P),    
-	    receive
-		{P, {exit_status, N}} ->
-		    {N, normalize(lists:flatten(lists:reverse(D)))}
-	    end
+        {_Port, {data, Chunk}} ->
+            get_port_data(Port, [Chunk|Accum], Timeout); 
+        {_Port, {exit_status, ExitStatus}} ->
+            {ExitStatus, lists:flatten(lists:reverse(Accum))}
     after Timeout ->
+        erlang:port_close(Port),
         {110, "timeout"}
     end.
-
-
-%FIXME? not tail recursive?
-normalize([$\r, $\n | Cs]) -> [$\n | normalize(Cs)];
-normalize([$\r | Cs]) -> [$\n | normalize(Cs)];
-normalize([C | Cs]) -> [C | normalize(Cs)];
-normalize([]) -> [].
 
 
 -spec recursive_copy(list(), list()) -> ok.                            
@@ -254,5 +251,3 @@ filename_join_([], Accum) -> lists:flatten(lists:reverse(Accum));
 filename_join_([Name|Other], []) -> filename_join_(Other, ["/", to_list(Name)|[]]);
 filename_join_([Name|[]], Accum) -> filename_join_([], [to_list(Name)|Accum]);
 filename_join_([Name|Other], Accum) -> filename_join_(Other, ["/", to_list(Name)|Accum]).
-    
-    

@@ -63,10 +63,13 @@ handle_call(_, _, State) ->
     {reply, bad_msg, State}.
 
 
-handle_info({nodeup, Node}, #state{up_nodes=UpNodes, down_nodes=DownNodes}=State) ->
+handle_info({nodeup, Node}, #state{up_nodes=UpNodes, scan_nodes=ScanNodes, down_nodes=DownNodes}=State) ->
     global:sync(),
     NewDown = lists:delete(Node, DownNodes),
-    NewUp = [Node|UpNodes],
+    NewUp = case lists:member(Node, ScanNodes) of
+        true -> [Node|UpNodes];
+        false -> UpNodes
+    end,
     {noreply, State#state{down_nodes=NewDown, up_nodes=NewUp}};
 handle_info({nodedown, Node}, #state{down_nodes=DownNodes, up_nodes=UpNodes}=State) ->
     global:sync(),
@@ -81,7 +84,7 @@ handle_info({nodedown, Node}, #state{down_nodes=DownNodes, up_nodes=UpNodes}=Sta
 handle_info(scan_nodes, #state{down_nodes=DownNodes}=State) ->
     Foreach = fun(Node) ->
         catch case net_adm:ping(Node) of
-            pong ->  error_logger:info_msg("Node ~p up~n", [Node]);
+            pong -> ok;
             pang -> error_logger:info_msg("Node ~p still down~n", [Node]);
             Other ->
                 error_logger:error_msg("ping error: ~p~n", [Other]), 
