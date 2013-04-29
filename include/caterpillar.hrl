@@ -9,6 +9,12 @@
 }).
 
 
+-record(package, {
+    name :: string(),
+    branch :: string()|'_'
+}).
+
+
 -record(notify, {
     subject = <<>> :: binary,
     body = <<>>    :: binary

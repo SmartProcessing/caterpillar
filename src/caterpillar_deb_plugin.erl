@@ -3,7 +3,7 @@
 -export([check/2, prepare/2, submit/2]).
 
 -define(CMD, caterpillar_utils:command).
--include("caterpillar_internal.hrl").
+-include("caterpillar_builder_internal.hrl").
 
 check(_Rev, _Dir) ->
     {ok, ""}.
@@ -20,14 +20,14 @@ prepare(Rev, Dir) ->
     end,
     {ok, ""}.
 
-submit(_Rev, Dir) ->
+submit(Rev, Dir) ->
     error_logger:info_msg("executing make package in ~s:~n", [Dir]),
-    case ?CMD("make package PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk PATH_PY_MK=../devel-tools/Makefile-py.mk", Dir) of
+    case ?CMD(get_command(Rev#rev_def.branch, "package"), [{cwd, Dir}]) of
         {0, _Msg} ->
             find_deb_file(filename:join([Dir, "dist"]));
         {Code, Msg} when is_integer(Code) ->
             error_logger:info_msg("make package failed with status ~B: ~s", [Code, Msg]),
-            {error, io_lib:format("make package returned ~B: ~s", [Code, Msg])}
+            {error, format("make package returned ~B: ~s", [Code, Msg])}
     end.
 
 find_deb_file(Dir) ->
@@ -40,3 +40,11 @@ find_deb_file(Dir) ->
             error_logger:error_msg("cant find deb package, ~p~n", [Other]),
             {error, "couldn't find *.deb package"}
     end.
+
+get_command(Branch, Type) ->
+    lists:flatten(io_lib:format("make ~s BRANCH=~s PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk",
+        [Type, binary_to_list(Branch)])).
+
+
+format(Format, Attrs) ->
+    lists:flatten(io_lib:format(Format, Attrs)).

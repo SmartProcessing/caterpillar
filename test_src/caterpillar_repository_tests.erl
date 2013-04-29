@@ -213,8 +213,8 @@ get_packages_test_() ->
             "some packages found",
             ["__test/package1/", "__test/package2/", "__test/package3/"],
             {ok, [
-                #package{name= "package1"},
-                #package{name= "package2"}
+                #repository_package{name= "package1"},
+                #repository_package{name= "package2"}
             ]}
         },
         {
@@ -240,7 +240,7 @@ get_packages_test_() ->
         {
             "unicode symbols in file names",
             ["__test/абв/"],
-            {ok, [#package{name= "абв"}]}
+            {ok, [#repository_package{name= "абв"}]}
         }
     ]
 ]}.
@@ -303,28 +303,28 @@ get_branches_test_() ->
         {
             "no branches in repos",
             ["__test/package1/", "__test/package2/"],
-            [#package{name=X} || X <- ["package1", "package2"]],
+            [#repository_package{name=X} || X <- ["package1", "package2"]],
             {ok, []} 
         },
         {
             "one branch in one repo",
             ["__test/package1/branch1/", "__test/package2/"],
-            [#package{name= "package1"}],
-            {ok, [#package{name= "package1", branch= "branch1"}]}
+            [#repository_package{name= "package1"}],
+            {ok, [#repository_package{name= "package1", branch= "branch1"}]}
         },
         {
             "few branches in different repos",
             ["__test/package1/branch1/", "__test/package2/branch2/"],
-            [#package{name=X} || X <- ["package1", "package2"]],
-            {ok, [#package{name=Name, branch=Branch} || {Name, Branch} <- [
+            [#repository_package{name=X} || X <- ["package1", "package2"]],
+            {ok, [#repository_package{name=Name, branch=Branch} || {Name, Branch} <- [
                 {"package1", "branch1"}, {"package2", "branch2"}
             ]]}
         },
         {
             "few branches with unicode symbols in repo with unicode symbols",
             ["__test/абв/вба/", "__test/абв/ччч/"],
-            [#package{name= "абв"}],
-            {ok, [#package{name= "абв", branch= "вба"}]}
+            [#repository_package{name= "абв"}],
+            {ok, [#repository_package{name= "абв", branch= "вба"}]}
         },
         {
             "plugin exits on branch check",
@@ -332,8 +332,8 @@ get_branches_test_() ->
                 "__test/package1/exit/", "__test/package1/branch1/",
                 "__test/package2/throw/", "__test/package2/branch2/"
             ],
-            [#package{name=X} || X <- ["package1", "package2"]],
-            {ok, [#package{name=Name, branch=Branch} || {Name, Branch} <- [
+            [#repository_package{name=X} || X <- ["package1", "package2"]],
+            {ok, [#repository_package{name=Name, branch=Branch} || {Name, Branch} <- [
                 {"package1", "branch1"}, {"package2", "branch2"}
             ]]}
         }
@@ -345,7 +345,7 @@ cast_clean_packages_test_() ->
 {foreachx,
     fun(Setup) ->
         {ok, D} = dets:open_file("test.dets", [{access, read_write}]),
-        [dets:insert(D, {X, archive, revision, tag, work_id}) || X <- Setup],
+        [dets:insert(D, {X, archive, type, revision, tag, work_id}) || X <- Setup],
         #state{dets=D}
     end,
     fun(_, _) ->
@@ -368,7 +368,7 @@ cast_clean_packages_test_() ->
         {
             "nothing in dets, clean message not sent",
             [],
-            [#package{name=Name, branch=Branch} || {Name, Branch} <- [
+            [#repository_package{name=Name, branch=Branch} || {Name, Branch} <- [
                 {"package1", "branch1"}, {"package2", "branch2"}
             ]],
             timeout
@@ -376,7 +376,7 @@ cast_clean_packages_test_() ->
         {
             "something in dets, but nothing to delete",
             [{"package1", "branch1"}],
-            [#package{name=Name, branch=Branch} || {Name, Branch} <- [
+            [#repository_package{name=Name, branch=Branch} || {Name, Branch} <- [
                 {"package1", "branch1"}, {"package2", "branch2"}
             ]],
             timeout
@@ -384,7 +384,7 @@ cast_clean_packages_test_() ->
         {
             "deleting missing branches n packages",
             [{"package1", "branch1"}, {"package3", "branch3"}],
-            [#package{name=Name, branch=Branch} || {Name, Branch} <- [
+            [#repository_package{name=Name, branch=Branch} || {Name, Branch} <- [
                 {"package1", "branch1"}, {"package2", "branch2"}
             ]],
             {'$gen_cast',
@@ -406,7 +406,7 @@ find_modified_packages_test_() ->
 {foreachx,
     fun(Setup) ->
         {ok, D} = dets:open_file("test.dets", [{access, read_write}]),
-        [dets:insert(D, {X, archive, R, tag, work_id}) || {X, R} <- Setup],
+        [dets:insert(D, {X, archive, archive_type, R, tag, work_id}) || {X, R} <- Setup],
         #state{dets=D, vcs_plugin=test_vcs_plugin, repository_root="__test"}
     end,
     fun(_, _) ->
@@ -424,15 +424,15 @@ find_modified_packages_test_() ->
         {
             "new package (package2/branch2)",
             [{{"package1", "branch1"}, 1}],
-            [#package{name=Name, branch=Branch} || {Name, Branch} <- [
+            [#repository_package{name=Name, branch=Branch} || {Name, Branch} <- [
                 {"package1", "branch1"}, {"package2", "branch2"}
             ]],
-            {ok, [#package{name= "package2", branch= "branch2", current_revno=1}]}
+            {ok, [#repository_package{name= "package2", branch= "branch2", current_revno=1}]}
         },
         {
             "both packages not modified",
             [{{"package1", "branch1"}, 1}, {{"package2", "branch2"}, 1}],
-            [#package{name=Name, branch=Branch} || {Name, Branch} <- [
+            [#repository_package{name=Name, branch=Branch} || {Name, Branch} <- [
                 {"package1", "branch1"}, {"package2", "branch2"}
             ]],
             {error,{find_modified_packages,"no packages modified"}}
@@ -440,20 +440,20 @@ find_modified_packages_test_() ->
         {
             "both packages modified",
             [{{"package1", "branch1"}, 10}, {{"package2", "branch2"}, 10}],
-            [#package{name=Name, branch=Branch} || {Name, Branch} <- [
+            [#repository_package{name=Name, branch=Branch} || {Name, Branch} <- [
                 {"package1", "branch1"}, {"package2", "branch2"}
             ]],
             {ok, [
-                #package{name= "package1", branch= "branch1", current_revno=1, old_revno=10},
-                #package{name= "package2", branch= "branch2", current_revno=1, old_revno=10}
+                #repository_package{name= "package1", branch= "branch1", current_revno=1, old_revno=10},
+                #repository_package{name= "package2", branch= "branch2", current_revno=1, old_revno=10}
             ]}
         },
         {
             "plugin returns bad response",
             [],
-            [#package{name= "crash", branch= "me"}],
+            [#repository_package{name= "crash", branch= "me"}],
             {ok, [
-                #package{
+                #repository_package{
                     name="crash", branch="me", 
                     status=error,
                     failed_at=find_modified_packages,
@@ -576,11 +576,32 @@ archive_packages_test_() ->
             {error, {archive_packages, "nothing archived"}}
         },
         {
-          %  "checking packages with bad status ignored",
+            "some error while archive",
+            ["__test_repo/error/error"],
+            [#repository_package{name="error", branch="error"}],
+            fun(Result) ->
+                ?assertEqual(
+                    {ok, [#repository_package{name="error", branch="error", status=error, failed_at=export_archives, reason=some_reason}]},
+                    Result
+                )
+            end
+        },
+        {
+            "bad return",
+            ["__test_repo/error/error"],
+            [#repository_package{name="error", branch="bad_return"}],
+            fun(Result) ->
+                ?assertEqual(
+                    {ok, [#repository_package{name="error", branch="bad_return", status=error, failed_at=export_archives, reason=bad_return}]},
+                    Result
+                )
+            end
+        },
+        {
+            "checking packages with bad status ignored",
             [],
-            [#package{status=error}],
-            fun() -> ok end,
-            {ok, [#package{status=error}]}
+            [#repository_package{status=error}],
+            fun(Result) -> ?assertEqual({ok, [#repository_package{status=error}]}, Result) end
         },
         {
            % "package successfuly archived",
@@ -588,8 +609,14 @@ archive_packages_test_() ->
                 "__test_export/package/branch/dir1/",
                 "__test_export/package/branch/dir2/"
             ],
-            [#package{name= "package", branch= "branch", current_revno=rev}],
-            fun() ->
+            [#repository_package{name= "package", branch= "branch", current_revno=rev}],
+            fun(Result) ->
+                ?assertEqual(
+                    {ok, [#repository_package{name= "package", branch= "branch", archive_name= "package__ARCHIVE__branch",
+                        archive_type= tgz, current_revno=rev
+                    }]},
+                    Result
+                ),
                 {ok, Names} = erl_tar:table("__test_archive/package__ARCHIVE__branch", [compressed]),
                 ?assertEqual(lists:sort(Names), ["dir1", "dir2"])
             end,
@@ -605,8 +632,8 @@ archive_packages_test_() ->
                 "__test_export/package/branch/dir/subdir",
                 "__test_export/package/branch/dir/subdir2"
             ],
-            [#package{name= "package", branch= "branch", current_revno=rev}],
-            fun() -> 
+            [#repository_package{name= "package", branch= "branch", current_revno=rev}],
+            fun(Result) -> 
                 ArchiveName = "__test_archive/package__ARCHIVE__branch",
                 UnArchivePath = "__test_extract",
                 ?assertEqual(
@@ -614,13 +641,13 @@ archive_packages_test_() ->
                     caterpillar_tar:extract(ArchiveName, [{cwd, UnArchivePath}, compressed])
                 ),
                 ?assertEqual(
-                    {ok, ["dir"]}, file:list_dir(UnArchivePath)
-                ),
-                ?assertEqual(
-                    {ok, ["subdir", "subdir2"]},
-                    (fun({ok, X}) -> {ok, lists:sort(X)};(O) -> O end)(
-                        file:list_dir(filename:join(UnArchivePath, "dir"))
-                    )
+                    {ok, [#repository_package{
+                        name= "package", branch= "branch",
+                        archive_name= "package__ARCHIVE__branch",
+                        archive_type= tgz,
+                        current_revno=rev
+                    }]},
+                    Result
                 )
             end,
             {ok, [#package{
@@ -639,16 +666,18 @@ archive_packages_test_() ->
                 "__test_export/package/branch/dir1/"
                 
             ],
-            [#package{name= "package", branch= "branch", current_revno=rev}],
-            fun() ->
+            [#repository_package{name= "package", branch= "branch", current_revno=rev}],
+            fun(Result) ->
                 {ok, Names} = erl_tar:table("__test_archive/package__ARCHIVE__branch", [compressed]),
                 ?assertEqual(["dir1", "абв", "бав"], lists:sort(Names))
-            end,
-            {ok, [#package{
-                name= "package", branch= "branch",
-                archive_name= "package__ARCHIVE__branch",
-                current_revno=rev
-            }]}
+                ?assertEqual(
+                    {ok, [#repository_package{
+                        name= "package", branch= "branch", archive_name= "package__ARCHIVE__branch",
+                        archive_type= tgz, current_revno=rev
+                    }]},
+                    Result
+                )
+            end
         }
     ]
 ]}.
@@ -669,18 +698,18 @@ get_diff_test_() ->
     end || {Message, Packages, Result} <- [
         {
             "plugin returns valid response",
-            [#package{name= "package1", branch= "branch1"}],
-            {ok, [#package{name= "package1", branch= "branch1", diff= <<"branch1 diff">>}]}
+            [#repository_package{name= "package1", branch= "branch1"}],
+            {ok, [#repository_package{name= "package1", branch= "branch1", diff= <<"branch1 diff">>}]}
         },
         {
             "checking packages with error status ignored",
-            [#package{name= "package1", branch= "branch1", status=error}],
-            {ok, [#package{name= "package1", branch= "branch1", status=error}]}
+            [#repository_package{name= "package1", branch= "branch1", status=error}],
+            {ok, [#repository_package{name= "package1", branch= "branch1", status=error}]}
         },
         { 
             "error while getting diff",
-            [#package{name="package2", branch="branch2"}],
-            {ok, [#package{name="package2", branch="branch2", diff= <<"cant get diff">>}]}
+            [#repository_package{name="package2", branch="branch2"}],
+            {ok, [#repository_package{name="package2", branch="branch2", diff= <<"cant get diff">>}]}
         }
     ]
 ]}.
@@ -701,18 +730,18 @@ get_changelog_test_() ->
     end || {Message, Packages, Result} <- [
         {
             "plugin returns valid response",
-            [#package{name= "package1", branch= "branch1"}],
-            {ok, [#package{name= "package1", branch= "branch1", changelog= <<"branch1 changelog">>}]}
+            [#repository_package{name= "package1", branch= "branch1"}],
+            {ok, [#repository_package{name= "package1", branch= "branch1", changelog= <<"branch1 changelog">>}]}
         },
         {
             "checking packages with error status ignored",
-            [#package{name= "package1", branch= "branch1", status=error}],
-            {ok, [#package{name= "package1", branch= "branch1", status=error}]}
+            [#repository_package{name= "package1", branch= "branch1", status=error}],
+            {ok, [#repository_package{name= "package1", branch= "branch1", status=error}]}
         },
         { 
             "error while getting changelog",
-            [#package{name= "package2", branch= "branch2"}],
-            {ok, [#package{name= "package2", branch= "branch2", changelog= <<"cant get changelog">>}]}
+            [#repository_package{name= "package2", branch= "branch2"}],
+            {ok, [#repository_package{name= "package2", branch= "branch2", changelog= <<"cant get changelog">>}]}
         }
     ]
 ]}.
@@ -735,13 +764,13 @@ get_tag_test_() ->
     end} || {Message, Packages, Result} <- [
         {
             "vcs returns tag",
-            [#package{} || _ <- lists:seq(1, 2)],
-            {ok, [#package{tag="tag"} || _ <- lists:seq(1, 2)]}
+            [#repository_package{} || _ <- lists:seq(1, 2)],
+            {ok, [#repository_package{tag="tag"} || _ <- lists:seq(1, 2)]}
         },
         {
             "vcs crashes on get_tag",
-            [#package{}, #package{branch="crash"}],
-            {ok, [#package{tag="tag"}, #package{branch="crash"}]}
+            [#repository_package{}, #repository_package{branch="crash"}],
+            {ok, [#repository_package{tag="tag"}, #repository_package{branch="crash"}]}
         }
     ]
 ]}.
@@ -764,7 +793,7 @@ build_changes_test_() ->
     end} || {Message, Packages, Result} <- [
         {
             "one successfuly processed package",
-            [#package{
+            [#repository_package{
                 name="package", branch="branch", archive_name="archive",
                 diff= <<"diff">>, changelog= <<"changelog">>
             }],
@@ -773,7 +802,7 @@ build_changes_test_() ->
                     subject = <<>>,
                     body = <<"\n\npackage/branch\nchangelog\nDiff contains 4 bytes\ndiff\n">>
                 },
-                packages = [#package{
+                packages = [#repository_package{
                     name="package", branch="branch", archive_name="archive",
                     diff= <<>>, changelog= <<>>
                 }],
@@ -784,7 +813,7 @@ build_changes_test_() ->
         },
         {
             "one failed to process package",
-            [#package{
+            [#repository_package{
                 name="p", branch="b", failed_at=somewhere, reason=some_error, status=error
             }],
             {ok,
@@ -793,7 +822,7 @@ build_changes_test_() ->
                     subject = <<>>,
                     body = <<"\n\np/b failed at somewhere\nsome_error\n">>
                 },
-                packages = [#package{
+                packages = [#repository_package{
                     name="p", branch="b", failed_at=somewhere, reason=some_error, status=error
                 }],
                 archives = []
@@ -802,11 +831,11 @@ build_changes_test_() ->
         {
             "one package failed, second package processed",
             [
-                #package{
+                #repository_package{
                     name="package", branch="branch", archive_name="archive",
                     diff= <<"diff">>, changelog= <<"changelog">>
                 },
-                #package{
+                #repository_package{
                     name="p", branch="b", failed_at=somewhere, reason=some_error, status=error
                 }
             ],
@@ -820,11 +849,11 @@ build_changes_test_() ->
                     >>
                 },
                 packages = [
-                    #package{
+                    #repository_package{
                         name="package", branch="branch", archive_name="archive",
                         diff= <<>>, changelog= <<>>
                     },
-                    #package{
+                    #repository_package{
                         name="p", branch="b", failed_at=somewhere, reason=some_error, status=error
                     }
                 ],
@@ -897,18 +926,16 @@ limit_output_test_() ->
 clean_packages_test_() ->
 {foreachx,
     fun(Packages) ->
-        ER = "__test_export",
-        AR = "__test_archive",
-        [caterpillar_utils:ensure_dir(Dir) || Dir <- [ER, AR]],
+        ArchiveRoot = "__test_archive",
+        caterpillar_utils:ensure_dir(ArchiveRoot),
         {ok, D} = dets:open_file("test.dets", [{access, read_write}]),
         [
             begin
-                caterpillar_utils:ensure_dir(filename:join([ER, Name, Branch])),
-                Archive = filename:join(AR, caterpillar_utils:package_to_archive(Name, Branch)),
+                Archive = filename:join(ArchiveRoot, caterpillar_utils:package_to_archive(Name, Branch)),
                 filelib:ensure_dir(Archive),
                 file:write_file(Archive, <<"h">>),
-                dets:insert(D, {{Name, Branch}, archive, last_revision, tag, work_id}) 
-            end || #package{name=Name, branch=Branch} <- Packages
+                dets:insert(D, {{Name, Branch}, archive, archive_type, last_revision, tag, work_id}) 
+            end || #repository_package{name=Name, branch=Branch} <- Packages
         ],
         #state{dets=D, export_root=ER, archive_root=AR, vcs_plugin=test_vcs_plugin}
     end,
@@ -920,9 +947,9 @@ clean_packages_test_() ->
 [
     {Packages, fun(_, #state{dets=D, export_root=ER}=State) ->
         {Message, fun() ->
-            PackageList = [{N, B} || #package{name=N, branch=B} <- Packages],
+            PackageList = [{N, B} || #repository_package{name=N, branch=B} <- Packages],
             ?assertEqual(
-                lists:sort([{Package, archive, last_revision, tag, work_id} || Package <- PackageList]),
+                lists:sort([{Package, archive, archive_type, last_revision, tag, work_id} || Package <- PackageList]),
                 lists:sort(dets:select(D, [{'$1', [], ['$1']}]))
             ),
             ?assertEqual(
@@ -932,7 +959,7 @@ clean_packages_test_() ->
             caterpillar_repository:clean_packages(State, CleanPackages),
             ?assertEqual(
                 lists:sort(
-                    [{{N, B}, archive, last_revision, tag, work_id} || #package{name=N, branch=B} <- AfterClean]
+                    [{{N, B}, archive, archive_type, last_revision, tag, work_id} || #repository_package{name=N, branch=B} <- AfterClean]
                 ),
                 lists:sort(dets:select(D, [{'$1', [], ['$1']}]))
             ),
@@ -944,35 +971,35 @@ clean_packages_test_() ->
     end} || {Message, Packages, CleanPackages, AfterClean} <- [
         {
             "nothing cleaned",
-            [#package{name= "package", branch= "branch"}],
+            [#repository_package{name= "package", branch= "branch"}],
             [],
-            [#package{name= "package", branch= "branch"}]
+            [#repository_package{name= "package", branch= "branch"}]
         },
         {
             "one package cleaned",
-            [#package{name=N, branch=B} || {N, B} <- [{"p1", "b1"}, {"p2", "b2"}]],
+            [#repository_package{name=N, branch=B} || {N, B} <- [{"p1", "b1"}, {"p2", "b2"}]],
             [{"p1", "b1"}],
-            [#package{name= "p2", branch= "b2"}]
+            [#repository_package{name= "p2", branch= "b2"}]
         },
         {
             "one package got few branches, one of them cleaned",
-            [#package{name=N, branch=B} || {N, B} <- [
+            [#repository_package{name=N, branch=B} || {N, B} <- [
                 {"p1", "b1"}, {"p1", "b2"}, {"p2", "b2"}
             ]],
             [{"p1", "b1"}],
-            [#package{name= "p1", branch= "b2"}, #package{name= "p2", branch= "b2"}]
+            [#repository_package{name= "p1", branch= "b2"}, #repository_package{name= "p2", branch= "b2"}]
         },
         {
             "one package got few branches, both of them cleaned",
-            [#package{name=N, branch=B} || {N, B} <- [
+            [#repository_package{name=N, branch=B} || {N, B} <- [
                 {"p1", "b1"}, {"p1", "b2"}, {"p2", "b2"}
             ]],
             [{"p1", "b1"}, {"p1", "b2"}],
-            [#package{name= "p2", branch= "b2"}]
+            [#repository_package{name= "p2", branch= "b2"}]
         },
         {
             "all packages cleaned",
-            [#package{name=N, branch=B} || {N, B} <- [
+            [#repository_package{name=N, branch=B} || {N, B} <- [
                 {"p1", "b1"}, {"p1", "b2"}, {"p2", "b2"}
             ]],
             [{"p1", "b1"}, {"p1", "b2"}, {"p2", "b2"}],
@@ -1189,7 +1216,52 @@ notify_test_() ->
         }
     ]
 ]}.
-        
+
+
+check_repository_db_version_test_() ->
+{foreach,
+    fun() ->
+        {ok, Dets} = dets:open_file("__test.dets", [{access, read_write}]),
+        Dets
+    end,
+    fun(Dets) ->
+        dets:close(Dets),
+        file:delete(Dets)
+    end,
+[
+    fun(Dets) ->
+        {Message, fun() ->
+            dets:insert(Dets, Version),
+            caterpillar_repository:check_repository_db_version(Dets),
+            Check(Dets)
+        end}
+    end || {Message, Version, Check} <- [
+        {
+            "no version in dets, data purged, new version writed",
+            [{purge_me}], 
+            fun(Dets) ->
+                ?assertEqual([[{version, ?REPOSITORY_DB_VERSION}]], dets:match(Dets, '$1'))
+            end
+        },
+        {
+            "already got valid version in dets",
+            [{do_not_purge_me}, {version, ?REPOSITORY_DB_VERSION}],
+            fun(Dets) ->
+                ?assertEqual(
+                    [{do_not_purge_me}, {version, ?REPOSITORY_DB_VERSION}],
+                    lists:sort([X || [X] <- dets:match(Dets, '$1')])
+                )
+            end
+        },
+        {
+            "older version in dets",
+            [{purge_me}, {version, -100}],
+            fun(Dets) ->
+                ?assertEqual([[{version, ?REPOSITORY_DB_VERSION}]], dets:match(Dets, '$1'))
+            end
+        }
+    ]
+]}.
 
 
 %%
@@ -1225,7 +1297,7 @@ handle_call_changes_test_() ->
     end} || {Message, Request, Setup, Check, Result} <- [
         {
             "changes test",
-            {changes, #changes{packages=[#package{}], archives=[#archive{}], notify=#notify{}}},
+            {changes, #changes{packages=[#repository_package{}], archives=[#archive{}], notify=#notify{}}},
             #state{work_id_file="test_work_id_file", dets="test_d", work_id=1, ets=ets:new(t, [])},
             fun(#state{work_id_file=BIF, dets=D}) -> 
                 ?assertEqual(
@@ -1233,7 +1305,7 @@ handle_call_changes_test_() ->
                     2
                 ),
                 ?assertEqual(
-                    [{{undefined, undefined}, undefined, undefined, undefined, 2}],
+                    [{{undefined, undefined}, undefined, undefined, undefined, undefined, 2}],
                     dets:select(D, [{'$1', [], ['$1']}])
                 )
             end,
@@ -1629,7 +1701,7 @@ rebuild_package_test_() ->
         },
         {
             "package marked for rebuild",
-            [{{package, branch}, archive_name, last_revno, tag, work_id}],
+            [{{package, branch}, archive_name, type, last_revno, tag, work_id}],
             {package, branch},
             fun() ->
                 Msg = receive A -> A after 50 -> timeout end,
@@ -1641,13 +1713,13 @@ rebuild_package_test_() ->
                 ?assertEqual(
                     {changes, #changes{
                         packages = [
-                            #package{
+                            #repository_package{
                                 name=package, branch=branch, tag=tag, archive_name=archive_name,
-                                current_revno = last_revno
+                                archive_type = type, current_revno = last_revno
                             }
                         ],
                         archives = [
-                            #archive{name=package, branch=branch, tag=tag, archive_name=archive_name}
+                            #archive{name=package, branch=branch, tag=tag, archive_name=archive_name, archive_type=type}
                         ],
                         notify = #notify{body = <<"rebuild request for package/branch\n">>}
                     }},

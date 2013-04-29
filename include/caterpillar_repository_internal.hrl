@@ -10,6 +10,8 @@
 -define(REPOSITORY_ROOT, "/srv/repository").
 -define(SCAN_INTERVAL, 600).
 
+-define(REPOSITORY_DB_VERSION, "0.1").
+
 
 -type work_id() :: non_neg_integer().
 
@@ -31,7 +33,8 @@
     scan_interval = ?SCAN_INTERVAL :: non_neg_integer()
 }).
 
--record(package, {
+
+-record(repository_package, {
     name :: string(),
     branch :: string(),
     tag :: term(),

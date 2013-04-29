@@ -1,6 +1,6 @@
 -module(caterpillar_builder).
 -include_lib("caterpillar.hrl").
--include_lib("caterpillar_internal.hrl").
+-include_lib("caterpillar_builder_internal.hrl").
 -behaviour(gen_server).
 
 -export([start_link/1]).
@@ -9,12 +9,13 @@
 
 -define(CPU, caterpillar_pkg_utils).
 -define(CU, caterpillar_utils).
--define(CDEP, caterpillar_dependencies).
+-define(CBS, caterpillar_build_storage).
 -define(UNPACK_RETRY_LIMIT, 15).
 
 -record(state, {
         master_state=false,
         deps,
+        buckets,
         main_queue,
         wait_queue,
         next_to_build,
@@ -36,8 +37,12 @@ start_link(Settings) ->
 
 init(Settings) ->
     error_logger:info_msg("starting caterpillar_builder~n", []),
-    {ok, Deps} = dets:open_file(deps,
-        [{file, ?GV(deps, Settings, ?DEFAULT_DEPENDENCIES_DETS)}]),
+    DepsFile = ?GV(deps, Settings, ?DEFAULT_DEPENDENCIES_DETS),
+    BucketsFile = ?GV(buckets, Settings, ?DEFAULT_BUCKETS_DETS),
+    filelib:ensure_dir(DepsFile),
+    filelib:ensure_dir(BucketsFile),
+    {ok, Buckets} = dets:open_file(buckets, [{file, BucketsFile}]),
+    {ok, Deps} = dets:open_file(deps, [{file, DepsFile}]),
     PollTime = ?GV(poll_time, Settings, 10000),
     BuildQueue = queue:new(),
     WaitQueue = queue:new(),
@@ -52,6 +57,7 @@ init(Settings) ->
     schedule_poller(PollTime),
     {ok, #state{
             deps=Deps,
+            buckets=Buckets,
             main_queue=BuildQueue,
             wait_queue=WaitQueue,
             workers=WorkerList,
@@ -68,7 +74,7 @@ init(Settings) ->
 
 handle_call({newref, RevDef}, _From, State) ->
     error_logger:info_msg("received new revision: ~p~n", [?VERSION(RevDef)]),
-    ?CDEP:create_dependencie(State#state.deps, RevDef),
+    ?CBS:create_dep(State#state.deps, RevDef),
     Queue = queue:in(RevDef, State#state.main_queue),
     QueuedState = State#state{main_queue=Queue},
     case State#state.next_to_build of
@@ -79,7 +85,7 @@ handle_call({newref, RevDef}, _From, State) ->
     end,
     {reply, ok, NewState};
 handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
-    ?CDEP:update_dependencies(State#state.deps, RevDef, <<"built">>),
+    ?CBS:update_dep_state(State#state.deps, RevDef, <<"built">>),
     DeployPkg = #deploy_package{
         name = binary_to_list(RevDef#rev_def.name),
         branch = binary_to_list(RevDef#rev_def.branch),
@@ -113,7 +119,7 @@ handle_call({err_built, Worker, RevDef, BuildInfo}, _From, State) ->
         ]),
     notify(Subj, BuildInfo#build_info.description),
     BuildState = BuildInfo#build_info.state,
-    ?CDEP:update_dependencies(State#state.deps, RevDef, BuildState),
+    ?CBS:update_dep_state(State#state.deps, RevDef, BuildState),
     NewWorkers = release_worker(Worker, State#state.workers),
     {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
     {ok, NewState} = try_build(ScheduledState),
@@ -124,12 +130,24 @@ handle_call(_Request, _From, State) ->
     {reply, unknown, State}.
 
 handle_cast({changes, WorkId, Archives}, State) ->
+    error_logger:info_msg("Changes: ~p~n", [Archives]),
     update_work_id(State#state.work_id, WorkId),
     ToPreprocess = lists:usort(Archives),
     {ok, NewState} = process_archives(ToPreprocess, State, WorkId),
     {noreply, NewState};
+handle_cast({clean_packages, Archives}, State) ->
+    Fun = fun(Archive) ->
+        Version = {
+            list_to_binary(Archive#archive.name),
+            list_to_binary(Archive#archive.branch),
+            <<>>
+        },
+        ?CBS:delete(State#state.deps, State#state.buckets, State#state.build_path, Version)
+    end,
+    lists:map(Fun, Archives),
+    {noreply, State};
 handle_cast({rebuild_deps, WorkId, Version}, State) ->
-    DepArchives = case ?CDEP:fetch_dependencies(State#state.deps, Version) of
+    DepArchives = case ?CBS:fetch_dep(State#state.deps, Version) of
         {ok, []} ->
             [];
         {ok, {_, {St, _}, _Object, Subject}} when St == built; St == tested ->
@@ -213,12 +231,13 @@ process_archive(BuildPath, Archive, UnpackState, WorkId) ->
 
 
 prepare(BuildPath, Archive, WorkId) ->
-    error_logger:info_msg("queued archive: ~p~n", [Archive]),
     TempName = io_lib:format(
         "~s-~s~s",
         [Archive#archive.name, Archive#archive.branch, Archive#archive.tag]
     ),
-    TempArch = filename:join([BuildPath, "temp", TempName]) ++ ".tar",
+    Type = Archive#archive.archive_type,
+    error_logger:info_msg("==============================ARCHIVE TYPE: ~p~n", [Type]),
+    TempArch = filename:join([BuildPath, "temp", TempName]) ++ "." ++ atom_to_list(Type),
     filelib:ensure_dir(TempArch),
     {ok, Fd} = file:open(TempArch, [read, write]),
     ArchiveWithFd = Archive#archive{fd=Fd},
@@ -226,7 +245,9 @@ prepare(BuildPath, Archive, WorkId) ->
     ok = caterpillar_event:sync_event(Msg),
     Cwd = filename:join([BuildPath, "temp", TempName]) ++ "/",
     catch ?CU:del_dir(Cwd),
-    ok = caterpillar_tar:extract(TempArch, [{cwd, Cwd}, compressed]),
+    filelib:ensure_dir(Cwd),
+    ok = caterpillar_archive:extract(TempArch, [{type, Type}, {cwd, Cwd}]),
+    file:close(Fd),
     file:delete(TempArch),
     PkgRecord = ?CPU:get_pkg_config(Archive, Cwd),
     RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId),
@@ -353,7 +374,7 @@ get_build_candidate(main_queue, State) ->
     case check_build_deps(Candidate, State) of
         independent ->
             error_logger:info_msg("next candidate: ~p~n", [?VERSION(Candidate)]),
-            ?CDEP:update_dependencies(State#state.deps, Candidate, <<"in_progress">>),
+            ?CBS:update_dep_state(State#state.deps, Candidate, <<"in_progress">>),
             {ok, State#state{
                     main_queue=MainQueue, 
                     next_to_build=Candidate,
@@ -376,7 +397,7 @@ get_build_candidate(wait_queue, State) ->
     {{value, Candidate}, WaitQueue} = queue:out(State#state.wait_queue),
     case check_build_deps(Candidate, State) of
         independent ->
-            ?CDEP:update_dependencies(State#state.deps, Candidate, <<"in_progress">>),
+            ?CBS:update_dep_state(State#state.deps, Candidate, <<"in_progress">>),
             {ok, State#state{
                     wait_queue=WaitQueue, 
                     queued=lists:delete(?VERSION(Candidate), State#state.queued),
@@ -398,7 +419,7 @@ get_build_candidate(both, State) ->
     {{value, Candidate}, WaitQueue} = queue:out(State#state.wait_queue),
     case check_build_deps(Candidate, State) of
         independent ->
-            ?CDEP:update_dependencies(State#state.deps, Candidate, <<"in_progress">>),
+            ?CBS:update_dep_state(State#state.deps, Candidate, <<"in_progress">>),
             {ok, State#state{
                     queued=lists:delete(?VERSION(Candidate), State#state.queued),
                     wait_queue=WaitQueue, 
@@ -421,20 +442,18 @@ get_build_candidate(both, State) ->
 %% ------------------------------------------------------------------
 -spec notify(list(), list()) -> ok.
 notify(Subject, Body) ->
-    Msg = {notify, #notify{
-            subject=list_to_binary(Subject), 
-            body=list_to_binary(Body)}},
-    caterpillar_event:sync_event(Msg).
+    Notify = #notify{subject=list_to_binary(Subject), body=list_to_binary(Body)},
+    caterpillar_event:sync_event({notify, Notify}).
 
 -spec check_build_deps(Candidate :: #rev_def{}, State :: #state{}) -> 
     independent|dependent|missing|{error, term()}.
 check_build_deps(Candidate, State) ->
     Preparing = State#state.queued,
-    case ?CDEP:list_unresolved_dependencies(
+    case ?CBS:list_unres_deps(
             State#state.deps, Candidate, Preparing) of
         {ok, [], []} ->
             {ok, NowBuilding} = list_building_revs(State),
-            {ok, Res} = ?CDEP:check_intersection(
+            {ok, Res} = ?CBS:check_isect(
                 Candidate,
                 NowBuilding),
             Res;

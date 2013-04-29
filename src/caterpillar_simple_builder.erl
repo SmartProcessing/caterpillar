@@ -5,7 +5,7 @@
 
 -define(GVOD, caterpillar_utils:get_value_or_die).
 
--export([init_worker/2, changes/3, get_work_id/1, terminate_worker/1, modify_control/4]).
+-export([init_worker/2, changes/3, get_work_id/1, terminate_worker/1, modify_control/4, clean_packages/2]).
 
 
 init_worker(Ident, Args) when is_atom(Ident) ->
@@ -51,6 +51,22 @@ get_work_id(#state{work_id=WI}) -> {ok, WI}.
 
 
 
+-spec clean_packages(#state{}, [#archive{}]) -> ok.
+clean_packages(_State, []) -> ok;
+clean_packages(#state{repository_root=RepositoryRoot}=State, [#archive{name=Name, branch=Branch}|Other]) ->
+    AbsBranchPath = filename:join([RepositoryRoot, Name, Branch]),
+    AbsRepoPath = filename:join([RepositoryRoot, Name]),
+    caterpillar_utils:del_dir(AbsBranchPath),
+    case caterpillar_utils:list_packages(AbsRepoPath) of
+        {ok, []} -> caterpillar_utils:del_dir(AbsRepoPath);
+        _ -> ok
+    end,
+    error_logger:info_msg("~p/~p cleaned~n", [Name, Branch]),
+    clean_packages(State, Other).
+
+
+
+
 %--------------------
 
 
@@ -84,14 +100,14 @@ unarchive(Archives, State) ->
 
 unarchive([], Accum, _State) ->
     {ok, Accum};
-unarchive([ #archive{name=Name, branch=Branch, archive_name=AR}=A|T ], Accum, State) ->
+unarchive([ #archive{name=Name, branch=Branch, archive_name=AR, archive_type=ArchiveType}=A|T ], Accum, State) ->
     ArchiveRoot = State#state.archive_root,
     RepositoryRoot = State#state.repository_root,
     ArchivePath = caterpillar_utils:filename_join([ArchiveRoot, AR]),
     UnArchivePath = caterpillar_utils:filename_join([RepositoryRoot, Name, Branch]),
     caterpillar_utils:del_dir(UnArchivePath),
     caterpillar_utils:ensure_dir(UnArchivePath),
-    case caterpillar_tar:extract(ArchivePath, [{cwd, UnArchivePath}, compressed, verbose]) of
+    case caterpillar_archive:extract(ArchivePath, [{cwd, UnArchivePath}, {type, ArchiveType}]) of
         {error, Reason} ->
             error_logger:error_msg(
                 "Failed to unarchive ~p with reason ~p~n",
@@ -99,7 +115,7 @@ unarchive([ #archive{name=Name, branch=Branch, archive_name=AR}=A|T ], Accum, St
             ),
             file:delete(ArchivePath),
             error;
-        _ ->
+        ok ->
             file:delete(ArchivePath),
             error_logger:info_msg("~s/~s unarchived~n", [Name, Branch]),
             unarchive(T, [ A|Accum ], State)
@@ -115,7 +131,7 @@ clean_deploy_root(Archives, #state{deploy_root=DR}) ->
 make_packages(Archives, State) ->
     error_logger:info_msg("making packages ~n"),
     Packages = [
-        #package{name=Name, branch=Branch, tag=Tag} || 
+        #build_package{name=Name, branch=Branch, tag=Tag} || 
         #archive{name=Name, branch=Branch, tag=Tag} <- Archives
     ],
     make_packages(Packages, [], State).
@@ -123,7 +139,7 @@ make_packages(Archives, State) ->
 
 make_packages([], Accum, _State) ->
     {ok, Accum};
-make_packages([ #package{name=Name, branch=Branch}=Package|T ], Accum, #state{next_work_id=WorkId}=State) ->
+make_packages([ #build_package{name=Name, branch=Branch}=Package|T ], Accum, #state{next_work_id=WorkId}=State) ->
     UnArchivePath = caterpillar_utils:filename_join([State#state.repository_root, Name, Branch]),
     ControlFile = caterpillar_utils:filename_join(UnArchivePath, "control"),
     case filelib:is_regular(ControlFile) of
@@ -134,26 +150,32 @@ make_packages([ #package{name=Name, branch=Branch}=Package|T ], Accum, #state{ne
     caterpillar_utils:del_dir(DistDir),
     NewPackage = case filelib:is_dir(UnArchivePath) of
         true ->
+            EnvHardCode = lists:flatten(io_lib:format(
+                "PATH_MK=../../devel-tools/trunk/Makefile.mk "
+                "PATH_PY_MK=../../smprc.setup/trunk/Makefile.mk "
+                "PATH_MOD=../../*/~s",
+                [Branch]
+            )),
             Commands = lists:map(
-                fun(Command) -> lists:flatten(io_lib:format(Command, [UnArchivePath])) end,
+                fun(Command) -> lists:flatten(io_lib:format(Command, [EnvHardCode, Branch, UnArchivePath])) end,
                 [
-                    "make -C ~s clean &>/dev/null | exit 0 ", %exit status always 0
-                    "make -C ~s test DIST_DIR=dist",
-                    "make -C ~s package DIST_DIR=dist"
+                    "make ~s BRANCH=~s -C ~s clean &>/dev/null | exit 0 ", %exit status always 0
+                    "make ~s BRANCH=~s -C ~s DIST_DIR=dist test",
+                    "make ~s BRANCH=~s -C ~s DIST_DIR=dist package"
                 ]
             ),
             case catch make(Package, DistDir, Commands, State) of
                 {ok, PackageResult} ->
-                    Package#package{build_status=ok, package=PackageResult};
+                    Package#build_package{build_status=ok, package=PackageResult};
                 {error, Log} ->
-                    Package#package{build_status=error, log=Log};
+                    Package#build_package{build_status=error, log=Log};
                 Error ->
                     error_logger:error_msg("make unknown error: ~p~n", [Error]),
                     {error, make_packages}
             end;
         _ ->
             error_logger:error_msg("not dir ~p~n", [UnArchivePath]),
-            Package#package{build_status=error, log= <<"unarchive path not directory">>}
+            Package#build_package{build_status=error, log= <<"unarchive path not directory">>}
     end,
     make_packages(T, [ NewPackage|Accum ], State).
 
@@ -177,14 +199,14 @@ make(Package, DistDir, Commands, #state{deploy_root=DeployRoot}) ->
 
 make(_, []) ->
     {ok, done};
-make(#package{name=Name, branch=Branch}=Package, [ Cmd|T ]) ->
+make(#build_package{name=Name, branch=Branch}=Package, [ Cmd|T ]) ->
     P = open_port({spawn, Cmd}, [binary, use_stdio, stderr_to_stdout, exit_status]),
     case receive_data_from_port() of
         {ok, 0, _Log} ->
-            error_logger:info_msg("~p succeed at ~s/~s~n", [Cmd, Name, Branch]),
+            error_logger:info_msg("succeed ~p at ~s/~s~n", [Cmd, Name, Branch]),
             make(Package, T); 
         {ok, _, Log} ->
-            error_logger:info_msg("~p failed at ~s/~s~n", [Cmd, Name, Branch]),
+            error_logger:info_msg("failed ~p at ~s/~s~n", [Cmd, Name, Branch]),
             {error, Log};
         {error, build_timeout} ->
             error_logger:error_msg(
@@ -218,7 +240,7 @@ pre_deploy(Packages, #state{deploy_root=DR, next_work_id=NWI, ident=Ident}) ->
         body = <<>>
     },
     DeployFold = fun
-        (#package{name=N, branch=B, build_status=ok, package=Package}, {Deploy, Notify}) ->
+        (#build_package{name=N, branch=B, build_status=ok, package=Package}, {Deploy, Notify}) ->
             error_logger:info_msg("openning ~p~n", [Package]),
             {ok, Fd} = file:open(caterpillar_utils:filename_join(DR, Package), [read, binary]),
             NewDeploy = Deploy#deploy{
@@ -231,7 +253,7 @@ pre_deploy(Packages, #state{deploy_root=DR, next_work_id=NWI, ident=Ident}) ->
             OldBody = Notify#notify.body,
             NewNotify = Notify#notify{body = <<OldBody/binary, Body/binary>>},
             {NewDeploy, NewNotify};
-        (#package{name=N, branch=B, log = Log}, {Deploy, Notify}) ->
+        (#build_package{name=N, branch=B, log = Log}, {Deploy, Notify}) ->
             Body = list_to_binary(io_lib:format("error ~s/~s~n", [N, B])),
             OldBody = Notify#notify.body,
             NewNotify = Notify#notify{body = <<OldBody/binary, Body/binary, Log/binary, $\n>>},
