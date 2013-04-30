@@ -269,10 +269,7 @@ events_test_() ->
             "register worker event",
             fun() ->
                 caterpillar_event:register_worker(test, work_id),
-                ?assertEqual(
-                    [{worker, test}],
-                    caterpillar_event:get_info()
-                )
+                ?assertEqual([{worker, test}], caterpillar_event:get_info())
             end
         },
         {
@@ -280,10 +277,7 @@ events_test_() ->
             fun() ->
                 caterpillar_event:register_service(repository),
                 caterpillar_event:register_worker(test, work_id),
-                ?assertEqual(
-                    [{service, repository}, {worker, test}],
-                    lists:sort(caterpillar_event:get_info())
-                ),
+                ?assertEqual([{service, repository}, {worker, test}], lists:sort(caterpillar_event:get_info())),
                 timer:sleep(10),
                 ?assertMatch(
                     {messages, [{_, _, {get_archives, work_id}}]},
@@ -295,10 +289,7 @@ events_test_() ->
             "register service event",
             fun() ->
                 caterpillar_event:register_service(test),
-                ?assertEqual(
-                    [{service, test}],
-                    caterpillar_event:get_info()
-                )
+                ?assertEqual([{service, test}], caterpillar_event:get_info())
             end
         },
         {
@@ -322,11 +313,13 @@ events_test_() ->
         {
             "registered worker down",
             fun() ->
+                Self = self(),
                 Pid = spawn(fun() ->
                     caterpillar_event:register_worker(worker1, work_id),
+                    Self ! spawned,
                     timer:sleep(10)
                 end),
-                timer:sleep(5),
+                ?assertEqual(spawned, caterpillar_test_support:recv(10)),
                 ?assertEqual([{worker, worker1}], caterpillar_event:get_info()),
                 caterpillar_test_support:wait_for_exit(Pid),
                 ?assertEqual([], caterpillar_event:get_info())
@@ -335,11 +328,13 @@ events_test_() ->
         {
             "registered service down",
             fun() ->
+                Self = self(),
                 Pid = spawn(fun() ->
                     caterpillar_event:register_service(service1),
+                    Self ! spawned,
                     timer:sleep(10)
                 end),
-                timer:sleep(5),
+                ?assertEqual(spawned, caterpillar_test_support:recv(10)),
                 ?assertEqual([{service, service1}], caterpillar_event:get_info()),
                 caterpillar_test_support:wait_for_exit(Pid),
                 ?assertEqual([], caterpillar_event:get_info())
@@ -348,10 +343,7 @@ events_test_() ->
         {
             "sync event, notify, not notifier available",
             fun() ->
-                ?assertEqual(
-                    {error, no_service},
-                    caterpillar_event:sync_event({notify, #notify{}})
-                )
+                ?assertEqual({error, no_service}, caterpillar_event:sync_event({notify, #notify{}}))
             end
         },
         {
@@ -385,60 +377,51 @@ events_test_() ->
         {
             "sync event, get_archive, repository available",
             fun() -> 
+                Self = self(),
                 spawn(fun() ->
                     caterpillar_event:register_service(repository),
-                    receive {_, From, {get_archive, #archive{}}} ->
-                        gen_server:reply(From, ok)
-                    after 10 ->
-                        timeout
+                    Self ! spawned,
+                    case caterpillar_test_support:recv(10) of
+                        {_, From, {get_archive, #archive{}}} -> gen_server:reply(From, ok);
+                        _ -> ok
                     end
                 end),
-                timer:sleep(1),
-                ?assertEqual(
-                    [{service, repository}],
-                    caterpillar_event:get_info()
-                ),
-                ?assertEqual(
-                    ok,
-                    caterpillar_event:sync_event({get_archive, #archive{}})
-                )
+                ?assertEqual(spawned, caterpillar_test_support:recv(10)),
+                ?assertEqual([{service, repository}], caterpillar_event:get_info()),
+                ?assertEqual(ok, caterpillar_event:sync_event({get_archive, #archive{}}))
             end
         },
         {
             "sync event rescan_repository",
             fun() -> 
+                Self = self(),
                 spawn(fun() ->
                     caterpillar_event:register_service(repository),
-                    receive {_, From, rescan_repository} ->
-                        gen_server:reply(From, ok)
-                    after 10 ->
-                        timeout
+                    Self ! spawned,
+                    case caterpillar_test_support:recv(10) of
+                        {_, From, rescan_repository} -> gen_server:reply(From, ok);
+                        _ -> ok
                     end
                 end),
-                timer:sleep(1),
-                ?assertEqual(
-                    [{service, repository}],
-                    caterpillar_event:get_info()
-                ),
-                ?assertEqual(
-                    ok,
-                    caterpillar_event:sync_event(rescan_repository)
-                )
+                ?assertEqual(spawned, caterpillar_test_support:recv(10)),
+                ?assertEqual([{service, repository}], caterpillar_event:get_info()),
+                ?assertEqual(ok, caterpillar_event:sync_event(rescan_repository))
             end
         }, 
         {
             "sync event rebuild_package",
             fun() -> 
+                Self = self(),
                 spawn(fun() ->
                     caterpillar_event:register_service(repository),
-                    receive
+                    Self ! spawned,
+                    case caterpillar_test_support:recv(10) of
                         {_, From, {rebuild_package, #package{name=name, branch=branch}}} ->
-                            gen_server:reply(From, ok)
-                    after 10 ->
-                        timeout
+                            gen_server:reply(From, ok);
+                        _ -> ok
                     end
                 end),
-                timer:sleep(1),
+                ?assertEqual(spawned, caterpillar_test_support:recv(10)),
                 ?assertEqual([{service, repository}], caterpillar_event:get_info()),
                 ?assertEqual(ok, caterpillar_event:sync_event({rebuild_package, #package{name=name, branch=branch}}))
             end
@@ -446,23 +429,36 @@ events_test_() ->
         {
             "sync event repository custom command",
             fun() -> 
+                Self = self(),
                 spawn(fun() ->
                     caterpillar_event:register_service(repository),
-                    receive {_, From, {repository_custom_command, command, args}} ->
-                        gen_server:reply(From, ok)
-                    after 10 ->
-                        timeout
+                    Self ! spawned,
+                    case caterpillar_test_support:recv(10) of
+                        {_, From, {repository_custom_command, command, args}} -> gen_server:reply(From, ok);
+                        _ -> ok
                     end
                 end),
-                timer:sleep(1),
-                ?assertEqual(
-                    [{service, repository}],
-                    caterpillar_event:get_info()
-                ),
-                ?assertEqual(
-                    ok,
-                    caterpillar_event:sync_event({repository_custom_command, command, args})
-                )
+                ?assertEqual(spawned, caterpillar_test_support:recv(10)),
+                ?assertEqual([{service, repository}], caterpillar_event:get_info()),
+                ?assertEqual(ok, caterpillar_event:sync_event({repository_custom_command, command, args}))
+            end
+        },
+        {
+            "sync event: workers custom command",
+            fun() -> 
+                Self = self(),
+                spawn(fun() ->
+                    caterpillar_event:register_worker(worker1, work_id),
+                    Self ! spawned,
+                    case caterpillar_test_support:recv(10) of
+                        {_, {worker_custom_command, command, args}} -> Self ! cast_received;
+                        _ -> ok
+                    end
+                end),
+                ?assertEqual(spawned, caterpillar_test_support:recv(10)),
+                ?assertEqual([{worker, worker1}], caterpillar_event:get_info()),
+                ?assertEqual(ok, caterpillar_event:sync_event({worker_custom_command, command, args})),
+                ?assertEqual(cast_received, caterpillar_test_support:recv(10))
             end
         },
         {
@@ -474,16 +470,9 @@ events_test_() ->
                     lists:sort(caterpillar_event:get_info())
                 ),
                 caterpillar_event:event({changes, work_id, [#archive{}]}),
-                Receive = fun() ->
-                    receive {_, Msg} ->
-                        Msg
-                    after 10 ->
-                        timeout
-                    end
-                end,
                 ?assertEqual(
                     [{changes, work_id, [#archive{}]} || _ <- [w1, w2]],
-                    [Receive() || _ <- [w1, w2]]
+                    [begin {_, Msg} = caterpillar_test_support:recv(10), Msg end || _ <- [w1, w2]]
                 )
             end
         },
@@ -496,16 +485,9 @@ events_test_() ->
                     lists:sort(caterpillar_event:get_info())
                 ),
                 caterpillar_event:event({clean_packages, [#archive{}]}),
-                Receive = fun() ->
-                    receive {_, Msg} ->
-                        Msg
-                    after 10 ->
-                        timeout
-                    end
-                end,
                 ?assertEqual(
                     [{clean_packages, [#archive{}]} || _ <- [w1, w2]],
-                    [Receive() || _ <- [w1, w2]]
+                    [begin {_, Msg} = caterpillar_test_support:recv(10), Msg end || _ <- [w1, w2]]
                 )
             end
         }
