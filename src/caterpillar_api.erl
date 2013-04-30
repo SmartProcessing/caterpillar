@@ -113,8 +113,9 @@ handle(#http_req{path=[<<"init_repository">>, Path]}=Req, State) ->
 
 handle(#http_req{path=[<<"rebuild_dependencies">>, Name, Branch]}=Req, State) ->
     Args = [binary_to_list(X) || X <- [Name, Branch]],
-    caterpillar_event:sync_event({worker_custom_command, rebuild_dependecies, Args}),
-    {ok, cowboy_http_req:reply(200, [], <<"ok">>, Req), State};
+    caterpillar_event:sync_event({worker_custom_command, rebuild_dependencies, Args}),
+    {ok, Req2} = cowboy_http_req:reply(200, [], <<"ok">>, Req),
+    {ok, Req2, State};
 
 handle(Req, State) ->
     error_logger:info_msg("bad request: ~p~n", [Req]),
