@@ -364,6 +364,12 @@ scan_pipe(Packages, State) ->
 
 
 cleanup_pipe(State) ->
+    case catch register(self(), cleanup_pipe_process) of
+        true -> ok;
+        _ ->
+            error_logger:info_msg("cleanup already in process~n"),
+            exit(normal)
+    end,
     FunList = [
         {get_packages, fun get_packages/2},
         {get_branches, fun get_branches/2},
