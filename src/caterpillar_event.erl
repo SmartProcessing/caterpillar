@@ -139,6 +139,14 @@ handle_call({sync_event, {repository_custom_command, _Command, _Args}=Request}, 
     sync_event_to_service(repository, From, Ets, Request),
     {noreply, State};
 
+handle_call({sync_event, {worker_custom_command, Command, Args}=Event}, From, #state{ets=Ets}=State) ->
+    spawn(fun() ->
+        ForeachFun = fun(Pid) -> gen_server:cast(Pid, Event) end,
+        catch lists:foreach(ForeachFun, select_workers_pids(Ets)),
+        gen_server:reply(From, ok)
+    end),
+    {noreply, State};
+
 handle_call(get_info, _From, #state{ets=Ets}=State) ->
     Info = [
         list_to_tuple(X) || X <- 
