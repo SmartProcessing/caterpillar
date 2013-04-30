@@ -132,6 +132,7 @@ handle_call(_Request, _From, State) ->
 
 handle_cast({changes, WorkId, Archives}, State) ->
     error_logger:info_msg("Changes: ~p~n", [Archives]),
+    %FIXME: why work_id updated before building?
     update_work_id(State#state.work_id, WorkId),
     ToPreprocess = lists:usort(Archives),
     {ok, NewState} = process_archives(ToPreprocess, State, WorkId),
@@ -207,11 +208,8 @@ code_change(_OldVsn, State, _Extra) ->
 
 
 %% Preprocessing
-process_archives([], State, _WorkId) ->
-    {ok, State};
-process_archives([A|O], State, WorkId) ->
-    UnpackState = State#state.unpack_state,
-    BuildPath = State#state.build_path,
+process_archives([], State, _WorkId) -> {ok, State};
+process_archives([A|O], #state{unpack_state=UnpackState, build_path=BuildPath}=State, WorkId) ->
     case can_prepare(A, State) of
         true ->
             Preparing = [?CPU:get_archive_version(A)|State#state.queued],
@@ -224,15 +222,12 @@ process_archives([A|O], State, WorkId) ->
     process_archives(O, State#state{queued=Preparing, prebuild=Prebuild}, WorkId).
 
 process_archive(BuildPath, Archive, UnpackState, WorkId) ->
-    {_Pid, Monitor} = erlang:spawn_monitor(
-        ?MODULE, 
-        prepare, 
-        [BuildPath, Archive, WorkId]),
+    {_Pid, Monitor} = erlang:spawn_monitor(?MODULE, prepare, [BuildPath, Archive, WorkId]),
     ets:insert(UnpackState, {Monitor, ?CPU:get_archive_version(Archive)}).
 
 
 prepare(BuildPath, Archive, WorkId) ->
-    Vsn = get_archive_version(Archive),
+    Vsn = ?CPU:get_archive_version(Archive),
     TempName = get_temp_name(Vsn),
     Type = Archive#archive.archive_type,
     TempArch = filename:join([BuildPath, "temp", TempName]) ++ "." ++ atom_to_list(Type),
@@ -308,15 +303,17 @@ job_free_worker([{Pid, none}|Other], ToBuild, OldW) ->
 job_free_worker([{Pid, SomeRef}|Other], ToBuild, OldW) ->
     job_free_worker(Other, ToBuild, [{Pid, SomeRef}|OldW]).
     
--spec create_workers({WorkerNumber :: non_neg_integer(), Settings :: term()}) -> 
-    {ok, [{Pid :: pid(), none}]}.
+-spec create_workers({WorkerNumber :: non_neg_integer(), Settings :: term()}) -> {ok, [{Pid :: pid(), none}]}.
 create_workers({WorkerNumber, Settings}) ->
-    error_logger:info_msg("starting ~B build workers, worker supervisor and lock storage: ~p ~n", 
-        [WorkerNumber, caterpillar_build_worker_sup:start_link(Settings)]),
+    error_logger:info_msg(
+        "starting ~B build workers, worker supervisor and lock storage: ~p ~n", 
+        [WorkerNumber, caterpillar_build_worker_sup:start_link(Settings)]
+    ),
     caterpillar_lock_sup:start_link(),
     create_workers(WorkerNumber, []).
-create_workers(0, Acc) ->
-    {ok, Acc};
+
+
+create_workers(0, Acc) -> {ok, Acc};
 create_workers(WorkerNumber, Acc) ->
     case supervisor:start_child(caterpillar_build_worker_sup, []) of
         {ok, Pid} ->
@@ -327,26 +324,27 @@ create_workers(WorkerNumber, Acc) ->
             {error, error}
     end.
 
+
 -spec list_building_revs(State :: #state{}) -> {ok, [#rev_def{}]}.
 list_building_revs(State) ->
     {ok, [RevDef || {_Pid, RevDef} <- State#state.workers, RevDef /= none]}.
 
+
 -spec number_free_workers(State :: #state{}) -> {ok, non_neg_integer()}.
 number_free_workers(State) ->
-    {ok, lists:foldl(
-            fun({_Pid, none}, Cnt) -> 
-                    Cnt + 1; 
-                ({_Pid, _Other}, Cnt) ->
-                    Cnt
-            end, 0, State#state.workers)}.
+    FoldFun = fun
+        ({_Pid, none}, Cnt) -> Cnt + 1; 
+        ({_Pid, _Other}, Cnt) -> Cnt
+    end,
+    {ok, lists:foldl(FoldFun, 0, State#state.workers)}.
+
 
 release_worker(Worker, Workers) ->
-    lists:map(
-        fun({W, _V}) when W==Worker ->
-            {Worker, none};
-        (Other) ->
-            Other
-        end, Workers).
+    MapFun =  fun
+        ({W, _V}) when W == Worker -> {Worker, none};
+        (Other) -> Other
+    end,
+    lists:map(MapFun, Workers).
 
 
 %% Scheduling
@@ -366,20 +364,17 @@ schedule_build(State) ->
     schedule_poller(State#state.poll_time),
     try_build(State).
 
+
 -spec get_build_candidate(State :: #state{}) -> {ok, NewState :: #state{}}.
 get_build_candidate(State) ->
-    case {
-            queue:is_empty(State#state.wait_queue),
-            queue:is_empty(State#state.main_queue)} of
-        {true, true} ->
-            {ok, State};
-        {true, false} ->
-            get_build_candidate(main_queue, State);
-        {false, true} ->
-            get_build_candidate(wait_queue, State);
-        {false, false} ->
-            get_build_candidate(both, State)
+    #state{main_queue = MainQueue, wait_queue = WaitQueue} = State,
+    case {queue:is_empty(WaitQueue), queue:is_empty(MainQueue)} of
+        {true, true} -> {ok, State};
+        {true, false} -> get_build_candidate(main_queue, State);
+        {false, true} -> get_build_candidate(wait_queue, State);
+        {false, false} -> get_build_candidate(both, State)
     end.
+
 
 get_build_candidate(main_queue, State) ->
     {{value, Candidate}, MainQueue} = queue:out(State#state.main_queue),
@@ -389,10 +384,10 @@ get_build_candidate(main_queue, State) ->
             error_logger:info_msg("next candidate: ~p~n", [?VERSION(Candidate)]),
             ?CBS:update_dep_state(State#state.deps, Candidate, <<"in_progress">>),
             {ok, State#state{
-                    main_queue=MainQueue, 
-                    next_to_build=Candidate,
-                    queued=lists:delete(?VERSION(Candidate), State#state.queued)
-                }};
+                main_queue=MainQueue, 
+                next_to_build=Candidate,
+                queued=lists:delete(?VERSION(Candidate), State#state.queued)
+            }};
 
         dependent ->
             WaitQueue = queue:in(Candidate, State#state.wait_queue),
