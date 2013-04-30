@@ -1,7 +1,7 @@
 -module(caterpillar_build_storage).
 -include_lib("caterpillar_builder_internal.hrl").
 -export([check_isect/2, list_unres_deps/3, list_buckets/2]).
--export([update_dep_state/3, fetch_dep/2, create_dep/2]).
+-export([update_dep_state/3, fetch_dep/2, create_dep/2, get_subj/2]).
 -export([create_bucket/2, find_bucket/2, arm_bucket/5, get_temp_path/2]).
 -export([fetch_bucket/2, list_buckets/2, update_dep_buckets/6, update_buckets/5, update_buckets/6, delete_from_bucket/4]).
 -export([delete/4]).
@@ -82,15 +82,26 @@ fetch_dep(DepTree, Version) ->
     ?UNLOCK(Version),
     Res.
 
+get_subj(DepTree, Version) ->
+    case fetch_dep(DepTree, Version) of
+        {ok, {_, _, _, Subj}} ->
+            Subj;
+        _Other ->
+            {error, not_found}
+    end.
+
 create_dep(DepTree, Rev) ->
     Version = ?VERSION(Rev),
     DepObject = Rev#rev_def.dep_object, 
+    update_subjects(DepTree, DepObject, Version),
     ?LOCK(Version),
     case dets:lookup(DepTree, Version) of
-        [{_V, {_, _Buckets}, _, _Subj}|_] ->
-            pass;
+        [{_V, {<<"missing">>, _}, _, Subj}|_] ->
+            dets:insert(DepTree, {Version, {<<"new">>, []}, DepObject, Subj});
         [] ->
-            dets:insert(DepTree, {Version, {<<"new">>, []}, DepObject, []})
+            dets:insert(DepTree, {Version, {<<"new">>, []}, DepObject, []});
+        [{_V, {_, _Buckets}, _, _Subj}|_] ->
+            pass
     end,
     ?UNLOCK(Version),
     {ok, done}.
@@ -115,18 +126,13 @@ update_dep_state(DepTree, Rev, Status) ->
 
 update_subjects(_, [], _) ->
     {ok, done};
-update_subjects(Deps, [Version|Other], NewRef) ->
+update_subjects(Deps, [{Version, _}|Other], NewRef) ->
     ?LOCK(Version),
     case dets:lookup(Deps, Version) of
         [{Version, BuildInfo, Object, Subject}|_] ->
-            case lists:member(NewRef, Subject) of
-                true ->
-                    ok;
-                false ->
-                    dets:insert(Deps, {Version, BuildInfo, Object, [NewRef|Subject]})
-            end;
+            dets:insert(Deps, {Version, BuildInfo, Object, lists:usort([NewRef|Subject])});
         [] ->
-            ok
+            dets:insert(Deps, {Version, {<<"missing">>, []}, [], [NewRef]})
     end,
     ?UNLOCK(Version),
     update_subjects(Deps, Other, NewRef).

@@ -43,6 +43,9 @@ handle_call({unlock, Ident}, From, State) ->
 handle_call({state, Ident}, _From, State) ->
     {reply, ets:lookup(State#state.storage, Ident), State};
 
+handle_call(state, _From, State) ->
+    {reply, ets:match(State#state.storage, '$1'), State};
+
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 

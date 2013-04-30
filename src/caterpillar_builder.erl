@@ -12,6 +12,7 @@
 -define(CBS, caterpillar_build_storage).
 -define(UNPACK_RETRY_LIMIT, 15).
 -define(BTL, binary_to_list).
+-define(LTB, list_to_binary).
 
 -record(state, {
         master_state=false,
@@ -138,6 +139,18 @@ handle_cast({changes, WorkId, Archives}, State) ->
     ToPreprocess = lists:usort(Archives),
     {ok, NewState} = process_archives(ToPreprocess, State, WorkId),
     {noreply, NewState};
+handle_cast({worker_custom_command, rebuild_dependencies, [Name, Branch|_]}, State) ->
+    error_logger:info_msg("rebuilding deps~n"),
+    Vsn = {?LTB(Name), ?LTB(Branch), <<>>},
+    case ?CBS:get_subj(State#state.deps, Vsn) of
+        Subj when is_list(Subj) ->
+            error_logger:info_msg(" deps: ~p~n", [Subj]),
+            lists:map(fun(X) -> rebuild(State#state.build_path, X, State#state.work_id) end, Subj);
+        {error, _} ->
+            error_logger:info_msg("Subj err"),
+            pass
+    end,
+    {noreply, State};
 handle_cast({clean_packages, Archives}, State) ->
     Fun = fun(Archive) ->
         Version = {
@@ -149,19 +162,6 @@ handle_cast({clean_packages, Archives}, State) ->
     end,
     lists:map(Fun, Archives),
     {noreply, State};
-handle_cast({rebuild_deps, WorkId, Version}, State) ->
-    DepArchives = case ?CBS:fetch_dep(State#state.deps, Version) of
-        {ok, []} ->
-            [];
-        {ok, {_, {St, _}, _Object, Subject}} when St == built; St == tested ->
-            lists:map(fun(X) -> ?CPU:get_version_archive(X) end, Subject);
-        Other ->
-            error_logger:info_msg("wrong: ~p~n", [Other]),
-            []
-    end,
-    error_logger:info_msg("rebuilding ~p dependencies: ~p~n", [Version, DepArchives]),
-    {ok, NewState} = process_archives(DepArchives, State, WorkId),
-    {noreply, NewState};
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -476,7 +476,7 @@ check_build_deps(Candidate, State) ->
                                 {BPackage, BBranch, _} = Dep,
                                 QueuedState = lists:member(Dep, State#state.queued),
                                 if not QueuedState ->
-                                    pass;
+                                    rebuild(State#state.build_path, Dep, Candidate#rev_def.work_id);
                                 true ->
                                     pass
                                 end
