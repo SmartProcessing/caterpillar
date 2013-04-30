@@ -188,36 +188,45 @@ init_test_() ->
 ]}. 
 
 
-%FIXME:
-register_scan_pipe_test_zzz() ->
-{foreach, 
-    fun() -> ok end,
-    fun(_) ->
-        catch erlang:exit(whereis(scan_pipe_caterpillar_repository), kill),
-        caterpillar_test_support:wait_for_exit(scan_pipe_caterpillar_repository)
+scan_input_test_() ->
+{foreach,
+    fun() ->
+        ok
+    end,
+    fun(_) -> 
+        caterpillar_test_support:kill_mock(scan_pipe_caterpillar_repository)
     end,
 [
     {Message, fun() ->
-        Setup(),
-        ?assertEqual(Result, catch caterpillar_repository:register_scan_pipe(prevres, state))
-    end} || {Message, Setup, Result} <- [
+        Mock(),
+        Check(catch caterpillar_repository:scan_input(Packages, any_state))
+    end} || {Message, Mock, Packages, Check} <- [
         {
-            "scan pipe successful registered",
-            fun() -> ok end,
-            {ok, prevres}
+            "while repo repo already in process",
+            fun() ->
+                ?assert(is_pid(caterpillar_test_support:mock(scan_pipe_caterpillar_repository, {'_', ok})))
+            end,
+            [],
+            fun(Result) -> 
+                ?assertEqual({error, already_in_process}, Result)
+            end
         },
         {
-            "scan pipe failed to register",
-            fun() ->
-                register(
-                    scan_pipe_caterpillar_repository,
-                    spawn(fun() ->
-                        receive _ -> ok after 50 -> timeout end 
-                    end)
-                ),
-                timer:sleep(1)
-            end,
-            {error, already_in_process}
+            "some random data, valid + invalid",
+            fun() -> ok end,
+            [#repository_package{}, #package{name=invalid}, invalid],
+            fun(Result) ->
+                ?assertEqual({ok, [#repository_package{}]}, Result)
+            end
+        },
+        {
+            "whole repo scan initialized, checking process registration",
+            fun() -> ok end,
+            [], 
+            fun(Result) ->
+                ?assertEqual({ok, []}, Result),
+                ?assertEqual(whereis(scan_pipe_caterpillar_repository), self())
+            end
         }
     ]
 ]}.
@@ -573,29 +582,6 @@ export_archives_test_() ->
                         archive_name= "package__ARCHIVE__branch",
                         archive_type= tgz,
                         current_revno=rev
-                    }]},
-                    Result
-                )
-            end
-        },
-        {
-            "package successfuly archived(unicode symbols inside)",
-            %FIXME:
-            ignore_me,
-            [
-                <<"__test_repo/package/branch/абв/">>,
-                <<"__test_repo/package/branch/бав/">>,
-                "__test_repo/package/branch/dir1/"
-                
-            ],
-            [#repository_package{name= "package", branch= "branch", current_revno=rev}],
-            fun(Result) ->
-                {ok, Names} = erl_tar:table("__test_archive/package__ARCHIVE__branch", [compressed]),
-                ?assertEqual(["dir1", "абв", "бав"], lists:sort(Names))
-                ?assertEqual(
-                    {ok, [#repository_package{
-                        name= "package", branch= "branch", archive_name= "package__ARCHIVE__branch",
-                        archive_type= tgz, current_revno=rev
                     }]},
                     Result
                 )

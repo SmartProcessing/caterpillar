@@ -23,7 +23,7 @@ recv() -> recv(500).
 recv(Timeout) -> receive A -> A after Timeout -> timeout end.
 
 
--spec mock(Name::atom(), Data::list()|tuple()) -> pid().
+-spec mock(Name::atom(), Data::list()|tuple()) -> pid()|{error, Reason::term()}.
 mock(Name, Data) when not is_list(Data) -> mock(Name, [Data]);
 mock(Name, Data) when is_atom(Name) ->
     Callee = self(),
@@ -31,7 +31,7 @@ mock(Name, Data) when is_atom(Name) ->
         Self = self(),
         yes = global:register_name(Name, Self),
         true = register(Name, Self),
-        Self ! {spawned, Self},
+        Callee ! {spawned, Self},
         loop(Data)
     end),
     receive
@@ -41,6 +41,7 @@ mock(Name, Data) when is_atom(Name) ->
 
 loop([{Request, Response}|Rest]) -> 
     receive 
+        {_, From, _} when Request == '_' -> gen_server:reply(From, Response), loop(Rest);
         {_, From, Request} -> gen_server:reply(From, Response), loop(Rest);
         {_, From, BadRequest} -> gen_server:reply(From, {error, {{bad_request, BadRequest}, {expected, Request}}}), ok
     end;

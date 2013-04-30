@@ -363,6 +363,7 @@ scan_pipe(Packages, State) ->
 
 
 cleanup_pipe(State) ->
+    error_logger:info_msg("cleaning up time~n"),
     case catch register(cleanup_pipe_process, self()) of
         true -> ok;
         _ ->
@@ -487,7 +488,8 @@ get_branches([BadPackage|Rest], Accum, State) ->
 cast_clean_packages(Branches, #state{dets=Dets}) -> 
     DetsBranches = dets:select(Dets, [{{'$1', '_', '_', '_', '_', '_'}, [], ['$1']}]),
     case DetsBranches -- [{Name, Branch} || #repository_package{name=Name, branch=Branch} <- Branches] of
-        [] -> ok;
+        [] ->
+            ok;
         ToClean ->
             Body = list_to_binary(
                 [io_lib:format("~s/~s~n", [Package, Name]) || {Package, Name} <- ToClean]
