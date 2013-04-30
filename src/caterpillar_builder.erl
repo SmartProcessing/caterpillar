@@ -11,6 +11,7 @@
 -define(CU, caterpillar_utils).
 -define(CBS, caterpillar_build_storage).
 -define(UNPACK_RETRY_LIMIT, 15).
+-define(BTL, binary_to_list).
 
 -record(state, {
         master_state=false,
@@ -227,9 +228,9 @@ process_archive(BuildPath, Archive, UnpackState, WorkId) ->
 
 
 prepare(BuildPath, Archive, WorkId) ->
-    #archive{name=Name, branch=Branch, tag=Tag, archive_type=Type} = Archive,
-    TempName = io_lib:format("~s-~s~s", [Name, Branch, Tag]),
-    error_logger:info_msg("==============================ARCHIVE TYPE: ~p~n", [Type]),
+    Vsn = ?CPU:get_archive_version(Archive),
+    TempName = get_temp_name(Vsn),
+    Type = Archive#archive.archive_type,
     TempArch = filename:join([BuildPath, "temp", TempName]) ++ "." ++ atom_to_list(Type),
     filelib:ensure_dir(TempArch),
     {ok, Fd} = file:open(TempArch, [read, write]),
@@ -245,6 +246,21 @@ prepare(BuildPath, Archive, WorkId) ->
     PkgRecord = ?CPU:get_pkg_config(Archive, Cwd),
     RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId),
     gen_server:call(caterpillar_builder, {newref, RevDef}, infinity).
+
+
+rebuild(BuildPath, Version, WorkId) ->
+    Archive = ?CPU:get_version_archive(Version),
+    Cwd = filename:join([BuildPath, "temp", ?CPU:get_dir_name(Version)]),
+    PkgConfig = ?CPU:get_pkg_config(Archive, Cwd),
+    RevDef = ?CPU:pack_rev_def(Archive, PkgConfig, WorkId),
+    gen_server:call(caterpillar_builder, {newref, RevDef}, infinity).
+
+
+get_temp_name({N, B, T}) ->
+    lists:flatten(io_lib:format(
+       "~s-~s~s",
+        [?BTL(N), ?BTL(B), ?BTL(T)]
+    )).
 
 
 can_prepare(Archive, State) ->
@@ -460,8 +476,7 @@ check_build_deps(Candidate, State) ->
                                 {BPackage, BBranch, _} = Dep,
                                 QueuedState = lists:member(Dep, State#state.queued),
                                 if not QueuedState ->
-                                    Msg = {rebuild_package, {binary_to_list(BPackage), binary_to_list(BBranch)}},
-                                    caterpillar_event:sync_event(Msg);
+                                    pass;
                                 true ->
                                     pass
                                 end
