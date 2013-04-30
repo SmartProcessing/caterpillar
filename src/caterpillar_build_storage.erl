@@ -3,7 +3,7 @@
 -export([check_isect/2, list_unres_deps/3, list_buckets/2]).
 -export([update_dep_state/3, fetch_dep/2, create_dep/2]).
 -export([create_bucket/2, find_bucket/2, arm_bucket/5, get_temp_path/2]).
--export([fetch_bucket/2, list_buckets/2, update_dep_buckets/6, update_buckets/5, delete_from_bucket/4]).
+-export([fetch_bucket/2, list_buckets/2, update_dep_buckets/6, update_buckets/5, update_buckets/6, delete_from_bucket/4]).
 -export([delete/4]).
 
 -define(LOCK(X), gen_server:call(caterpillar_lock, {lock, X}, infinity)).
