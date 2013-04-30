@@ -42,7 +42,7 @@ get_revno(_State, Package, Branch) ->
 is_repository(_State, Package) ->
     IsRepo = "git rev-parse",
     case command(IsRepo, [{cd, Package}]) of
-        {ok, <<>>} -> true;
+        {ok, _} -> true;
         {error, _} -> 
             error_logger:info_msg("~s is not repository~n", [Package]),
             false
@@ -52,7 +52,7 @@ is_repository(_State, Package) ->
 is_branch(_State, Package, Branch) ->
     IsBranch = format("git rev-parse heads/~s 1> /dev/null", [Branch]),
     case command(IsBranch, [{cd, Package}]) of
-        {ok, <<>>} -> true;
+        {ok, _} -> true;
         {error, Error} ->
             error_logger:info_msg("not a branch: ~s~n", [Error]),
             false

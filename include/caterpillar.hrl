@@ -15,7 +15,7 @@
 
 -record(package, {
     name :: string(),
-    branch :: string()|'_'
+    branch = '_' :: string()|'_' % '_' - all branches in package
 }).
 
 

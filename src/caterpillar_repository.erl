@@ -38,6 +38,8 @@ init(Args) ->
             archive_root = caterpillar_utils:ensure_dir(?GV(archive_root, Args, ?ARCHIVE_ROOT)),
             notify_root = caterpillar_utils:ensure_dir(?GV(notify_root, Args, ?NOTIFY_ROOT)),
             scan_interval = ?GV(scan_interval, Args, ?SCAN_INTERVAL) * 1000,
+            cleanup_interval = ?GV(cleanup_interval, Args, ?CLEANUP_INTERVAL) * 1000,
+            cleanup_timer = clean_repository(0),
             registered = false,
             register_service_timer = register_service(0),
             scan_timer = scan_repository(0),
@@ -53,6 +55,11 @@ init(Args) ->
 handle_info(scan_repository, State) ->
     spawn(fun() -> scan_pipe(State) end),
     {noreply, scan_repository(State)};
+
+%cleanup event
+handle_info(clean_repository, State) ->
+    spawn(fun() -> cleanup_pipe(State) end),
+    {noreply, clean_repository(State)};
 
 %async event for pushing saved notifications
 handle_info(async_notify, State) ->
@@ -234,6 +241,14 @@ scan_repository(Delay) when is_integer(Delay), Delay >= 0 ->
     erlang:send_after(Delay, self(), scan_repository).
 
 
+-spec clean_repository(#state{}|non_neg_integer()) -> #state{}|reference().
+clean_repository(#state{cleanup_interval=CI, cleanup_timer=CT}=State) ->
+    catch erlang:cancel_timer(CT),
+    State#state{cleanup_timer=clean_repository(CI)};
+clean_repository(Delay) when is_integer(Delay), Delay >= 0 ->
+    erlang:send_after(Delay, self(), clean_repository).
+
+
 -spec clean_packages(#state{}, [{ArchiveName::term(), Branch::term()}]) -> ok.
 clean_packages(_State, []) -> ok;
 clean_packages(#state{dets=Dets, archive_root=ArchiveRoot}=State, [{Name, Branch}|O]) ->
@@ -329,16 +344,14 @@ scan_pipe(State) ->
 
 
 scan_pipe(#package{name=Name, branch=Branch}, State) ->
-    scan_pipe([#repository_package{name=Name, branch=Branch}], State);
+    RepoPackage = [#repository_package{name=Name, branch=Branch}],
+    scan_pipe(RepoPackage, State);
 
 scan_pipe(Packages, State) ->
-    FindModifiedPackages = [
-        {register_scan_pipe, fun register_scan_pipe/2},
+    FunList = [
+        {scan_input, fun scan_input/2},
         {get_packages, fun get_packages/2},
         {get_branches, fun get_branches/2},
-        {cast_clean_packages, fun cast_clean_packages/2}
-    ],
-    ScanSelectedPackages = [
         {find_modified_packages, fun find_modified_packages/2},
         {export_archives, fun export_archives/2},
         {get_diff, fun get_diff/2},
@@ -347,86 +360,123 @@ scan_pipe(Packages, State) ->
         {build_changes, fun build_changes/2},
         {send_changes, fun send_changes/2}
     ],
-    FunList = case Packages of 
-        [] -> FindModifiedPackages ++ ScanSelectedPackages;
-        _ -> ScanSelectedPackages
-    end,
     caterpillar_utils:pipe(FunList, Packages, State).
 
 
-register_scan_pipe(PrevRes, _State) ->
-    Self = self(),
-    case catch register(scan_pipe_caterpillar_repository, Self) of
-        true ->
-            error_logger:info_msg("scan pipe started at ~p~n", [Self]),
-            {ok, PrevRes};
-        _Err ->
-            error_logger:error_msg("scan_pipe already in process~n"),
-            {error, already_in_process}
+cleanup_pipe(State) ->
+    FunList = [
+        {get_packages, fun get_packages/2},
+        {get_branches, fun get_branches/2},
+        {cast_clean_packages, fun cast_clean_packages/2}
+    ],
+    caterpillar_utils:pipe(FunList, [], State).
+
+
+-spec scan_input([#package{}], #state{}) -> {ok, [#repository_package{}]}|{error, Reason::term()}.
+scan_input(Packages, _State) ->
+    FoldFun = fun
+        (#package{name=Name, branch=Branch}, Acc) -> [#repository_package{name=Name, branch=Branch}|Acc];
+        (BadPackage, Acc) -> 
+            error_logger:error_msg("scan_input bad package: ~p~n", [BadPackage]),
+            Acc
+    end,
+    case lists:foldl(FoldFun, [], Packages) of
+        [] -> 
+            case catch register(scan_pipe_caterpillar_repository, self()) of
+                true ->
+                    error_logger:info_msg("scanning whole repository~n"),
+                    {ok, []};
+                _Err ->
+                    error_logger:error_msg("whole repository scan already in process~n"),
+                    {error, already_in_process}
+            end;
+        Result -> {ok, Result}
     end.
 
 
-get_packages(_, #state{repository_root=RepositoryRoot, vcs_plugin=VCSPlugin, vcs_state=VCSState}) ->
+-spec get_packages([#repository_package{}], #state{}) -> {ok, [#repository_package{}]}|{error, Reason::term()}.
+get_packages([], #state{repository_root=RepositoryRoot}=State) ->
     case caterpillar_utils:list_packages(RepositoryRoot) of
+        {ok, []} -> 
+            error_logger:info_msg("no packages in repository, stoping~n"),
+            {stop, done};
         {ok, Packages} ->
-            FoldFun = fun(Package, Accum) ->
-                AbsPackage = caterpillar_utils:filename_join(RepositoryRoot, Package),
-                case VCSPlugin:is_repository(VCSState, AbsPackage) of
-                    true -> [#repository_package{name=Package} | Accum];
-                    false ->
-                        error_logger:info_msg("~p is not repository~n", [Package]),
+            RepoPackages = lists:foldl(
+                fun
+                    (Name, Accum) when is_list(Name) -> [#repository_package{name=Name, branch='_'}|Accum];
+                    (BadName, Accum) ->
+                        error_logger:error_msg("get_packages bad repository package name: ~p~n", [BadName]),
                         Accum
-                end 
-            end,
-            case catch lists:foldl(FoldFun, [], Packages) of
-                Repos when is_list(Repos) -> {ok, lists:reverse(Repos)};
-                Error -> {error, {get_packages, {plugin_bad_return, Error}}}
-            end;
-        Error -> {error, {get_packages, Error}}
+                end,
+                [],
+                Packages
+            ),
+            get_packages(RepoPackages, State);
+        {error, Reason} -> {error, {get_packages, Reason}};
+        Other -> {error, {get_packages, {bad_result, Other}}}
+    end;
+get_packages(Packages, State) ->
+    case get_packages(Packages, [], State) of
+        {ok, []} -> {stop, done};
+        {ok, ResultPackages} -> {ok, ResultPackages};
+        {error, Reason} -> {error, {get_packages, Reason}};
+        Other -> {error, {get_packages, {bad_result, Other}}}
     end.
 
 
-get_branches(Packages, State) ->
-    get_branches(Packages, [],  State).
+get_packages([], Accum, _State) -> {ok, Accum};
+get_packages([#repository_package{name=Name}=Package|Rest], Accum, State) when is_list(Name) ->
+    #state{repository_root=RepositoryRoot, vcs_plugin=VCSPlugin, vcs_state=VCSState} = State,
+    AbsolutePath = caterpillar_utils:filename_join(RepositoryRoot, Name),
+    case catch VCSPlugin:is_repository(VCSState, AbsolutePath) of
+        true -> 
+            get_packages(Rest, [Package|Accum], State);
+        false ->
+            error_logger:info_msg("~p is not repository~n", [Package]),
+            get_packages(Rest, Accum, State);
+        Error ->
+            {error, Error}
+    end;
+get_packages([BadPackage|_Rest], _Accum, _State) ->
+    error_logger:error_msg("get_packages bad package: ~p~n", [BadPackage]),
+    {error, {bad_package, BadPackage}}.
 
 
-get_branches([], Branches, _State) ->
-    {ok, lists:sort(Branches)};
+-spec get_branches([#repository_package{}], #state{}) -> {ok, [#repository_package{}]}.
+get_branches(Packages, State) -> get_branches(Packages, [],  State).
 
-get_branches([Package|O], Accum, #state{repository_root=RepositoryRoot, vcs_plugin=VCSPlugin, vcs_state=VCSState}=State) ->
-    AbsPackage = caterpillar_utils:filename_join(RepositoryRoot, Package#repository_package.name),
-    NewAccum = case VCSPlugin:get_branches(VCSState, AbsPackage) of
+
+get_branches([], Accum, _State) -> {ok, Accum};
+get_branches([#repository_package{name=Name, branch='_'}=Package|Rest], Accum, State) -> %all branches for repo
+    #state{repository_root=RepositoryRoot, vcs_plugin=VCSPlugin, vcs_state=VCSState} = State,
+    AbsoluteName = caterpillar_utils:filename_join(RepositoryRoot, Name),
+    NewAccum = case catch VCSPlugin:get_branches(VCSState, AbsoluteName) of
         {ok, []} -> 
-            error_logger:info_msg("no branches in ~p~n", [Package]),
+            error_logger:info_msg("no branches in ~p~n", [Name]),
             Accum;
-        {ok, RawBranches} -> 
-            FoldFun = fun(Branch, Acc) ->
-                case catch VCSPlugin:is_branch(VCSState, AbsPackage, Branch) of
-                    true ->
-                        [Package#repository_package{branch=Branch}|Acc];
-                    false ->
-                        error_logger:info_msg("~p/~p not a branch~n", [Package#repository_package.name, Branch]), 
-                        Acc;
-                    Err ->
-                        error_logger:error_msg(
-                            "get_branches error: ~p~n on ~p/~p~n",
-                            [Err, Package, Branch]
-                        ),
-                        Acc
-                end
-            end,
-            case catch lists:foldl(FoldFun, Accum, RawBranches) of
-                Branches when is_list(Branches) ->
-                    Branches;
-                Error ->
-                    error_logger:error_msg("get_branches fold error: ~p~n on ~p~n", [Error, Package]),
-                    Accum
-            end;
+        {ok, Branches} -> 
+            lists:append([#repository_package{name=Name, branch=Branch} || Branch <- Branches], Accum);
         Error -> 
             error_logger:error_msg("get_branches error: ~p~n on ~p~n", [Error, Package]),
             Accum
     end,
-    get_branches(O, NewAccum, State).
+    get_branches(Rest, NewAccum, State);
+get_branches([#repository_package{name=Name, branch=Branch}=Package|Rest], Accum, State) when is_list(Branch) ->
+    #state{repository_root=RepositoryRoot, vcs_plugin=VCSPlugin, vcs_state=VCSState} = State,
+    AbsoluteName = caterpillar_utils:filename_join(RepositoryRoot, Name),
+    NewAccum = case catch VCSPlugin:is_branch(VCSState, AbsoluteName, Branch) of
+        true -> [Package|Accum];
+        false ->
+            error_logger:info_msg("not branch: ~p/~p~n", [Name, Branch]),
+            Accum;
+        Error ->
+            error_logger:error_msg("get_branches check branch error: at ~s/~s ~p~n", [Name, Branch, Error]),
+            Accum
+    end,
+    get_branches(Rest, NewAccum, State);
+get_branches([BadPackage|Rest], Accum, State) ->
+    error_logger:error_msg("get_branches bad package: ~p~n", [BadPackage]),
+    get_branches(Rest, Accum, State).
 
 
 cast_clean_packages(Branches, #state{dets=Dets}) -> 
