@@ -69,19 +69,15 @@ handle_info(_Msg, State) ->
 
 handle_cast({event, {changes, _, _}=Event}, #state{ets=Ets}=State) ->
     spawn(fun() ->
-        lists:foreach(
-            fun(Pid) -> gen_server:cast(Pid, Event) end,
-            select_workers_pids(Ets)
-        )
+        ForeachFun = fun(Pid) -> gen_server:cast(Pid, Event) end,
+        lists:foreach(ForeachFun, select_workers_pids(Ets))
     end),
     {noreply, State};
 
 handle_cast({event, {clean_packages, _}=Event}, #state{ets=Ets}=State) ->
     spawn(fun() ->
-        lists:foreach(
-            fun(Pid) -> gen_server:cast(Pid, Event) end,
-            select_workers_pids(Ets)
-        )
+        ForeachFun = fun(Pid) -> gen_server:cast(Pid, Event) end,
+        lists:foreach(ForeachFun, select_workers_pids(Ets))
     end),
     {noreply, State};
 
@@ -131,11 +127,11 @@ handle_call({sync_event, {deploy, #deploy{}}=Request}, From, #state{ets=Ets}=Sta
     sync_event_to_service(deploy, From, Ets, Request),
     {noreply, State};
 
-handle_call({sync_event, {rescan_package, {_Package, _Name}}=Request}, From, #state{ets=Ets}=State) ->
+handle_call({sync_event, {rescan_package, #package{}}=Request}, From, #state{ets=Ets}=State) ->
     sync_event_to_service(repository, From, Ets, Request),
     {noreply, State};
 
-handle_call({sync_event, {rebuild_package, {_Package, _Branch}}=Request}, From, #state{ets=Ets}=State) ->
+handle_call({sync_event, {rebuild_package, #package{}}=Request}, From, #state{ets=Ets}=State) ->
     sync_event_to_service(repository, From, Ets, Request),
     {noreply, State};
 
@@ -166,21 +162,13 @@ terminate(Reason, _State) ->
     error_logger:info_msg("caterpillar_router down with reason: ~p~n", [Reason]).
 
 
-
-
-
 %---------
-
-
-
 
 
 select_service(Ets, Name) ->
     case catch ets:select(Ets, ?SELECT(service, Name)) of
-        [] ->
-            {error, no_service};
-        [Pid|_] -> 
-            {ok, Pid};
+        [] -> {error, no_service};
+        [Pid|_] -> {ok, Pid};
         Error -> 
             error_logger:info_msg("select_service error: ~p~n", [Error]),
             {error, select_service}
@@ -189,11 +177,9 @@ select_service(Ets, Name) ->
 
 select_worker(Ets, Name) ->
     case catch ets:select(Ets, ?SELECT(worker, Name)) of
-        [] ->
-            {error, no_worker};
-        [Pid|_] -> 
-            {ok, Pid};
-        Error -> 
+        [] -> {error, no_worker};
+        [Pid|_] -> {ok, Pid};
+        Error ->  
             error_logger:info_msg("select_worker error: ~p~n", [Error]),
             {error, select_worker}
     end.
@@ -201,8 +187,6 @@ select_worker(Ets, Name) ->
 
 select_workers_pids(Ets) ->
     ets:select(Ets, [{{'_', '$1', '_', '$2'}, [{'==', worker, '$1'}], ['$2']}]).
-
-
 
 
 push_archives_to_new_worker(#state{ets=Ets}, WorkId, WorkerPid) ->
@@ -227,4 +211,3 @@ sync_event_to_service(Service, From, Ets, Request) ->
         end,
         gen_server:reply(From, Reply)
     end).
-    

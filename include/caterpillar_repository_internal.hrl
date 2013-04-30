@@ -9,6 +9,7 @@
 -define(WORK_ID_FILE, filename:join(?REPOSITORY_LIBPATH, "work_id_file")).
 -define(REPOSITORY_ROOT, "/srv/repository").
 -define(SCAN_INTERVAL, 600).
+-define(CLEANUP_INTERVAL, 600).
 
 -define(REPOSITORY_DB_VERSION, "0.1").
 
@@ -29,7 +30,9 @@
     scan_timer :: reference(),
     registered = false :: boolean(),
     register_service_timer :: reference(),
-    scan_interval = ?SCAN_INTERVAL :: non_neg_integer()
+    scan_interval = ?SCAN_INTERVAL :: non_neg_integer(),
+    cleanup_interval :: non_neg_integer(),
+    cleanup_timer :: reference()
 }).
 
 

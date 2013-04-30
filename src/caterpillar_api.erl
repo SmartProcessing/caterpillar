@@ -37,15 +37,13 @@ handle_info(_, State) ->
     {noreply, State}.
 
 
-handle_call({execute, Key}, _From, #state{ets=Ets}=State) ->
-    %FIXME: insert_new, lookup - race
-    Response = case ets:lookup(Ets, Key) of
+handle_call({execute, Message}, _From, #state{ets=Ets}=State) ->
+    Response = case ets:lookup(Ets, Message) of
         [] -> 
-            Msg = Key,
-            case catch caterpillar_event:sync_event(Msg) of
+            case catch caterpillar_event:sync_event(Message) of
                 {ok, Pid} ->
                     Ref = erlang:monitor(process, Pid),
-                    ets:insert(Ets, {Key, Ref}),
+                    ets:insert(Ets, {Message, Ref}),
                     true;
                 Error ->
                     {error, Error}
@@ -80,13 +78,16 @@ init({tcp, http}, #http_req{path=Path}=Req, State) ->
     {ok, Req, State}.
 
 
-
-handle(#http_req{path=[Cmd, Package, Branch]}=Req, State)
+handle(#http_req{path=[Cmd, Name|Rest]}=Req, State)
   when Cmd == <<"rescan">>; Cmd == <<"rebuild">>
 ->
     error_logger:info_msg("handling ~s~n", [Cmd]),
     AtomCmd = binary_to_atom(<<Cmd/binary, "_package">>, latin1),
-    Message = {execute,  {AtomCmd, {binary_to_list(Package), binary_to_list(Branch)}}}, 
+    Package = #package{
+        name = binary_to_list(Name),
+        branch = (fun([Branch|_]) -> binary_to_list(Branch);([]) -> '_' end)(Rest)
+    },
+    Message = {execute,  {AtomCmd, Package}},
     Response = case gen_server:call(?MODULE, Message, infinity) of
         true ->
             {ok, Req2} = cowboy_http_req:reply(200, [], <<"ok\n">>, Req),
@@ -98,21 +99,6 @@ handle(#http_req{path=[Cmd, Package, Branch]}=Req, State)
             Res = format("~p~n", [Error]),
             {ok, Req2} = cowboy_http_req:reply(500, [], Res, Req),
             Req2
-    end,
-    {ok, Response, State};
-
-handle(#http_req{path=[<<"rescan">>, Package]}=Req, State) ->
-    Response = case gen_server:call(?MODULE, {execute, {rescan_package, {binary_to_list(Package), nobranch}}}, infinity) of
-        true ->
-            {ok, Res} = cowboy_http_req:reply(200, [], <<"ok\n">>, Req),
-            Res;
-        false ->
-            {ok, Res} = cowboy_http_req:reply(200, [], <<"already in process\n">>, Req),
-            Res;
-        Error -> 
-            Text = format("~p~n", [Error]),
-            {ok, Res} = cowboy_http_req:reply(500, [], Text, Req),
-            Res
     end,
     {ok, Response, State};
 

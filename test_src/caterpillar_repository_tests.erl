@@ -188,6 +188,49 @@ init_test_() ->
 ]}. 
 
 
+scan_input_test_() ->
+{foreach,
+    fun() ->
+        ok
+    end,
+    fun(_) -> 
+        caterpillar_test_support:kill_mock(scan_pipe_caterpillar_repository)
+    end,
+[
+    {Message, fun() ->
+        Mock(),
+        Check(catch caterpillar_repository:scan_input(Packages, any_state))
+    end} || {Message, Mock, Packages, Check} <- [
+        {
+            "while repo repo already in process",
+            fun() ->
+                ?assert(is_pid(caterpillar_test_support:mock(scan_pipe_caterpillar_repository, {'_', ok})))
+            end,
+            [],
+            fun(Result) -> 
+                ?assertEqual({error, already_in_process}, Result)
+            end
+        },
+        {
+            "some random data, valid + invalid",
+            fun() -> ok end,
+            [#repository_package{}, #package{name=invalid}, invalid],
+            fun(Result) ->
+                ?assertEqual({ok, [#repository_package{}]}, Result)
+            end
+        },
+        {
+            "whole repo scan initialized, checking process registration",
+            fun() -> ok end,
+            [], 
+            fun(Result) ->
+                ?assertEqual({ok, []}, Result),
+                ?assertEqual(whereis(scan_pipe_caterpillar_repository), self())
+            end
+        }
+    ]
+]}.
+
 
 get_packages_test_() ->
 {foreachx,
@@ -201,80 +244,64 @@ get_packages_test_() ->
 [
     {Setup, fun(_, State) ->
         {Message, fun() ->
-            ?assertEqual(
-                Result,
-                caterpillar_repository:get_packages('_', State)
-            )
+            Check(catch caterpillar_repository:get_packages(Packages, State))
         end}
-    end} || {Message, Setup, Result} <- [
+    end} || {Message, Setup, Packages, Check} <- [
         {
             "some packages found",
             ["__test/package1/", "__test/package2/", "__test/package3/"],
-            {ok, [
-                #repository_package{name= "package1"},
-                #repository_package{name= "package2"}
-            ]}
+            [],
+            fun(Result) ->
+                ?assertEqual(
+                    {ok, [#repository_package{name=Name, branch='_'} || Name <- ["package1", "package2"]]},
+                    Result
+                )
+            end
         },
         {
             "repository root not exists",
             [],
-            {error, {get_packages, {error, enoent}}}
+            [],
+            fun(Result) -> ?assertEqual({error, {get_packages, enoent}}, Result) end
         },
         {
             "repository root empty",
             ["__test/"],
-            {ok, []}
+            [],
+            fun(Result) -> ?assertEqual({stop, done}, Result) end
         },
         {
             "repository plugin exits",
             ["__test/exit/"],
-            {error, {get_packages, {plugin_bad_return, {'EXIT',some_reason}}}}
+            [],
+            fun(Result) ->
+                ?assertEqual(
+                    {error, {get_packages, {'EXIT',some_reason}}},
+                    Result
+                )
+            end
         },
         {
             "repository plugin throws exception",
             ["__test/throw/"],
-            {error, {get_packages, {plugin_bad_return, some_reason}}}
+            [],
+            fun(Result) -> 
+                ?assertEqual(
+                    {error, {get_packages, some_reason}},
+                    Result
+                )
+            end
         },
         {
-            "unicode symbols in file names",
-            ["__test/абв/"],
-            {ok, [#repository_package{name= "абв"}]}
-        }
-    ]
-]}.
-
-
-register_scan_pipe_test_() ->
-{foreach, 
-    fun() -> ok end,
-    fun(_) ->
-        catch erlang:exit(whereis(scan_pipe_caterpillar_repository), kill)
-    end,
-[
-    {Message, fun() ->
-        Setup(),
-        ?assertEqual(
-            Result,
-            catch caterpillar_repository:register_scan_pipe(prevres, state)
-        )
-    end} || {Message, Setup, Result} <- [
-        {
-            "scan pipe successful registered",
-            fun() -> ok end,
-            {ok, prevres}
-        },
-        {
-            "scan pipe failed to register",
-            fun() ->
-                register(
-                    scan_pipe_caterpillar_repository,
-                    spawn(fun() ->
-                        receive _ -> ok after 50 -> timeout end 
-                    end)
-                ),
-                timer:sleep(1)
-            end,
-            {error, already_in_process}
+            "bad package name",
+            [],
+            [#repository_package{name=bad_name}],
+            fun(Result) ->
+                ?assertEqual(
+                    {error, {get_packages, {bad_package, #repository_package{name=bad_name}}}},
+                    Result
+                )
+            end
         }
     ]
 ]}.
@@ -292,48 +319,53 @@ get_branches_test_() ->
 [
     {Setup, fun(_, State) ->
         {Message, fun() ->
-            ?assertEqual(
-                Result,
-                catch caterpillar_repository:get_branches(Packages, State)
-            )
+            Check(catch caterpillar_repository:get_branches(Packages, State))
         end} 
-    end} || {Message, Setup, Packages, Result} <- [
+    end} || {Message, Setup, Packages, Check} <- [
         {
             "no branches in repos",
             ["__test/package1/", "__test/package2/"],
             [#repository_package{name=X} || X <- ["package1", "package2"]],
-            {ok, []} 
+            fun(Result) -> ?assertEqual({ok, []}, Result) end
         },
         {
-            "one branch in one repo",
-            ["__test/package1/branch1/", "__test/package2/"],
-            [#repository_package{name= "package1"}],
-            {ok, [#repository_package{name= "package1", branch= "branch1"}]}
+            "scanning whole repository for branches",
+            ["__test/package1/branch1/"],
+            [#repository_package{name="package1", branch='_'}],
+            fun(Result) ->
+                ?assertEqual({ok, [#repository_package{name="package1", branch="branch1"}]}, Result)
+            end
         },
         {
             "few branches in different repos",
             ["__test/package1/branch1/", "__test/package2/branch2/"],
-            [#repository_package{name=X} || X <- ["package1", "package2"]],
-            {ok, [#repository_package{name=Name, branch=Branch} || {Name, Branch} <- [
-                {"package1", "branch1"}, {"package2", "branch2"}
-            ]]}
+            [#repository_package{name=X, branch='_'} || X <- ["package1", "package2"]],
+            fun(Result) ->
+                ?assertEqual(
+                    {ok, [#repository_package{name=Name, branch=Branch} || {Name, Branch} <- [
+                        {"package1", "branch1"}, {"package2", "branch2"}
+                    ]]},
+                    sort(Result)
+                )
+            end
         },
         {
-            "few branches with unicode symbols in repo with unicode symbols",
-            ["__test/абв/вба/", "__test/абв/ччч/"],
-            [#repository_package{name= "абв"}],
-            {ok, [#repository_package{name= "абв", branch= "вба"}]}
-        },
-        {
-            "plugin exits on branch check",
+            "plugin exits on branch check (branches listed manualy)",
             [
                 "__test/package1/exit/", "__test/package1/branch1/",
                 "__test/package2/throw/", "__test/package2/branch2/"
             ],
-            [#repository_package{name=X} || X <- ["package1", "package2"]],
-            {ok, [#repository_package{name=Name, branch=Branch} || {Name, Branch} <- [
-                {"package1", "branch1"}, {"package2", "branch2"}
-            ]]}
+            [#repository_package{name=N, branch=B} || {N, B} <- [
+                {"package1", "exit"}, {"package1", "branch1"}, {"package2", "branch2"}, {"package2", "throw"}
+            ]],
+            fun(Result) ->
+                ?assertEqual(
+                    {ok, [#repository_package{name=Name, branch=Branch} || {Name, Branch} <- [
+                        {"package1", "branch1"}, {"package2", "branch2"}
+                    ]]},
+                    sort(Result)
+                )
+            end
         }
     ]
 ]}.
@@ -353,14 +385,8 @@ cast_clean_packages_test_() ->
     {Setup, fun(_, State) ->
         {Message, fun() ->
             register(caterpillar_repository, self()),
-            ?assertEqual(
-                {ok, Packages},
-                caterpillar_repository:cast_clean_packages(Packages, State)
-            ),
-            ?assertEqual(
-                RecvResult,
-                receive Msg -> Msg after 10 -> timeout end
-            )
+            ?assertEqual({ok, Packages}, caterpillar_repository:cast_clean_packages(Packages, State)),
+            ?assertEqual(RecvResult, caterpillar_test_support:recv(10))
         end}
     end} || {Message, Setup, Packages, RecvResult} <- [
         {
@@ -556,29 +582,6 @@ export_archives_test_() ->
                         archive_name= "package__ARCHIVE__branch",
                         archive_type= tgz,
                         current_revno=rev
-                    }]},
-                    Result
-                )
-            end
-        },
-        {
-            "package successfuly archived(unicode symbols inside)",
-            %FIXME:
-            ignore_me,
-            [
-                <<"__test_repo/package/branch/абв/">>,
-                <<"__test_repo/package/branch/бав/">>,
-                "__test_repo/package/branch/dir1/"
-                
-            ],
-            [#repository_package{name= "package", branch= "branch", current_revno=rev}],
-            fun(Result) ->
-                {ok, Names} = erl_tar:table("__test_archive/package__ARCHIVE__branch", [compressed]),
-                ?assertEqual(["dir1", "абв", "бав"], lists:sort(Names))
-                ?assertEqual(
-                    {ok, [#repository_package{
-                        name= "package", branch= "branch", archive_name= "package__ARCHIVE__branch",
-                        archive_type= tgz, current_revno=rev
                     }]},
                     Result
                 )
@@ -1428,25 +1431,10 @@ handle_call_rescan_n_rebuild_package_test_() ->
         Check(caterpillar_repository:handle_call(Request, from, state))
     end} || {Message, Request, Check} <- [
         {
-            "rescan package test",
-            {rescan_package, {package, branch}},
-            fun(Match) ->
-                ?assertMatch(
-                    {reply, {ok, _}, state},
-                    Match
-                ),
-                {reply, {ok, Pid}, state} = Match,
-                ?assert(is_pid(Pid))
-            end
-        },
-        {
             "rebuild package test",
-            {rebuild_package, {package, branch}},
+            {rebuild_package, #package{}},
             fun(Match) ->
-                ?assertMatch(
-                    {reply, {ok, _}, state},
-                    Match
-                ),
+                ?assertMatch({reply, {ok, _}, state}, Match),
                 {reply, {ok, Pid}, state} = Match,
                 ?assert(is_pid(Pid))
             end
@@ -1538,49 +1526,36 @@ rebuild_package_test_() ->
         {Message, fun() ->
             register(caterpillar_repository, self()),
             spawn(fun() ->
-                ?assertEqual(
-                    ok,
-                    caterpillar_repository:rebuild_package(Package, Branch, State)
-                )
+                ?assertEqual(ok, caterpillar_repository:rebuild_package(Package, State))
             end),
             timer:sleep(1),
             Check()
         end}
-    end} || {Message, Setup, {Package, Branch}, Check} <- [
+    end} || {Message, Setup, Package, Check} <- [
         {
             "no packages in dets",
             [],
-            {package, branch},
-            fun() ->
-                ?assertEqual(
-                    timeout,
-                    receive _ -> ok after 10 -> timeout end
-                )
-            end
+            #package{name=name, branch=branch},
+            fun() -> ?assertEqual(timeout, caterpillar_test_support:recv(10)) end
         },
         {
             "package marked for rebuild",
-            [{{package, branch}, archive_name, type, last_revno, tag, work_id}],
-            {package, branch},
+            [{{name, branch}, archive_name, type, last_revno, tag, work_id}],
+            #package{name=name, branch=branch},
             fun() ->
-                Msg = receive A -> A after 50 -> timeout end,
-                ?assertMatch(
-                    {_, _, {changes, #changes{}}},
-                    Msg
-                ),
-                {_, From, Changes} = Msg,
+                Msg = caterpillar_test_support:recv(50),
+                ?assertMatch({_, _, {changes, #changes{}}}, Msg),
+                {_, _From, Changes} = Msg,
                 ?assertEqual(
                     {changes, #changes{
-                        packages = [
-                            #repository_package{
-                                name=package, branch=branch, tag=tag, archive_name=archive_name,
-                                archive_type = type, current_revno = last_revno
-                            }
-                        ],
+                        packages = [#repository_package{
+                            name=name, branch=branch, tag=tag, archive_name=archive_name,
+                            archive_type = type, current_revno = last_revno
+                        }],
                         archives = [
-                            #archive{name=package, branch=branch, tag=tag, archive_name=archive_name, archive_type=type}
+                            #archive{name=name, branch=branch, tag=tag, archive_name=archive_name, archive_type=type}
                         ],
-                        notify = #notify{body = <<"rebuild request for package/branch\n">>}
+                        notify = #notify{body = <<"rebuild request for name/branch\n">>}
                     }},
                     Changes
                 )
@@ -1588,3 +1563,9 @@ rebuild_package_test_() ->
         }
     ]
 ]}.
+
+
+%------ test support funcs
+
+
+sort({ok, Data}) -> {ok, lists:sort(Data)}.
