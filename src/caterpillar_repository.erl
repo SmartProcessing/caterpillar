@@ -363,10 +363,10 @@ scan_pipe(Packages, State) ->
 
 
 cleanup_pipe(State) ->
-    case catch register(self(), cleanup_pipe_process) of
+    case catch register(cleanup_pipe_process, self()) of
         true -> ok;
         _ ->
-            error_logger:info_msg("cleanup already in process~n"),
+            error_logger:info_msg("cleanup already in process at pid~p~n", [whereis(cleanup_pipe_process)]),
             exit(normal)
     end,
     FunList = [
