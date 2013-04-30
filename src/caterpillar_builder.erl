@@ -11,6 +11,7 @@
 -define(CU, caterpillar_utils).
 -define(CBS, caterpillar_build_storage).
 -define(UNPACK_RETRY_LIMIT, 15).
+-define(BTL, binary_to_list).
 
 -record(state, {
         master_state=false,
@@ -249,9 +250,9 @@ prepare(BuildPath, Archive, WorkId) ->
 
 rebuild(BuildPath, Version, WorkId) ->
     Archive = ?CPU:get_version_archive(Version),
-    Cwd = filename:join([BuildPath, "temp", ?CPU:get_dir_name(Version)])
-    PkgConfig = ?CPI:get_pkg_config(Archive, Cwd),
-    RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId)
+    Cwd = filename:join([BuildPath, "temp", ?CPU:get_dir_name(Version)]),
+    PkgConfig = ?CPU:get_pkg_config(Archive, Cwd),
+    RevDef = ?CPU:pack_rev_def(Archive, PkgConfig, WorkId),
     gen_server:call(caterpillar_builder, {newref, RevDef}, infinity).
 
 
@@ -475,6 +476,7 @@ check_build_deps(Candidate, State) ->
                                 {BPackage, BBranch, _} = Dep,
                                 QueuedState = lists:member(Dep, State#state.queued),
                                 if not QueuedState ->
+                                    pass;
                                 true ->
                                     pass
                                 end
