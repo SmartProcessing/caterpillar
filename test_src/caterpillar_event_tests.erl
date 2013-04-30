@@ -259,8 +259,7 @@ events_test_() ->
     fun(_) ->
         Pid = global:whereis_name(caterpillar_event),
         ok = caterpillar_event:stop(),
-        caterpillar_test_support:wait_for_exit(Pid),
-        timer:sleep(1)
+        caterpillar_test_support:wait_for_exit(Pid)
     end,
 [
     {Message, fun() ->
@@ -358,15 +357,16 @@ events_test_() ->
         {
             "sync event, notify, notifier available",
             fun() -> 
+                Self = self(),
                 spawn(fun() ->
                     caterpillar_event:register_service(notifier),
-                    receive {_, From, {notify, #notify{}}} ->
-                        gen_server:reply(From, {ok, done})
-                    after 50 ->
-                        timeout
+                    Self ! registered,
+                    case caterpillar_test_support:recv(50) of
+                        {_, From, {notify, #notify{}}} -> gen_server:reply(From, {ok, done});
+                        _ -> ok
                     end
                 end),
-                timer:sleep(5),
+                ?assertEqual(registered, caterpillar_test_support:recv(50)),
                 ?assertEqual(
                     {ok, done},
                     caterpillar_event:sync_event({notify, #notify{}})
