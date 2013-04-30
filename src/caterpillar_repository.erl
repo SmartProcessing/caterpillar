@@ -175,7 +175,6 @@ handle_call({changes, Changes}, _From, State) ->
     NewState = State#state{work_id=NewWorkId},
     spawn(fun() ->
         Archives = Changes#changes.archives,
-        error_logger:info_msg("archives: ~p~n", [Archives]),
         case Archives of
             [] -> ok;
             _ -> caterpillar_event:event({changes, NewWorkId, Archives})
