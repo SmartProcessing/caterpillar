@@ -366,6 +366,7 @@ events_test_() ->
                         timeout
                     end
                 end),
+                timer:sleep(5),
                 ?assertEqual(
                     {ok, done},
                     caterpillar_event:sync_event({notify, #notify{}})
