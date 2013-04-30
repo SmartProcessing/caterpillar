@@ -378,10 +378,10 @@ cleanup_pipe(State) ->
     caterpillar_utils:pipe(FunList, [], State).
 
 
--spec scan_input([#package{}], #state{}) -> {ok, [#repository_package{}]}|{error, Reason::term()}.
+-spec scan_input([#repository_package{}], #state{}) -> {ok, [#repository_package{}]}|{error, Reason::term()}.
 scan_input(Packages, _State) ->
     FoldFun = fun
-        (#package{name=Name, branch=Branch}, Acc) -> [#repository_package{name=Name, branch=Branch}|Acc];
+        (#repository_package{name=Name, branch=Branch}, Acc) -> [#repository_package{name=Name, branch=Branch}|Acc];
         (BadPackage, Acc) -> 
             error_logger:error_msg("scan_input bad package: ~p~n", [BadPackage]),
             Acc
