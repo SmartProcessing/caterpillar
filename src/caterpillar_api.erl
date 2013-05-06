@@ -111,10 +111,16 @@ handle(#http_req{path=[<<"init_repository">>, Path]}=Req, State) ->
     end,
     {ok, Req2, State};
 
-handle(#http_req{path=[<<"rebuild_dependencies">>, Name, Branch]}=Req, State) ->
+handle(#http_req{path=[<<"rebuild_deps">>, Name, Branch]}=Req, State) ->
     Args = [binary_to_list(X) || X <- [Name, Branch]],
-    caterpillar_event:sync_event({worker_custom_command, rebuild_dependencies, Args}),
-    {ok, Req2} = cowboy_http_req:reply(200, [], <<"ok">>, Req),
+    Reply = case caterpillar_event:sync_event({worker_custom_command, rebuild_dependencies, Args}) of
+        [{ok, Res}|_] ->
+            Res;
+        Reason ->
+            error_logger:error_msg("error: rebuild_dependencies: ~p~n", [Reason]),
+            list_to_binary(lists:flatten(io_lib:format("error: ~p~n", [Reason])))
+    end,
+    {ok, Req2} = cowboy_http_req:reply(200, [], Reply, Req),
     {ok, Req2, State};
 
 handle(Req, State) ->

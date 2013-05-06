@@ -130,6 +130,19 @@ handle_call({err_built, Worker, RevDef, BuildInfo}, _From, State) ->
     {reply, ok, NewState};
 handle_call(state, _From, State) ->
     {reply, State, State};
+handle_call({worker_custom_command, rebuild_dependencies, [Name, Branch|_]}, _From, State) ->
+    Vsn = {?LTB(Name), ?LTB(Branch), <<>>},
+    Res = case ?CBS:get_subj(State#state.deps, Vsn) of
+        Subj when is_list(Subj) ->
+            lists:map(fun(X) -> self() ! {rebuild, X}
+            end, Subj),
+            Subj;
+        {error, _} ->
+            []
+    end,
+    ResIo = lists:map(fun(X) -> lists:flatten(io_lib:format("~p", [X])) end, Res),
+    Reply = list_to_binary("rebuilding dependencies:\n" ++ string:join(ResIo, ",\n") ++ "\n"),
+    {reply, {ok, Reply}, State};
 handle_call(_Request, _From, State) ->
     {reply, unknown, State}.
 
@@ -139,16 +152,6 @@ handle_cast({changes, WorkId, Archives}, State) ->
     ToPreprocess = lists:usort(Archives),
     {ok, NewState} = process_archives(ToPreprocess, State, WorkId),
     {noreply, NewState#state{wid = WorkId}};
-handle_cast({worker_custom_command, rebuild_dependencies, [Name, Branch|_]}, State) ->
-    Vsn = {?LTB(Name), ?LTB(Branch), <<>>},
-    case ?CBS:get_subj(State#state.deps, Vsn) of
-        Subj when is_list(Subj) ->
-            lists:map(fun(X) -> self() ! {rebuild, X}
-            end, Subj);
-        {error, _} ->
-            pass
-    end,
-    {noreply, State};
 handle_cast({clean_packages, Archives}, State) ->
     Fun = fun(Archive) ->
         Version = {
