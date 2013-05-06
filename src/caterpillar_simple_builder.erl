@@ -81,7 +81,7 @@ retrieve_archives([#archive{archive_name=AN}=A|O], Accum, #state{archive_root=AR
     {ok, FD} = file:open(Name, [write]),
     RequestArchive = A#archive{fd=FD},
     case catch caterpillar_worker:retrieve_archive(RequestArchive) of
-        ok ->
+        {ok, _} ->
             file:close(FD),
             error_logger:info_msg("~s/~s retrieved~n", [A#archive.name, A#archive.branch]),
             retrieve_archives(O, [A|Accum], State);
