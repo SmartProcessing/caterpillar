@@ -45,6 +45,7 @@ init(Settings) ->
     filelib:ensure_dir(BucketsFile),
     {ok, Buckets} = dets:open_file(buckets, [{file, BucketsFile}]),
     {ok, Deps} = dets:open_file(deps, [{file, DepsFile}]),
+    ?CBS:cleanup_new_in_progress(Deps),
     PollTime = ?GV(poll_time, Settings, 10000),
     BuildQueue = queue:new(),
     WaitQueue = queue:new(),
@@ -461,9 +462,10 @@ check_build_deps(Candidate, State) ->
                 Candidate,
                 NowBuilding),
             Res;
-        {ok, [], _Deps} ->
+        {ok, [], Deps} ->
             dependent;
         {ok, Dependencies, _} when is_list(Dependencies) ->
+            error_logger:info_msg("missing deps: ~p~n", [Dependencies]),
             case State#state.queue_missing of
                 true ->
                     error_logger:info_msg("asking for rebuild for ~p~n", [?VERSION(Candidate)]),
