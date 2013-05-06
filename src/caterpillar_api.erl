@@ -81,6 +81,7 @@ init({tcp, http}, #http_req{path=Path}=Req, State) ->
 handle(#http_req{path=[Cmd, Name|Rest]}=Req, State)
   when Cmd == <<"rescan">>; Cmd == <<"rebuild">>
 ->
+    timer:sleep(2000),
     error_logger:info_msg("handling ~s~n", [Cmd]),
     AtomCmd = binary_to_atom(<<Cmd/binary, "_package">>, latin1),
     Package = #package{
