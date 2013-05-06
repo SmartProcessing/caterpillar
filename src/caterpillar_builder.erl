@@ -196,8 +196,9 @@ handle_info(schedule, State) when State#state.master_state == true ->
     end,
     {noreply, NewState};
 handle_info({rebuild, Version}, State) ->
-    erlang:spawn(?MODULE, rebuild, [State#state.build_path, Version, State#state.wid]),
-    {noreply, State#state{queued=lists:usort([Version|State#state.queued])}};
+    Archive = ?CPU:get_version_archive(Version),
+    process_archive(State#state.build_path, Archive, State#state.unpack_state, State#state.wid),
+    {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -236,16 +237,20 @@ prepare(BuildPath, Archive, WorkId) ->
     {ok, Fd} = file:open(TempArch, [read, write]),
     ArchiveWithFd = Archive#archive{fd=Fd},
     Msg = {get_archive, ArchiveWithFd},
-    ok = caterpillar_event:sync_event(Msg),
-    Cwd = filename:join([BuildPath, "temp", TempName]) ++ "/",
-    catch ?CU:del_dir(Cwd),
-    filelib:ensure_dir(Cwd),
-    ok = caterpillar_archive:extract(TempArch, [{type, Type}, {cwd, Cwd}]),
-    file:close(Fd),
-    file:delete(TempArch),
-    PkgRecord = ?CPU:get_pkg_config(Archive, Cwd),
-    RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId),
-    gen_server:call(caterpillar_builder, {newref, RevDef}, infinity).
+    case caterpillar_event:sync_event(Msg) of
+        ok ->
+            Cwd = filename:join([BuildPath, "temp", TempName]) ++ "/",
+            catch ?CU:del_dir(Cwd),
+            filelib:ensure_dir(Cwd),
+            ok = caterpillar_archive:extract(TempArch, [{type, Type}, {cwd, Cwd}]),
+            file:close(Fd),
+            file:delete(TempArch),
+            PkgRecord = ?CPU:get_pkg_config(Archive, Cwd),
+            RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId),
+            gen_server:call(caterpillar_builder, {newref, RevDef}, infinity);
+        Other ->
+            error_logger:error_msg("failed to get archive ~p:~p~n", [Archive, Other])
+    end.
 
 
 rebuild(BuildPath, Version, WorkId) ->
