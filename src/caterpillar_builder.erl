@@ -5,13 +5,14 @@
 
 -export([start_link/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-         terminate/2, code_change/3, prepare/3]).
+         terminate/2, code_change/3, prepare/3, rebuild/3]).
 
 -define(CPU, caterpillar_pkg_utils).
 -define(CU, caterpillar_utils).
 -define(CBS, caterpillar_build_storage).
 -define(UNPACK_RETRY_LIMIT, 15).
 -define(BTL, binary_to_list).
+-define(LTB, list_to_binary).
 
 -record(state, {
         master_state=false,
@@ -132,12 +133,21 @@ handle_call(_Request, _From, State) ->
     {reply, unknown, State}.
 
 handle_cast({changes, WorkId, Archives}, State) ->
-    error_logger:info_msg("Changes: ~p~n", [Archives]),
     %FIXME: why work_id updated before building?
     update_work_id(State#state.work_id, WorkId),
     ToPreprocess = lists:usort(Archives),
     {ok, NewState} = process_archives(ToPreprocess, State, WorkId),
-    {noreply, NewState};
+    {noreply, NewState#state{wid = WorkId}};
+handle_cast({worker_custom_command, rebuild_dependencies, [Name, Branch|_]}, State) ->
+    Vsn = {?LTB(Name), ?LTB(Branch), <<>>},
+    case ?CBS:get_subj(State#state.deps, Vsn) of
+        Subj when is_list(Subj) ->
+            lists:map(fun(X) -> self() ! {rebuild, X}
+            end, Subj);
+        {error, _} ->
+            pass
+    end,
+    {noreply, State};
 handle_cast({clean_packages, Archives}, State) ->
     Fun = fun(Archive) ->
         Version = {
@@ -149,20 +159,7 @@ handle_cast({clean_packages, Archives}, State) ->
     end,
     lists:map(Fun, Archives),
     {noreply, State};
-handle_cast({rebuild_deps, WorkId, Version}, State) ->
-    DepArchives = case ?CBS:fetch_dep(State#state.deps, Version) of
-        {ok, []} ->
-            [];
-        {ok, {_, {St, _}, _Object, Subject}} when St == built; St == tested ->
-            lists:map(fun(X) -> ?CPU:get_version_archive(X) end, Subject);
-        Other ->
-            error_logger:info_msg("wrong: ~p~n", [Other]),
-            []
-    end,
-    error_logger:info_msg("rebuilding ~p dependencies: ~p~n", [Version, DepArchives]),
-    {ok, NewState} = process_archives(DepArchives, State, WorkId),
-    {noreply, NewState};
-handle_cast(_Msg, State) ->
+handle_cast(Msg, State) ->
     {noreply, State}.
 
 handle_info({'DOWN', Reference, _, _, Reason}, State) ->
@@ -173,7 +170,7 @@ handle_info({'DOWN', Reference, _, _, Reason}, State) ->
         _Other ->
             [{Reference, Archive}|_] = ets:lookup(State#state.unpack_state, Reference),
             error_logger:error_msg("preprocess on ~p failed: ~p~n", [Archive, Reason]),
-            Preparing = lists:delete(Archive, State#state.queued),
+            Preparing = lists:delete(?CPU:get_archive_version(Archive), State#state.queued),
             Subj = io_lib:format("#Unpack error: ~p", [Archive]),
             Body = io_lib:format("Failed to unpack archive ~p: ~p~n", [Archive, Reason]),
             notify(Subj, Body)
@@ -198,6 +195,10 @@ handle_info(schedule, State) when State#state.master_state == true ->
             NewState = ScheduledState
     end,
     {noreply, NewState};
+handle_info({rebuild, Version}, State) ->
+    Archive = ?CPU:get_version_archive(Version),
+    process_archive(State#state.build_path, Archive, State#state.unpack_state, State#state.wid),
+    {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -236,16 +237,20 @@ prepare(BuildPath, Archive, WorkId) ->
     {ok, Fd} = file:open(TempArch, [read, write]),
     ArchiveWithFd = Archive#archive{fd=Fd},
     Msg = {get_archive, ArchiveWithFd},
-    ok = caterpillar_event:sync_event(Msg),
-    Cwd = filename:join([BuildPath, "temp", TempName]) ++ "/",
-    catch ?CU:del_dir(Cwd),
-    filelib:ensure_dir(Cwd),
-    ok = caterpillar_archive:extract(TempArch, [{type, Type}, {cwd, Cwd}]),
-    file:close(Fd),
-    file:delete(TempArch),
-    PkgRecord = ?CPU:get_pkg_config(Archive, Cwd),
-    RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId),
-    gen_server:call(caterpillar_builder, {newref, RevDef}, infinity).
+    case caterpillar_event:sync_event(Msg) of
+        ok ->
+            Cwd = filename:join([BuildPath, "temp", TempName]) ++ "/",
+            catch ?CU:del_dir(Cwd),
+            filelib:ensure_dir(Cwd),
+            ok = caterpillar_archive:extract(TempArch, [{type, Type}, {cwd, Cwd}]),
+            file:close(Fd),
+            file:delete(TempArch),
+            PkgRecord = ?CPU:get_pkg_config(Archive, Cwd),
+            RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId),
+            gen_server:call(caterpillar_builder, {newref, RevDef}, infinity);
+        Other ->
+            error_logger:error_msg("failed to get archive ~p:~p~n", [Archive, Other])
+    end.
 
 
 rebuild(BuildPath, Version, WorkId) ->
@@ -379,10 +384,8 @@ get_build_candidate(State) ->
 
 get_build_candidate(main_queue, State) ->
     {{value, Candidate}, MainQueue} = queue:out(State#state.main_queue),
-    error_logger:info_msg("checking ~p~n", [?VERSION(Candidate)]),
     case check_build_deps(Candidate, State) of
         independent ->
-            error_logger:info_msg("next candidate: ~p~n", [?VERSION(Candidate)]),
             ?CBS:update_dep_state(State#state.deps, Candidate, <<"in_progress">>),
             {ok, State#state{
                 main_queue=MainQueue, 
@@ -471,16 +474,8 @@ check_build_deps(Candidate, State) ->
         {ok, Dependencies, _} when is_list(Dependencies) ->
             case State#state.queue_missing of
                 true ->
-                    lists:map(
-                        fun(Dep) ->
-                                {BPackage, BBranch, _} = Dep,
-                                QueuedState = lists:member(Dep, State#state.queued),
-                                if not QueuedState ->
-                                    pass;
-                                true ->
-                                    pass
-                                end
-                        end, Dependencies),
+                    error_logger:info_msg("asking for rebuild for ~p~n", [?VERSION(Candidate)]),
+                    ask_for_rebuild(Dependencies, State),
                     dependent;
                 _Other ->
                     Subj = io_lib:format("#~B error: ~s/~s/~s", [
@@ -500,6 +495,26 @@ check_build_deps(Candidate, State) ->
     end.
 
 %% Utils
+%%
+
+ask_for_rebuild(Dependencies, State) ->
+    lists:map(
+        fun(Dep) ->
+            {BPackage, BBranch, _} = Dep,
+            QueuedState = lists:member(Dep, State#state.queued),
+            {ok, {_, {BS, _}, _, _}} = ?CBS:fetch_dep(State#state.deps, Dep),
+            error_logger:info_msg("Build state: ~p~n", [BS]),
+            if (not QueuedState) and 
+                (BS /= <<"new">>) and 
+                (BS /= <<"in_progress">>) and
+                (BS /= <<"built">>) and
+                (BS /= <<"tested">>)
+                ->
+                self() ! {rebuild, Dep};
+            true ->
+                pass
+            end
+        end, Dependencies).
 
 get_work_id(File) ->
     case file:consult(File) of

@@ -119,18 +119,21 @@ handle_call({rebuild_package, #package{}=Package}, _From, State) ->
     {reply, {ok, Pid}, State};
 
 %copying archive to remote fd
-handle_call({get_archive, #archive{name=Name, branch=Branch, fd=Fd}}, From, State) ->
+handle_call({get_archive, #archive{name=Name, branch=Branch, fd=Fd}=Archive}, From, State) ->
     spawn(fun() ->
         ArchiveRoot = State#state.archive_root,
         Dets = State#state.dets,
         SelectPattern = [{
-            {{'$1', '$2'}, '$3', '_', '_', '_', '_'},
+            {{'$1', '$2'}, '$3', '$4', '_', '_', '_'},
             [{'andalso', {'==', '$1', Name}, {'==', '$2', Branch}}],
-            ['$3']
+            [['$3', '$4']]
         }],
         Reply = case catch dets:select(Dets, SelectPattern) of
-            [ArchiveName] ->
-                file:copy(caterpillar_utils:filename_join(ArchiveRoot, ArchiveName), Fd);
+            [[ArchiveName, ArchiveType]] ->
+                case file:copy(caterpillar_utils:filename_join(ArchiveRoot, ArchiveName), Fd) of
+                    {ok, _} -> {ok, Archive#archive{archive_type=ArchiveType}};
+                    Error -> Error
+                end;
             BadReturn ->
                 error_logger:info_msg(
                     "get_archive cant select archive for package ~p/~p with: ~p~n",
@@ -138,10 +141,7 @@ handle_call({get_archive, #archive{name=Name, branch=Branch, fd=Fd}}, From, Stat
                 ),
                 {error, get_archive}
         end,
-        case Reply of
-            {ok, _} -> gen_server:reply(From, ok);
-            _ -> gen_server:reply(From, Reply)
-        end
+        gen_server:reply(From, Reply)
     end),
     {noreply, State};
 

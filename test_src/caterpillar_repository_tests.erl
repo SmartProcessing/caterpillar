@@ -1321,7 +1321,8 @@ handle_call_get_archive_test_() ->
         #state{archive_root=ArchiveRoot, dets=D}
     end,
     fun(_, #state{archive_root=ArchiveRoot, dets=D}) ->
-        dets:close(D), file:delete(D),
+        dets:close(D),
+        file:delete(D),
         caterpillar_utils:del_dir(ArchiveRoot)
     end,
 [
@@ -1353,14 +1354,8 @@ handle_call_get_archive_test_() ->
                 #archive{name="test", branch="branch", fd=Fd}
             end,
             fun(#state{archive_root=ArchiveRoot}) ->
-                ?assertEqual(
-                    {ref, ok},
-                    receive Msg -> Msg after 100 -> timeout end
-                ),
-                ?assertEqual(
-                    {ok, <<"archive_data">>},
-                    file:read_file(filename:join(ArchiveRoot, "copy_here"))
-                )
+                ?assertMatch({ref, {ok, #archive{}}}, test_support:recv(100)),
+                ?assertEqual({ok, <<"archive_data">>}, file:read_file(filename:join(ArchiveRoot, "copy_here")))
             end
         }
     ]
