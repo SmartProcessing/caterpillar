@@ -5,7 +5,7 @@
 
 -export([start_link/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-         terminate/2, code_change/3, prepare/3, rebuild/3]).
+         terminate/2, code_change/3, prepare/3]).
 
 -define(CPU, caterpillar_pkg_utils).
 -define(CU, caterpillar_utils).
@@ -231,14 +231,14 @@ process_archive(BuildPath, Archive, UnpackState, WorkId) ->
 prepare(BuildPath, Archive, WorkId) ->
     Vsn = ?CPU:get_archive_version(Archive),
     TempName = get_temp_name(Vsn),
-    Type = Archive#archive.archive_type,
-    TempArch = filename:join([BuildPath, "temp", TempName]) ++ "." ++ atom_to_list(Type),
+    TempArch = filename:join([BuildPath, "temp", TempName]) ++ "." ++ "tmp",
     filelib:ensure_dir(TempArch),
     {ok, Fd} = file:open(TempArch, [read, write]),
     ArchiveWithFd = Archive#archive{fd=Fd},
     Msg = {get_archive, ArchiveWithFd},
     case caterpillar_event:sync_event(Msg) of
-        ok ->
+        {ok, NewArchive} ->
+            Type = NewArchive#archive.archive_type,
             Cwd = filename:join([BuildPath, "temp", TempName]) ++ "/",
             catch ?CU:del_dir(Cwd),
             filelib:ensure_dir(Cwd),
@@ -251,14 +251,6 @@ prepare(BuildPath, Archive, WorkId) ->
         Other ->
             error_logger:error_msg("failed to get archive ~p:~p~n", [Archive, Other])
     end.
-
-
-rebuild(BuildPath, Version, WorkId) ->
-    Archive = ?CPU:get_version_archive(Version),
-    Cwd = filename:join([BuildPath, "temp", ?CPU:get_dir_name(Version)]),
-    PkgConfig = ?CPU:get_pkg_config(Archive, Cwd),
-    RevDef = ?CPU:pack_rev_def(Archive, PkgConfig, WorkId),
-    gen_server:call(caterpillar_builder, {newref, RevDef}, infinity).
 
 
 get_temp_name({N, B, T}) ->
@@ -484,7 +476,7 @@ check_build_deps(Candidate, State) ->
                             binary_to_list(Candidate#rev_def.branch),
                             binary_to_list(Candidate#rev_def.tag)
                         ]),
-                    Body = io_lib:format("Missing dependencies: ~p~n", [Dependencies]),
+                    Body = io_lib:format("missing dependencies: ~p~n", [Dependencies]),
                     notify(Subj, Body),
                     missing
             end;
