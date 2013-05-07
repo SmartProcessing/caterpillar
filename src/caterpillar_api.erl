@@ -123,6 +123,16 @@ handle(#http_req{path=[<<"rebuild_deps">>, Name, Branch]}=Req, State) ->
     {ok, Req2} = cowboy_http_req:reply(200, [], Reply, Req),
     {ok, Req2, State};
 
+handle(#http_req{path=[<<"pkg_info">>, Name, Branch]}=Req, State) ->
+    Reply = case caterpillar_event:sync_event({worker_custom_command, pkg_info, [Name, Branch]}) of
+        [{ok, Res}|_] ->
+            Res;
+        Reason ->
+            list_to_binary(lists:flatten(io_lib:format("error: ~p~n", [Reason])))
+    end,
+    {ok, Req2} = cowboy_http_req:reply(200, [], Reply, Req),
+    {ok, Req2, State};
+
 handle(Req, State) ->
     error_logger:info_msg("bad request: ~p~n", [Req]),
     {ok, Req2} = cowboy_http_req:reply(400, [], <<"bad request\n">>, Req),

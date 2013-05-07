@@ -130,7 +130,7 @@ handle_call({err_built, Worker, RevDef, BuildInfo}, _From, State) ->
     {reply, ok, NewState};
 handle_call(state, _From, State) ->
     {reply, State, State};
-handle_call({worker_custom_command, rebuild_dependencies, [Name, Branch|_]}, _From, State) ->
+handle_call({worker_custom_command, rebuild_deps, [Name, Branch|_]}, _From, State) ->
     Vsn = {?LTB(Name), ?LTB(Branch), <<>>},
     Res = case ?CBS:get_subj(State#state.deps, Vsn) of
         Subj when is_list(Subj) ->
@@ -143,6 +143,17 @@ handle_call({worker_custom_command, rebuild_dependencies, [Name, Branch|_]}, _Fr
     ResIo = lists:map(fun(X) -> lists:flatten(io_lib:format("~p", [X])) end, Res),
     Reply = list_to_binary("rebuilding dependencies:\n" ++ string:join(ResIo, ",\n") ++ "\n"),
     {reply, {ok, Reply}, State};
+handle_call({worker_custom_command, pkg_info, [Name, Branch|_]}, _From, State) ->
+    Vsn = {Name, Branch, <<>>},
+    Res = case ?CBS:fetch_dep(State#state.deps, Vsn) of
+        {ok, {{N, B, T}, {Status, _}, Obj, Subj}} ->
+            ?LTB(lists:flatten(
+                    io_lib:format("Name: ~s~nBranch: ~s~nTag: ~s~nState: ~s~nDepends: ~p~nHas in dependencies: ~p~n", 
+                        [N, B, T, Status, Obj, Subj])));
+        _Other ->
+            <<"error: not found\n">>
+    end,
+    {reply, {ok, Res}, State};
 handle_call(_Request, _From, State) ->
     {reply, unknown, State}.
 
