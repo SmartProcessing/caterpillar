@@ -216,7 +216,8 @@ handle_info(schedule, State) when State#state.master_state == true ->
 handle_info({rebuild, Version}, State) ->
     Archive = ?CPU:get_version_archive(Version),
     process_archive(State#state.build_path, Archive, State#state.unpack_state, State#state.wid),
-    {noreply, State};
+    Queued = lists:usort([Version|State#state.queued]),
+    {noreply, State#state{queued=Queued}};
 handle_info(_Info, State) ->
     {noreply, State}.
 
