@@ -113,7 +113,7 @@ handle(#http_req{path=[<<"init_repository">>, Path]}=Req, State) ->
 
 handle(#http_req{path=[<<"rebuild_deps">>, Name, Branch]}=Req, State) ->
     Args = [binary_to_list(X) || X <- [Name, Branch]],
-    Reply = case caterpillar_event:sync_event({worker_custom_command, rebuild_dependencies, Args}) of
+    Reply = case caterpillar_event:sync_event({worker_custom_command, rebuild_deps, Args}) of
         [{ok, Res}|_] ->
             Res;
         Reason ->
