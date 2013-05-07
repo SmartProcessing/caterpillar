@@ -178,17 +178,20 @@ handle_cast(Msg, State) ->
     {noreply, State}.
 
 handle_info({'DOWN', Reference, _, _, Reason}, State) ->
-    case Reason of
+    Preparing = case Reason of
         normal ->
-            Preparing = State#state.queued,
-            ok;
+            State#state.queued;
         _Other ->
-            [{Reference, Archive}|_] = ets:lookup(State#state.unpack_state, Reference),
-            error_logger:error_msg("preprocess on ~p failed: ~p~n", [Archive, Reason]),
-            Preparing = lists:delete(?CPU:get_archive_version(Archive), State#state.queued),
-            Subj = io_lib:format("#Unpack error: ~p", [Archive]),
-            Body = io_lib:format("Failed to unpack archive ~p: ~p~n", [Archive, Reason]),
-            notify(Subj, Body)
+            case ets:lookup(State#state.unpack_state, Reference) of
+                [{Reference, Version}|_] ->
+                error_logger:error_msg("preprocess on ~p failed: ~p~n", [Version, Reason]),
+                Subj = io_lib:format("#Unpack error: ~p", [Version]),
+                Body = io_lib:format("Failed to unpack archive ~p: ~p~n", [Version, Reason]),
+                notify(Subj, Body),
+                lists:delete(Version, State#state.queued);
+            _Other ->
+                State#state.queued
+            end
     end,
     ets:delete(State#state.unpack_state, Reference),
     {noreply, State#state{queued=Preparing}};
