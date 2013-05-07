@@ -78,6 +78,11 @@ init({tcp, http}, #http_req{path=Path}=Req, State) ->
     {ok, Req, State}.
 
 
+handle(#http_req{path=[<<"rescan_repository">>]}=Req, State) ->
+    Result = (catch caterpillar_event:sync_event(rescan_repository)),
+    {ok, Req2} = cowboy_http_req:reply(200, [], Result, Req),
+    {ok, Req2, State};
+
 handle(#http_req{path=[Cmd, Name|Rest]}=Req, State)
   when Cmd == <<"rescan">>; Cmd == <<"rebuild">>
 ->
