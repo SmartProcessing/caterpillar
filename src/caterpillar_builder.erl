@@ -137,7 +137,7 @@ handle_call({worker_custom_command, rebuild_deps, [Name, Branch|_]}, _From, Stat
             lists:map(fun(X) -> self() ! {rebuild, X}
             end, Subj),
             Subj;
-        {error, _} ->
+        _Other ->
             []
     end,
     ResIo = lists:map(fun(X) -> lists:flatten(io_lib:format("~p", [X])) end, Res),
