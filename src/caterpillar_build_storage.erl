@@ -24,6 +24,8 @@ list_none_new_dependencies(_DepTree, [], _Preparing, {NoneDeps, NewDeps}) ->
     {ok, NoneDeps, NewDeps};
 list_none_new_dependencies(DepTree, [{Dep, State}|O], Preparing, {NoneDeps, NewDeps}) ->
     case fetch_dep(DepTree, Dep) of
+        {ok, {_VersionSpec, {<<"missing">>, _B}, _Obj, _Subj}} ->
+            list_none_new_dependencies(DepTree, O, Preparing, {[Dep|NoneDeps], NewDeps});
         {ok, {_VersionSpec, {_Success, _B}, _Obj, _Subj}} when State == <<"new">> ->
             list_none_new_dependencies(DepTree, O, Preparing, {NoneDeps, NewDeps});
         {ok, {_VersionSpec, {<<"none">>, _B}, _Obj, _Subj}} ->
