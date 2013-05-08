@@ -3,7 +3,7 @@
 -include_lib("caterpillar_builder_internal.hrl").
 -behaviour(gen_server).
 
--export([start_link/1]).
+-export([start_link/1, state/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3, prepare/3]).
 
@@ -20,6 +20,7 @@
         buckets,
         main_queue,
         wait_queue,
+        queue_switch=true,
         next_to_build,
         workers=[],
         unpack_state,
@@ -36,6 +37,9 @@
 
 start_link(Settings) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, Settings, []).
+
+state() ->
+    gen_server:call(?MODULE, state, 10000).
 
 init(Settings) ->
     error_logger:info_msg("starting caterpillar_builder~n", []),
@@ -185,9 +189,6 @@ handle_info({'DOWN', Reference, _, _, Reason}, State) ->
             case ets:lookup(State#state.unpack_state, Reference) of
                 [{Reference, Version}|_] ->
                 error_logger:error_msg("preprocess on ~p failed: ~p~n", [Version, Reason]),
-                Subj = io_lib:format("#Unpack error: ~p", [Version]),
-                Body = io_lib:format("Failed to unpack archive ~p: ~p~n", [Version, Reason]),
-                notify(Subj, Body),
                 lists:delete(Version, State#state.queued);
             _Other ->
                 State#state.queued
@@ -205,19 +206,18 @@ handle_info(schedule, State) when State#state.master_state == false ->
             {noreply, State}
     end;
 handle_info(schedule, State) when State#state.master_state == true ->
-    {ok, ScheduledState} = schedule_build(State),
     case State#state.prebuild of
-        [{Archive, WorkId}|Rest] ->
-            {ok, NewState} = process_archives([Archive], ScheduledState#state{prebuild=Rest}, WorkId);
+        [{_V, Archive, WorkId}|Rest] ->
+            {ok, NewState} = process_archives([Archive], State#state{prebuild=Rest}, WorkId);
         [] ->
-            NewState = ScheduledState
+            NewState = State
     end,
-    {noreply, NewState};
+    {ok, SState} = schedule_build(NewState),
+    {noreply, SState};
 handle_info({rebuild, Version}, State) ->
     Archive = ?CPU:get_version_archive(Version),
-    process_archive(State#state.build_path, Archive, State#state.unpack_state, State#state.wid),
-    Queued = lists:usort([Version|State#state.queued]),
-    {noreply, State#state{queued=Queued}};
+    Prebuild = lists:ukeysort(1, [{Version, Archive, State#state.wid}|State#state.prebuild]),
+    {noreply, State#state{prebuild=Prebuild}};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -231,14 +231,15 @@ code_change(_OldVsn, State, _Extra) ->
 %% Preprocessing
 process_archives([], State, _WorkId) -> {ok, State};
 process_archives([A|O], #state{unpack_state=UnpackState, build_path=BuildPath}=State, WorkId) ->
+    Vsn = ?CPU:get_archive_version(A),
     case can_prepare(A, State) of
         true ->
-            Preparing = [?CPU:get_archive_version(A)|State#state.queued],
+            Preparing = [Vsn|State#state.queued],
             Prebuild = State#state.prebuild,
             process_archive(BuildPath, A, UnpackState, WorkId);
         false ->
             Preparing = State#state.queued,
-            Prebuild = lists:ukeysort(1, [{A, WorkId}|State#state.prebuild])
+            Prebuild = lists:ukeysort(1, [{Vsn, A, WorkId}|State#state.prebuild])
     end,
     process_archives(O, State#state{queued=Preparing, prebuild=Prebuild}, WorkId).
 
@@ -255,6 +256,7 @@ prepare(BuildPath, Archive, WorkId) ->
     {ok, Fd} = file:open(TempArch, [read, write]),
     ArchiveWithFd = Archive#archive{fd=Fd},
     Msg = {get_archive, ArchiveWithFd},
+    error_logger:info_msg("getting archive: ~p~n", [ArchiveWithFd]),
     case caterpillar_event:sync_event(Msg) of
         {ok, NewArchive} ->
             Type = NewArchive#archive.archive_type,
@@ -268,7 +270,8 @@ prepare(BuildPath, Archive, WorkId) ->
             RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId),
             gen_server:call(caterpillar_builder, {newref, RevDef}, infinity);
         Other ->
-            error_logger:error_msg("failed to get archive ~p:~p~n", [Archive, Other])
+            error_logger:error_msg("failed to get archive ~p:~p~n", [Archive, Other]),
+            exit(no_archive)
     end.
 
 
@@ -392,72 +395,72 @@ get_build_candidate(State) ->
         {false, false} -> get_build_candidate(both, State)
     end.
 
-
-get_build_candidate(main_queue, State) ->
-    {{value, Candidate}, MainQueue} = queue:out(State#state.main_queue),
+get_build_candidate(QType, State) when QType == main_queue; QType == wait_queue ->
+    {{value, Candidate}, Queue} = extract_candidate(QType, State),
     case check_build_deps(Candidate, State) of
         independent ->
-            ?CBS:update_dep_state(State#state.deps, Candidate, <<"in_progress">>),
+            submit_next_to_build(QType, Queue, Candidate, State);
+        dependent ->
+            case QType of
+                main_queue ->
+                    {ok, State#state{main_queue=Queue, wait_queue=queue:in(Candidate, State#state.wait_queue)}};
+                wait_queue ->
+                    {ok, State#state{wait_queue=queue:in(Candidate, Queue)}}
+            end;
+        _Other ->
+            submit_missing(QType, Queue, Candidate, State)
+    end;
+get_build_candidate(both, State) ->
+    {ok, NewState} = case State#state.queue_switch of
+        true ->
+            get_build_candidate(wait_queue, State);
+        false ->
+            get_build_candidate(main_queue, State)
+    end,
+    SW = not(State#state.queue_switch),
+    {ok, NewState#state{queue_switch=SW}}.
+
+extract_candidate(QType, State) ->
+    case QType of
+        main_queue ->
+            queue:out(State#state.main_queue);
+        wait_queue ->
+            queue:out(State#state.wait_queue)
+    end.
+
+submit_next_to_build(QType, Queue, Candidate, State) ->
+    ?CBS:update_dep_state(State#state.deps, Candidate, <<"in_progress">>),
+    case QType of
+        main_queue ->
             {ok, State#state{
-                main_queue=MainQueue, 
+                main_queue=Queue, 
                 next_to_build=Candidate,
                 queued=lists:delete(?VERSION(Candidate), State#state.queued)
             }};
+        wait_queue ->
+            {ok, State#state{
+                wait_queue=Queue, 
+                next_to_build=Candidate,
+                queued=lists:delete(?VERSION(Candidate), State#state.queued)
+            }}
+    end.
 
-        dependent ->
-            WaitQueue = queue:in(Candidate, State#state.wait_queue),
-            {ok, State#state{main_queue=MainQueue, wait_queue=WaitQueue}};
-        missing ->
+submit_missing(QType, Queue, Candidate, State) ->
+    ?CBS:update_dep_state(State#state.deps, Candidate, <<"none">>),
+    lists:map(fun(X) -> 
+                ?CBS:delete_from_bucket(State#state.buckets, State#state.build_path, X, Candidate)
+            end, ?CBS:list_buckets(State#state.deps, Candidate)),
+    case QType of
+        main_queue ->
             {ok, State#state{
-                    main_queue=MainQueue,
-                    queued=lists:delete(?VERSION(Candidate), State#state.queued)
-                }};
-        _Other ->
-            RolledMainQueue = queue:in(Candidate, MainQueue),
-            {ok, State#state{main_queue=RolledMainQueue}}
-    end;
-get_build_candidate(wait_queue, State) ->
-    {{value, Candidate}, WaitQueue} = queue:out(State#state.wait_queue),
-    case check_build_deps(Candidate, State) of
-        independent ->
-            ?CBS:update_dep_state(State#state.deps, Candidate, <<"in_progress">>),
+                main_queue=Queue, 
+                queued=lists:delete(?VERSION(Candidate), State#state.queued)
+            }};
+        wait_queue ->
             {ok, State#state{
-                    wait_queue=WaitQueue, 
-                    queued=lists:delete(?VERSION(Candidate), State#state.queued),
-                    next_to_build=Candidate}};
-        dependent ->
-            RolledWaitQueue = queue:in(Candidate, WaitQueue),
-            {ok, State#state{wait_queue=RolledWaitQueue}};
-        missing ->
-            {ok, State#state{
-                    queued=lists:delete(?VERSION(Candidate), State#state.queued),
-                    wait_queue=WaitQueue}};
-        Other ->
-            Subject = io_lib:format("Build for ~p", [Candidate]),
-            Body = io_lib:format("Error while processing dependencies: ~n~p~n", [Other]),
-            notify(Subject, Body),
-            {error, broken_deps}
-    end;
-get_build_candidate(both, State) ->
-    {{value, Candidate}, WaitQueue} = queue:out(State#state.wait_queue),
-    case check_build_deps(Candidate, State) of
-        independent ->
-            ?CBS:update_dep_state(State#state.deps, Candidate, <<"in_progress">>),
-            {ok, State#state{
-                    queued=lists:delete(?VERSION(Candidate), State#state.queued),
-                    wait_queue=WaitQueue, 
-                    next_to_build=Candidate}};
-        dependent ->
-            RolledWaitQueue = queue:in(Candidate, WaitQueue),
-            get_build_candidate(main_queue,
-                State#state{wait_queue=RolledWaitQueue});
-        missing ->
-            {ok, State#state{
-                    wait_queue=WaitQueue,
-                    queued=lists:delete(?VERSION(Candidate), State#state.queued)
-                }};
-        _Other ->
-            {error, broken_deps}
+                wait_queue=Queue, 
+                queued=lists:delete(?VERSION(Candidate), State#state.queued)
+            }}
     end.
 
 
@@ -483,10 +486,8 @@ check_build_deps(Candidate, State) ->
         {ok, [], Deps} ->
             dependent;
         {ok, Dependencies, _} when is_list(Dependencies) ->
-            error_logger:info_msg("missing deps: ~p~n", [Dependencies]),
             case State#state.queue_missing of
                 true ->
-                    error_logger:info_msg("asking for rebuild for ~p~n", [?VERSION(Candidate)]),
                     ask_for_rebuild(Dependencies, State),
                     dependent;
                 _Other ->
@@ -514,14 +515,12 @@ ask_for_rebuild(Dependencies, State) ->
         fun(Dep) ->
             {BPackage, BBranch, _} = Dep,
             QueuedState = lists:member(Dep, State#state.queued),
+            PrebuildState = lists:keymember(Dep, 1, State#state.prebuild),
             {ok, {_, {BS, _}, _, _}} = ?CBS:fetch_dep(State#state.deps, Dep),
-            error_logger:info_msg("Build state: ~p~n", [BS]),
-            if (not QueuedState) and 
-                (BS /= <<"new">>) and 
-                (BS /= <<"in_progress">>) and
-                (BS /= <<"built">>) and
-                (BS /= <<"tested">>)
+            if (not QueuedState) and (not PrebuildState)
+                and (BS == <<"missing">>)
                 ->
+                    error_logger:info_msg("really asking for rebuild~p~n", [Dep]),
                 self() ! {rebuild, Dep};
             true ->
                 pass
