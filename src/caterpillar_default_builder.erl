@@ -1,10 +1,12 @@
 -module(caterpillar_default_builder).
 
--export([clean/2, test/2, prebuild/2]).
+-export([prepare/2, clean/2, test/2, prebuild/2]).
 
 -include("caterpillar_builder_internal.hrl").
 -define(CMD, caterpillar_utils:command).
 
+prepare(_Rev, _Dir) ->
+    {ok, ""}.
 
 clean(Rev, Dir) ->
     error_logger:info_msg("executing make clean in ~s:~n", [Dir]),

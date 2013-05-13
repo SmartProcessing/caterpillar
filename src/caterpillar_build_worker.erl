@@ -36,7 +36,7 @@ init(Settings) ->
     BuildPlugins = ?GV(
         build_plugins, 
         Settings, 
-        [{deb, caterpillar_deb_plugin}]
+        [{"deb", caterpillar_deb_plugin}]
     ),
     PlatformPlugins = ?GV(
         platform_plugins, 
@@ -88,6 +88,7 @@ build_rev(ToBuild, State) ->
     DepsDets = State#state.deps,
     Funs = [
         {fun unpack_rev/2, {BuildPath, BuildBuckets, DepsDets}},
+        {fun platform_prepare/2, PlatformPlugins},
         {fun platform_clean/2, PlatformPlugins},
         {fun platform_test/2, PlatformPlugins},
         {fun platform_prebuild/2, PlatformPlugins},
@@ -169,10 +170,15 @@ platform_get_env({Rev, {_, BPath, _}, BuildPath}, Plugins) ->
 package_get_env({Rev, {_, BPath, _}, BuildPath}, Plugins) ->
     {Name, _B, _T} = ?VERSION(Rev),
     PkgConfig = Rev#rev_def.pkg_config,
-    PackageT = PkgConfig#pkg_config.package_t,
-    Plugin = ?GV(PackageT, Plugins, caterpillar_deb_plugin),
+    %% TODO call corresponding plugin for each package type
+    [PackageT|_] = PkgConfig#pkg_config.package_t, 
+    Plugin = ?GV(PackageT, Plugins, caterpillar_deb_pluginza),
     Path = filename:join([BuildPath, BPath, binary_to_list(Name)]),
     {ok, Plugin, Path, Rev}.
+
+platform_prepare(Env, Plugins) ->
+    {ok, Plugin, Path, Rev} = platform_get_env(Env, Plugins),
+    informer(<<"none">>, Plugin:prepare(Rev, Path), Env).
 
 platform_clean(Env, Plugins) ->
     {ok, Plugin, Path, Rev} = platform_get_env(Env, Plugins),

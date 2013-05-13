@@ -150,9 +150,9 @@ handle_call({worker_custom_command, rebuild_deps, [Name, Branch|_]}, _From, Stat
 handle_call({worker_custom_command, pkg_info, [Name, Branch|_]}, _From, State) ->
     Vsn = {Name, Branch, <<>>},
     Res = case ?CBS:fetch_dep(State#state.deps, Vsn) of
-        {ok, {{N, B, T}, {Status, _}, Obj, Subj}} ->
+        {ok, {{N, B, T}, Status, Obj, Subj}} ->
             ?LTB(lists:flatten(
-                    io_lib:format("Name: ~s~nBranch: ~s~nTag: ~s~nState: ~s~nDepends: ~p~nHas in dependencies: ~p~n", 
+                    io_lib:format("Name: ~s~nBranch: ~s~nTag: ~s~nState: ~p~nDepends: ~p~nHas in dependencies: ~p~n", 
                         [N, B, T, Status, Obj, Subj])));
         _Other ->
             <<"error: not found\n">>
