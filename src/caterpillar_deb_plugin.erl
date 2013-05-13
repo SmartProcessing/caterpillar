@@ -42,7 +42,7 @@ find_deb_file(Dir) ->
     end.
 
 get_command(Branch, Type) ->
-    lists:flatten(io_lib:format("make ~s BRANCH=~s PATH_MOD=../* PATH_MK=../devel-tools/Makefile.mk",
+    lists:flatten(io_lib:format("make ~s BRANCH=~s PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk",
         [Type, binary_to_list(Branch)])).
 
 
