@@ -1,9 +1,9 @@
 -module(caterpillar_build_storage).
 -include_lib("caterpillar_builder_internal.hrl").
--export([check_isect/2, list_unres_deps/3, list_buckets/2, cleanup_new_in_progress/1]).
+-export([check_isect/2, list_unres_deps/3, list_buckets/2, empty_state_buckets/2, cleanup_new_in_progress/1]).
 -export([update_dep_state/3, fetch_dep/2, create_dep/2, get_subj/2]).
 -export([create_bucket/2, find_bucket/2, arm_bucket/5, get_temp_path/2]).
--export([fetch_bucket/2, list_buckets/2, update_dep_buckets/6, update_buckets/5, update_buckets/6, delete_from_bucket/4]).
+-export([fetch_bucket/2, update_dep_buckets/6, update_buckets/5, update_buckets/6, delete_from_bucket/4]).
 -export([delete/4]).
 
 -define(LOCK(X), gen_server:call(caterpillar_lock, {lock, X}, infinity)).
@@ -345,6 +345,14 @@ delete_from_bucket(BucketsDB, Path, Bucket, Rev) ->
     ToClean = filename:join([Path, BPath, binary_to_list(Rev#rev_def.name)]),
     error_logger:info_msg("cleaning up: ~p~n", [ToClean]),
     ?CU:del_dir(ToClean).
+
+empty_state_buckets(DepsDB, Rev) ->
+    Vsn = ?VERSION(Rev),
+    ?LOCK(Vsn),
+    [{Vsn, {State, _}, DepOn, HasInDep}|_] = dets:lookup(DepsDB, Vsn),
+    ok = dets:insert(DepsDB, {Vsn, {State, []}, DepOn, HasInDep}),
+    ?UNLOCK(Vsn),
+    ok.
 
 list_buckets(DepsDB, Rev) ->
     Version = ?VERSION(Rev),

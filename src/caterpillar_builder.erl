@@ -450,6 +450,7 @@ submit_missing(QType, Queue, Candidate, State) ->
     lists:map(fun(X) -> 
                 ?CBS:delete_from_bucket(State#state.buckets, State#state.build_path, X, Candidate)
             end, ?CBS:list_buckets(State#state.deps, Candidate)),
+    ?CBS:empty_state_buckets(State#state.deps, Candidate),
     case QType of
         main_queue ->
             {ok, State#state{
