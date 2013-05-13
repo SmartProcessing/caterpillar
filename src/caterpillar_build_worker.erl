@@ -242,7 +242,8 @@ make_complete_actions(
 ->
     lists:map(fun(X) -> 
                 ?CBS:delete_from_bucket(BucketsDets, Path, X, Rev)
-            end, ?CBS:list_buckets(DepsDets, Rev)).
+            end, ?CBS:list_buckets(DepsDets, Rev)),
+    ?CBS:empty_state_buckets(DepsDets, Rev).
 
 create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev) ->
     try
