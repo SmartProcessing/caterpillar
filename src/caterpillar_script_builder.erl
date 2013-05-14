@@ -82,9 +82,10 @@ find_deb_file(Dir) ->
 
 
 get_command(Branch, Type) ->
+    os:putenv("BRANCH", Branch),
     lists:flatten(
         io_lib:format(
-            "BRANCH=~s build.sh ~s",
-            [binary_to_list(Branch), Type]
+            "./build.sh ~s",
+            [Type]
         )
     ).

@@ -25,7 +25,6 @@ get_pkg_config_record(Archive, {control, Data}) ->
         deps=?GV("Depends", Data, [])
     };
 get_pkg_config_record(Archive, {config, Data}) ->
-    error_logger:info_msg("BUILD DEPS! ~p~n", [?GV(build_deps, Data)]),
     #pkg_config{
         name=?GV(name, Data, Archive#archive.name),
         version=?GV(version, Data, "0.0.0"),
