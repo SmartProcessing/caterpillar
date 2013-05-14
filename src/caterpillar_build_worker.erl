@@ -38,7 +38,7 @@ init(Settings) ->
         Settings, 
         [
             {"deb", caterpillar_deb_plugin},
-            {"sc_deb", caterpillar_script_builder}
+            {"script", caterpillar_script_builder}
         ]
     ),
     PlatformPlugins = ?GV(
