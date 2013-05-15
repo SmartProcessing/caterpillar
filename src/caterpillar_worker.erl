@@ -48,7 +48,7 @@ handle_info(register_as_worker, #state{worker_plugin=WP, worker_state=WS, regist
     {ok, WorkId} = WP:get_work_id(WS),
     NewState = case catch caterpillar_event:register_worker(Ident, WorkId) of
         {ok, Pid} ->
-            error_logger:info_msg("registered in event service"),
+            error_logger:info_msg("registered in event service~n"),
             erlang:monitor(process, Pid),
             State#state{registered=true};
         _ ->
