@@ -25,16 +25,15 @@ get_pkg_config_record(Archive, {control, Data}) ->
         deps=?GV("Depends", Data, [])
     };
 get_pkg_config_record(Archive, {config, Data}) ->
-    error_logger:info_msg("BUILD DEPS! ~p~n", [?GV(build_deps, Data)]),
     #pkg_config{
         name=?GV(name, Data, Archive#archive.name),
         version=?GV(version, Data, "0.0.0"),
         section=?GV(section, Data, "smprc"),
-        package_t=?GV(package_t, Data, ["deb"]),
+        package_t=?GV(package_plugin, Data, ["deb"]),
         arch=?GV(architecture, Data, "all"),
         maintainers=?GV(maintainers, Data, ["example@example.org"]),
         description=?GV(description, Data, ""),
-        platform=?GV(platform, Data, "default"),
+        platform=?GV(platform_plugin, Data, "default"),
         deps=?GV(deps, Data, []),
         build_deps=?GV(build_deps, Data, [])
     };

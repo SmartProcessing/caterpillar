@@ -1,14 +1,14 @@
 -module(caterpillar_deb_plugin).
 
--export([check/2, prepare/2, submit/2]).
+-export([build_check/2, build_prepare/2, build_submit/2]).
 
 -define(CMD, caterpillar_utils:command).
 -include("caterpillar_builder_internal.hrl").
 
-check(_Rev, _Dir) ->
+build_check(_Rev, _Dir) ->
     {ok, ""}.
 
-prepare(Rev, Dir) ->
+build_prepare(Rev, Dir) ->
     ControlFile = filename:join(Dir, "control"),
     case filelib:is_regular(ControlFile) of
         true ->
@@ -20,7 +20,7 @@ prepare(Rev, Dir) ->
     end,
     {ok, ""}.
 
-submit(Rev, Dir) ->
+build_submit(Rev, Dir) ->
     error_logger:info_msg("executing make package in ~s:~n", [Dir]),
     case ?CMD(get_command(Rev#rev_def.branch, "package"), [{cwd, Dir}]) of
         {0, _Msg} ->

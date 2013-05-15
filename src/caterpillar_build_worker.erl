@@ -36,12 +36,18 @@ init(Settings) ->
     BuildPlugins = ?GV(
         build_plugins, 
         Settings, 
-        [{"deb", caterpillar_deb_plugin}]
+        [
+            {"deb", caterpillar_deb_plugin},
+            {"script", caterpillar_script_builder}
+        ]
     ),
     PlatformPlugins = ?GV(
         platform_plugins, 
         Settings, 
-        [{"default", caterpillar_default_builder}]
+        [
+            {"default", caterpillar_default_builder},
+            {"script", caterpillar_script_builder}
+        ]
     ),
     BuildPath = ?GV(
         build_path, 
@@ -195,15 +201,15 @@ platform_prebuild(Env, Plugins) ->
 
 build_prepare(Env, Plugins) ->
     {ok, Plugin, Path, Rev} = package_get_env(Env, Plugins),
-    informer(<<"tested">>, Plugin:prepare(Rev, Path), Env).
+    informer(<<"tested">>, Plugin:build_prepare(Rev, Path), Env).
 
 build_check(Env, Plugins) ->
     {ok, Plugin, Path, Rev} = package_get_env(Env, Plugins),
-    informer(<<"tested">>, Plugin:check(Rev, Path), Env).
+    informer(<<"tested">>, Plugin:build_check(Rev, Path), Env).
 
 build_submit(Env, Plugins) ->
     {ok, Plugin, Path, Rev} = package_get_env(Env, Plugins),
-    {State, Msg} = Plugin:submit(Rev, Path),
+    {State, Msg} = Plugin:build_submit(Rev, Path),
     case State of
         ok ->
             {_Fd, _Name} = Msg,
