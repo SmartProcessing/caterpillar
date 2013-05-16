@@ -15,7 +15,7 @@
 -define(LTB, list_to_binary).
 
 -record(state, {
-        master_state=false,
+        master_pid=none,
         deps,
         buckets,
         main_queue,
@@ -182,6 +182,8 @@ handle_cast({clean_packages, Archives}, State) ->
 handle_cast(Msg, State) ->
     {noreply, State}.
 
+handle_info({'DOWN', _, _, Pid, _}, State) when Pid == State#state.master_pid ->
+    {noreply, State#state{master_pid=none}};
 handle_info({'DOWN', Reference, _, _, Reason}, State) ->
     Preparing = case Reason of
         normal ->
@@ -197,16 +199,17 @@ handle_info({'DOWN', Reference, _, _, Reason}, State) ->
     end,
     ets:delete(State#state.unpack_state, Reference),
     {noreply, State#state{queued=Preparing}};
-handle_info(schedule, State) when State#state.master_state == false ->
+handle_info(schedule, State) when State#state.master_pid == none ->
     case catch caterpillar_event:register_worker(caterpillar_builder, State#state.wid) of
-        {ok, _} ->
-            {noreply, State#state{master_state=true}};
+        {ok, Pid} ->
+            erlang:monitor(process, Pid),
+            {noreply, State#state{master_pid=Pid}};
         Other ->
             error_logger:error_msg("couldn't register self~n", [Other]),
             schedule_poller(State#state.poll_time),
             {noreply, State}
     end;
-handle_info(schedule, State) when State#state.master_state == true ->
+handle_info(schedule, State) when State#state.master_pid /= none ->
     case State#state.prebuild of
         [{_V, Archive, WorkId}|Rest] ->
             {ok, NewState} = process_archives([Archive], State#state{prebuild=Rest}, WorkId);
