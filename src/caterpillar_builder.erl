@@ -2,7 +2,6 @@
 -include_lib("caterpillar.hrl").
 -include_lib("caterpillar_builder_internal.hrl").
 -behaviour(gen_server).
-
 -export([start_link/1, state/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3, prepare/3]).
@@ -61,7 +60,7 @@ init(Settings) ->
     WorkIdFile = ?GV(work_id, Settings, ?DEFAULT_WORK_ID_FILE),
     WorkId = get_work_id(WorkIdFile),
     Ident = ?GV(ident, Settings, "unknown"),
-    schedule_poller(PollTime),
+    start_timer(PollTime),
     {ok, #state{
             deps=Deps,
             buckets=Buckets,
@@ -182,8 +181,11 @@ handle_cast({clean_packages, Archives}, State) ->
 handle_cast(Msg, State) ->
     {noreply, State}.
 
+handle_info(timer_loop, State) ->
+    self() ! schedule,
+    start_timer(State#state.poll_time),
+    {noreply, State};
 handle_info({'DOWN', _, _, Pid, _}, State) when Pid == State#state.master_pid ->
-    schedule_poller(State#state.poll_time),
     {noreply, State#state{master_pid=none}};
 handle_info({'DOWN', Reference, _, _, Reason}, State) ->
     Preparing = case Reason of
@@ -202,7 +204,6 @@ handle_info({'DOWN', Reference, _, _, Reason}, State) ->
     {noreply, State#state{queued=Preparing}};
 handle_info(schedule, State) when State#state.master_pid == none ->
     error_logger:info_msg("trying to register self~n"),
-    schedule_poller(State#state.poll_time),
     case catch caterpillar_event:register_worker(caterpillar_builder, State#state.wid) of
         {ok, Pid} ->
             error_logger:info_msg("registered worker at ~p~n", [Pid]),
@@ -220,7 +221,6 @@ handle_info(schedule, State) when State#state.master_pid /= none ->
             NewState = State
     end,
     {ok, SState} = schedule_build(NewState),
-    schedule_poller(State#state.poll_time),
     {noreply, SState};
 handle_info({rebuild, Version}, State) ->
     Archive = ?CPU:get_version_archive(Version),
@@ -379,9 +379,9 @@ release_worker(Worker, Workers) ->
 %% ------------------------------------------------------------------
 
 
--spec schedule_poller(non_neg_integer()) -> ok.
-schedule_poller(Timeout) ->
-    erlang:send_after(Timeout, self(), schedule).
+-spec start_timer(non_neg_integer()) -> ok.
+start_timer(Timeout) ->
+    erlang:send_after(Timeout, self(), timer_loop).
 
 -spec schedule_build(State :: #state{}) -> {ok, NewState :: #state{}}.
 schedule_build(State) when State#state.next_to_build == none ->
@@ -527,7 +527,7 @@ ask_for_rebuild(Dependencies, State) ->
             if (not QueuedState) and (not PrebuildState)
                 and (BS == <<"missing">>)
                 ->
-                    error_logger:info_msg("really asking for rebuild~p~n", [Dep]),
+                    error_logger:info_msg("ask for rebuild~p~n", [Dep]),
                 self() ! {rebuild, Dep};
             true ->
                 pass
