@@ -202,6 +202,7 @@ handle_info({'DOWN', Reference, _, _, Reason}, State) ->
     {noreply, State#state{queued=Preparing}};
 handle_info(schedule, State) when State#state.master_pid == none ->
     error_logger:info_msg("trying to register self~n"),
+    schedule_poller(State#state.poll_time),
     case catch caterpillar_event:register_worker(caterpillar_builder, State#state.wid) of
         {ok, Pid} ->
             error_logger:info_msg("registered worker at ~p~n", [Pid]),
@@ -209,7 +210,6 @@ handle_info(schedule, State) when State#state.master_pid == none ->
             {noreply, State#state{master_pid=Pid}};
         Other ->
             error_logger:error_msg("couldn't register self~n", [Other]),
-            schedule_poller(State#state.poll_time),
             {noreply, State}
     end;
 handle_info(schedule, State) when State#state.master_pid /= none ->
