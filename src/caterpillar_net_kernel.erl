@@ -41,10 +41,7 @@ init(Args) ->
     case net_kernel:start([NodeName, longnames]) of
         {ok, _} -> ok;
         Error ->
-            error_logger:info_msg(
-                "net_kernal failed to start with: ~p~n",
-                [Error]
-            ),
+            error_logger:info_msg("net_kernal failed to start with: ~p~n", [Error]),
             init:stop()
     end,
     Cookie = proplists:get_value(cookie, Args, 'caterpillar'),
@@ -65,6 +62,7 @@ handle_call(_, _, State) ->
 
 handle_info({nodeup, Node}, #state{up_nodes=UpNodes, scan_nodes=ScanNodes, down_nodes=DownNodes}=State) ->
     global:sync(),
+    error_logger:info_msg("Node ~p up~n", [Node]),
     NewDown = lists:delete(Node, DownNodes),
     NewUp = case lists:member(Node, ScanNodes) of
         true -> [Node|UpNodes];

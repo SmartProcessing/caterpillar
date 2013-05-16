@@ -163,6 +163,7 @@ handle_call(_Request, _From, State) ->
 
 handle_cast({changes, WorkId, Archives}, State) ->
     %FIXME: why work_id updated before building?
+    error_logger:info_msg("Changed for ~p arrived~n", [WorkId]),
     update_work_id(State#state.work_id, WorkId),
     ToPreprocess = lists:usort(Archives),
     {ok, NewState} = process_archives(ToPreprocess, State, WorkId),
