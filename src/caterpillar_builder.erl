@@ -183,6 +183,7 @@ handle_cast(Msg, State) ->
     {noreply, State}.
 
 handle_info({'DOWN', _, _, Pid, _}, State) when Pid == State#state.master_pid ->
+    schedule_poller(State#state.poll_time),
     {noreply, State#state{master_pid=none}};
 handle_info({'DOWN', Reference, _, _, Reason}, State) ->
     Preparing = case Reason of
@@ -200,8 +201,10 @@ handle_info({'DOWN', Reference, _, _, Reason}, State) ->
     ets:delete(State#state.unpack_state, Reference),
     {noreply, State#state{queued=Preparing}};
 handle_info(schedule, State) when State#state.master_pid == none ->
+    error_logger:info_msg("trying to register self~n"),
     case catch caterpillar_event:register_worker(caterpillar_builder, State#state.wid) of
         {ok, Pid} ->
+            error_logger:info_msg("registered worker at ~p~n", [Pid]),
             erlang:monitor(process, Pid),
             {noreply, State#state{master_pid=Pid}};
         Other ->
@@ -217,6 +220,7 @@ handle_info(schedule, State) when State#state.master_pid /= none ->
             NewState = State
     end,
     {ok, SState} = schedule_build(NewState),
+    schedule_poller(State#state.poll_time),
     {noreply, SState};
 handle_info({rebuild, Version}, State) ->
     Archive = ?CPU:get_version_archive(Version),
@@ -382,10 +386,8 @@ schedule_poller(Timeout) ->
 -spec schedule_build(State :: #state{}) -> {ok, NewState :: #state{}}.
 schedule_build(State) when State#state.next_to_build == none ->
     {ok, NewState} = get_build_candidate(State),
-    schedule_poller(State#state.poll_time),
     try_build(NewState);
 schedule_build(State) ->
-    schedule_poller(State#state.poll_time),
     try_build(State).
 
 
