@@ -6,9 +6,10 @@
 -include("caterpillar_builder_internal.hrl").
 -define(CMD, caterpillar_utils:command).
 
-prepare(Rev, Dir) ->
+
+prepare(#rev_def{branch=Branch}=Rev, Dir) ->
     error_logger:info_msg("executing build.sh configure in ~s:~n", [Dir]),
-    case ?CMD(get_command(Rev#rev_def.branch, "configure"), [{cwd, Dir}]) of
+    case ?CMD(get_command("configure"), [{cwd, Dir}, {env, get_env(Branch)}]) of
         {0, _Msg} ->
             {ok, ""};
         {Code, Msg} when is_integer(Code) ->
@@ -16,9 +17,10 @@ prepare(Rev, Dir) ->
             {error, io_lib:format("errors on configure~n ~B: ~s", [Code, Msg])}
     end.
 
-clean(Rev, Dir) ->
+
+clean(#rev_def{branch=Branch}=Rev, Dir) ->
     error_logger:info_msg("executing build.sh clean in ~s:~n", [Dir]),
-    case ?CMD(get_command(Rev#rev_def.branch, "clean"), [{cwd, Dir}]) of
+    case ?CMD(get_command("clean"), [{cwd, Dir}, {env, get_env(Branch)}]) of
         {0, _Msg} ->
             {ok, ""};
         {110, Msg} ->
@@ -30,9 +32,9 @@ clean(Rev, Dir) ->
     end.
 
 
-test(Rev, Dir) ->
+test(#rev_def{branch=Branch}=Rev, Dir) ->
     error_logger:info_msg("executing build.sh test in ~s:~n", [Dir]),
-    case ?CMD(get_command(Rev#rev_def.branch, "test"), [{cwd, Dir}]) of
+    case ?CMD(get_command("test"), [{cwd, Dir}, {env, get_env(Branch)}]) of
         {0, _Msg} ->
             {ok, ""};
         {Code, Msg} when is_integer(Code) ->
@@ -40,11 +42,12 @@ test(Rev, Dir) ->
             {error, io_lib:format("errors on test~n ~B: ~s", [Code, Msg])}
     end.
 
-prebuild(_Rev, _Dir) ->
-    {ok, ""}.
 
-build_check(_Rev, _Dir) ->
-    {ok, ""}.
+prebuild(_Rev, _Dir) -> {ok, ""}.
+
+
+build_check(_Rev, _Dir) -> {ok, ""}.
+
 
 build_prepare(Rev, Dir) ->
     ControlFile = filename:join(Dir, "control"),
@@ -58,15 +61,17 @@ build_prepare(Rev, Dir) ->
     end,
     {ok, ""}.
 
-build_submit(Rev, Dir) ->
+
+build_submit(#rev_def{branch=Branch}=Rev, Dir) ->
     error_logger:info_msg("executing build.sh package in ~s:~n", [Dir]),
-    case ?CMD(get_command(Rev#rev_def.branch, "package"), [{cwd, Dir}]) of
+    case ?CMD(get_command("package"), [{cwd, Dir}, {env, get_env(Branch)}]) of
         {0, _Msg} ->
             find_deb_file(filename:join([Dir, "dist"]));
         {Code, Msg} when is_integer(Code) ->
             error_logger:info_msg("make package failed with status ~B: ~s", [Code, Msg]),
             {error, lists:flatten(io_lib:format("make package returned ~B: ~s", [Code, Msg]))}
     end.
+
 
 find_deb_file(Dir) ->
     case filelib:wildcard(filename:join(Dir, "*.deb")) of
@@ -81,11 +86,12 @@ find_deb_file(Dir) ->
 
 
 
-get_command(Branch, Type) ->
-    os:putenv("BRANCH", Branch),
-    lists:flatten(
-        io_lib:format(
-            "./build.sh ~s",
-            [Type]
-        )
-    ).
+get_command(Type) ->
+    format("./build.sh ~s", [Type]).
+
+
+get_env(Branch) ->
+    [{"BRANCH", format("~s", [Branch])}].
+
+
+format(Template, Args) -> lists:flatten(io_lib:format(Template, Args)).
