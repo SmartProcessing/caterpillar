@@ -175,15 +175,8 @@ copy_packages({Paths, #deploy{packages=Packages, ident=Ident}=Deploy}, #state{de
 run_post_deploy(#deploy{post_deploy_actions=Actions}=Deploy, _State) when is_list(Actions) ->
     lists:foreach(
         fun
-            ({M, F, A}) -> 
-                error_logger:info_msg(
-                    "post_deploy ~p/~p result: ~p~n",
-                    [M, F, catch apply(M, F, A)]
-                );
-            (Bad) ->
-                error_logger:error_msg(
-                    "post_deploy badarg: ~p~n", [Bad]
-                )
+            ({M, F, A}) -> error_logger:info_msg("post_deploy ~p/~p result: ~p~n", [M, F, catch apply(M, F, A)]);
+            (Bad) -> error_logger:error_msg( "post_deploy badarg: ~p~n", [Bad])
         end,
         Actions
     ),
@@ -198,7 +191,8 @@ cast_rotate(Deploy, _State) ->
     {ok, Deploy}.
 
 
-run_deploy_script(Deploy, #state{deploy_script=DS}) ->
+run_deploy_script(#deploy{packages=[]}=Deploy, State) -> {ok, Deploy};
+run_deploy_script(Deploy, #state{deploy_script=DS}) -> 
     error_logger:info_msg("deploy script result: ~p~n", [os:cmd(DS)]),
     {ok, Deploy}.
 
