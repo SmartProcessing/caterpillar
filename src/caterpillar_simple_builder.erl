@@ -180,7 +180,7 @@ make_packages([ #build_package{name=Name, branch=Branch}=Package|T ], Accum, #st
 make(#build_package{name=Name, branch=Branch}=Package, Cmd, UnArchivePath, DistDir, #state{deploy_root=DeployRoot}) ->
     Format= fun(Template, Args) -> lists:flatten(io_lib:format(Template, Args)) end,
     Env = [
-        {"PATH_MK=", "../../devel-tools/trunk/Makefile.mk"},
+        {"PATH_MK", "../../devel-tools/trunk/Makefile.mk"},
         {"PATH_PY_MK", "../../smprc.setup/trunk/Makefile.mk"},
         {"PATH_MOD", Format("../../*/~s", [Branch])},
         {"BRANCH", Format("~s", [Branch])},
