@@ -1,4 +1,4 @@
-PATH_MK = ../devel-tools/Makefile.mk
+PATH_MK ?= ../devel-tools/Makefile.mk
 include $(PATH_MK)
 
 LIB_PATH = var/lib/caterpillar
