@@ -137,8 +137,7 @@ make_packages(Archives, State) ->
     make_packages(Packages, [], State).
 
 
-make_packages([], Accum, _State) ->
-    {ok, Accum};
+make_packages([], Accum, _State) ->  {ok, Accum};
 make_packages([ #build_package{name=Name, branch=Branch}=Package|T ], Accum, #state{next_work_id=WorkId}=State) ->
     UnArchivePath = caterpillar_utils:filename_join([State#state.repository_root, Name, Branch]),
     ControlFile = caterpillar_utils:filename_join(UnArchivePath, "control"),
@@ -150,28 +149,26 @@ make_packages([ #build_package{name=Name, branch=Branch}=Package|T ], Accum, #st
     caterpillar_utils:del_dir(DistDir),
     NewPackage = case filelib:is_dir(UnArchivePath) of
         true ->
-            EnvHardCode = lists:flatten(io_lib:format(
-                "PATH_MK=../../devel-tools/trunk/Makefile.mk "
-                "PATH_PY_MK=../../smprc.setup/trunk/Makefile.mk "
-                "PATH_MOD=../../*/~s",
-                [Branch]
-            )),
-            Commands = lists:map(
-                fun(Command) -> lists:flatten(io_lib:format(Command, [EnvHardCode, Branch, UnArchivePath])) end,
-                [
-                    "make ~s BRANCH=~s -C ~s clean &>/dev/null | exit 0 ", %exit status always 0
-                    "make ~s BRANCH=~s -C ~s DIST_DIR=dist test",
-                    "make ~s BRANCH=~s -C ~s DIST_DIR=dist package"
-                ]
-            ),
-            case catch make(Package, DistDir, Commands, State) of
+            BuildScriptPath = caterpillar_utils:filename_join([UnArchivePath, "build.sh"]),
+            case filelib:is_regular("build.sh") of 
+                true -> ok;
+                false -> 
+                    error_logger:info_msg("writing default build.sh~n"),
+                    BuildScript = 
+                        "#!/bin/bash\n"
+                        "make clean &>/dev/null | exit 0 && make test && make package; exit $?"
+                    ,
+                    file:write_file(BuildScriptPath, BuildScript),
+                    file:change_mode(BuildScriptPath, 8#0775)
+            end,
+            case catch make(Package, BuildScriptPath, UnArchivePath, DistDir, State) of
                 {ok, PackageResult} ->
                     Package#build_package{build_status=ok, package=PackageResult};
                 {error, Log} ->
                     Package#build_package{build_status=error, log=Log};
                 Error ->
                     error_logger:error_msg("make unknown error: ~p~n", [Error]),
-                    {error, make_packages}
+                    exit({error, {make_packages, Error}})
             end;
         _ ->
             error_logger:error_msg("not dir ~p~n", [UnArchivePath]),
@@ -180,9 +177,19 @@ make_packages([ #build_package{name=Name, branch=Branch}=Package|T ], Accum, #st
     make_packages(T, [ NewPackage|Accum ], State).
 
 
-make(Package, DistDir, Commands, #state{deploy_root=DeployRoot}) ->
-    case make(Package, Commands) of
-        {ok, done} ->
+make(#build_package{name=Name, branch=Branch}=Package, Cmd, UnArchivePath, DistDir, #state{deploy_root=DeployRoot}) ->
+    Format= fun(Template, Args) -> lists:flatten(io_lib:format(Template, Args)) end,
+    Env = [
+        {"PATH_MK=", "../../devel-tools/trunk/Makefile.mk"},
+        {"PATH_PY_MK", "../../smprc.setup/trunk/Makefile.mk"},
+        {"PATH_MOD", Format("../../*/~s", [Branch])},
+        {"BRANCH", Format("~s", [Branch])},
+        {"DIST_DIR", "dist"}
+    ],
+    P = open_port({spawn, Cmd}, [binary, use_stdio, stderr_to_stdout, exit_status, {cd, UnArchivePath}, {env, Env}]),
+    case receive_data_from_port() of
+        {ok, 0, _Log} ->
+            error_logger:info_msg("succeed ~p at ~s/~s~n", [Cmd, Name, Branch]),
             case filelib:wildcard(caterpillar_utils:filename_join(DistDir, "*.deb")) of
                 [Deb] ->
                     DebName = lists:last(filename:split(Deb)),
@@ -193,18 +200,6 @@ make(Package, DistDir, Commands, #state{deploy_root=DeployRoot}) ->
                     error_logger:error_msg("cant find deb package, ~p~n", [Other]),
                     {error, <<"no package build">>}
             end;
-        Error -> Error
-    end.
-
-
-make(_, []) ->
-    {ok, done};
-make(#build_package{name=Name, branch=Branch}=Package, [ Cmd|T ]) ->
-    P = open_port({spawn, Cmd}, [binary, use_stdio, stderr_to_stdout, exit_status]),
-    case receive_data_from_port() of
-        {ok, 0, _Log} ->
-            error_logger:info_msg("succeed ~p at ~s/~s~n", [Cmd, Name, Branch]),
-            make(Package, T); 
         {ok, _, Log} ->
             error_logger:info_msg("failed ~p at ~s/~s~n", [Cmd, Name, Branch]),
             {error, Log};
@@ -217,7 +212,7 @@ make(#build_package{name=Name, branch=Branch}=Package, [ Cmd|T ]) ->
         {error, Reason} ->
             {error, Reason}
     end.
-
+    
 
 receive_data_from_port() ->
     receive_data_from_port(<<>>).
