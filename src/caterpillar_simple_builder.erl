@@ -150,7 +150,7 @@ make_packages([ #build_package{name=Name, branch=Branch}=Package|T ], Accum, #st
     NewPackage = case filelib:is_dir(UnArchivePath) of
         true ->
             BuildScriptPath = caterpillar_utils:filename_join([UnArchivePath, "build.sh"]),
-            case filelib:is_regular("build.sh") of 
+            case filelib:is_regular(BuildScriptPath) of 
                 true -> ok;
                 false -> 
                     error_logger:info_msg("writing default build.sh~n"),

@@ -6,3 +6,4 @@ test.config
 test
 *.swo
 erl_crash.dump
+test.config
