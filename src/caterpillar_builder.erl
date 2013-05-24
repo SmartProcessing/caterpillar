@@ -110,7 +110,12 @@ handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
             binary_to_list(RevDef#rev_def.branch),
             binary_to_list(RevDef#rev_def.tag)
         ]),
-    Message = io_lib:format("built package: ~s", [BuildInfo#build_info.pkg_name]),
+    Message = io_lib:format(
+        "Subject: E-mail test\n"
+        "Mime-Version: 1.0\n"
+        "Content-type: text/html; charset=\"utf-8\"\n"
+        "<p>built package: ~s</p>\n"
+        "<img src=\"http://media.tumblr.com/7e1563ad5f6ebf7c3b6b51150eb03bfb/tumblr_inline_mmawrllsKw1qz4rgp.gif\"></img>", [BuildInfo#build_info.pkg_name]),
     notify(Subj, Message),
     NewWorkers = release_worker(Worker, State#state.workers),
     {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
