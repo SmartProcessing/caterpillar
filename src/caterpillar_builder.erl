@@ -115,7 +115,7 @@ handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
         "Mime-Version: 1.0\n"
         "Content-type: text/html; charset=\"utf-8\"\n"
         "<p>built package: ~s</p>\n"
-        "<img width=250px height=113px src=\"http://media.tumblr.com/7e1563ad5f6ebf7c3b6b51150eb03bfb/tumblr_inline_mmawrllsKw1qz4rgp.gif\"></img>", [BuildInfo#build_info.pkg_name]),
+        "<img width=250px height=113px src=\"https://conf.smprc.ru/download/attachments/12518014/build_success.gif\"></img>", [BuildInfo#build_info.pkg_name]),
     notify(Subj, Message),
     NewWorkers = release_worker(Worker, State#state.workers),
     {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
