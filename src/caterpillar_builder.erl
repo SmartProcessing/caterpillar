@@ -111,11 +111,11 @@ handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
             binary_to_list(RevDef#rev_def.tag)
         ]),
     Message = io_lib:format(
-        "Subject: E-mail test\n"
+        "Subject: ~s\n"
         "Mime-Version: 1.0\n"
         "Content-type: text/html; charset=\"utf-8\"\n"
         "<p>built package: ~s</p>\n"
-        "", [BuildInfo#build_info.pkg_name]),
+        "", [Subj, BuildInfo#build_info.pkg_name]),
     notify(Subj, Message),
     NewWorkers = release_worker(Worker, State#state.workers),
     {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
