@@ -25,6 +25,7 @@ init(Args) ->
         ets = ets:new(?MODULE, [protected, named_table]),
         mail_root=caterpillar_utils:ensure_dir(proplists:get_value(mail_root, Args, ?MAIL_ROOT)),
         email_from=proplists:get_value(email_from, Args),
+        email_to = EmailTo,
         email_distribution=proplists:get_value(email_distribution, Args, [EmailTo])
     },
     async_send_mail(),
