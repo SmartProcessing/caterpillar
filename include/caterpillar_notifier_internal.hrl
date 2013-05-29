@@ -6,6 +6,8 @@
     "To: ~s~n"
     "From: ~s~n"
     "Subject: ~s~n"
+    "Mime-Version: 1.0~n"
+    "Content-type: text/plain; charset=\"utf-8\"~n"
     "~s~n"
 ).
 -define(MAIL_ROOT, "/var/lib/caterpillar/notifier/mail_root").

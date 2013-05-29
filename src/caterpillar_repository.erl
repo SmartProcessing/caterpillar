@@ -4,12 +4,6 @@
 
 -include_lib("caterpillar.hrl").
 -include_lib("caterpillar_repository_internal.hrl").
--define(MAIL_TEMPLATE,
-    "Subject: ~s~n"
-    "Mime-Version: 1.0~n"
-    "Content-type: text/plain; charset=\"utf-8\"~n"
-    "~s~n"
-).
 
 -export([start_link/1, stop/0]).
 -export([init/1, handle_info/2, handle_cast/2, handle_call/3, terminate/2, code_change/3]).
@@ -308,9 +302,7 @@ async_notify(#state{notify_root=NR}) ->
 
 -spec notify(#state{}, #notify{}) -> no_return().
 notify(#state{notify_root=NR}, #notify{}=Notify) ->
-    BodyWSubj = list_to_binary(io_lib:format(?MAIL_TEMPLATE, 
-            [Notify#notify.subject, Notify#notify.body])),
-    case catch caterpillar_event:sync_event({notify, Notify#notify{body=BodyWSubj}}) of
+    case catch caterpillar_event:sync_event({notify, Notify}) of
         ok -> ok;
         Error -> 
             {A, B, C} = os:timestamp(),
