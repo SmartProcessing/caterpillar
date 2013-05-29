@@ -20,7 +20,7 @@ stop() ->
 
 
 init(Args) ->
-    EmailTo = email_to=proplists:get_value(email_to, Args),
+    EmailTo = proplists:get_value(email_to, Args),
     State = #state{
         ets = ets:new(?MODULE, [protected, named_table]),
         mail_root=caterpillar_utils:ensure_dir(proplists:get_value(mail_root, Args, ?MAIL_ROOT)),
