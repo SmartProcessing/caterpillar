@@ -16,7 +16,8 @@
     registered = false :: boolean(),
     mail_root :: filelib:dirname(),
     email_to :: string(),
-    email_from :: string()
+    email_from :: string(),
+    email_distribution :: list()
 }).
 
 

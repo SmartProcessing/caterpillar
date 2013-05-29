@@ -20,11 +20,12 @@ stop() ->
 
 
 init(Args) ->
+    EmailTo = email_to=proplists:get_value(email_to, Args),
     State = #state{
         ets = ets:new(?MODULE, [protected, named_table]),
         mail_root=caterpillar_utils:ensure_dir(proplists:get_value(mail_root, Args, ?MAIL_ROOT)),
-        email_to=proplists:get_value(email_to, Args),
-        email_from=proplists:get_value(email_from, Args)
+        email_from=proplists:get_value(email_from, Args),
+        email_distribution=proplists:get_value(email_distribution, Args, [EmailTo])
     },
     async_send_mail(),
     async_register(),
@@ -76,10 +77,7 @@ handle_cast(_Messages, State) ->
 
 handle_call({notify, Notify}, From, State) ->
     spawn(fun() ->
-        gen_server:reply(
-            From,
-            catch store_mail(State, Notify)
-        )
+        gen_server:reply(From, catch store_mail(State, Notify))
     end),
     {noreply, State};
 
@@ -102,13 +100,10 @@ code_change(_OldVsn, State, _Extra) ->
 %--------
 
 
-get_name() ->
-    lists:flatten(
-        io_lib:format("~4..0B~6..0B~6..0B", tuple_to_list(erlang:now()))
-    ).
+get_name() -> lists:flatten(io_lib:format("~4..0B~6..0B~6..0B", tuple_to_list(erlang:now()))).
 
 
-async_register() ->
+async_register() -> 
     async_register(1000).
 
 
@@ -116,28 +111,21 @@ async_register(Delay) ->
     erlang:send_after(Delay, self(), async_register).
 
 
-async_send_mail() ->
-    async_send_mail(1000).
+async_send_mail() -> async_send_mail(1000).
 
 async_send_mail(Delay) ->
     erlang:send_after(Delay, self(), async_send_mail).
 
 
-send_mail(#state{mail_root=MR, email_to=ETo}, File) ->
+send_mail(#state{mail_root=MR, email_distribution=DistList}, File) ->
     AbsPath = filename:join(MR, File),
-    Cmd = lists:flatten(
-        io_lib:format(
-            "ssmtp ~s < ~s", [ETo, AbsPath]
-        )
-    ),
+    Emails = string:join(DistList, " "),
+    Cmd = lists:flatten(io_lib:format("ssmtp ~s < ~s", [Emails, AbsPath])),
     open_port({spawn, Cmd}, [binary, stderr_to_stdout, exit_status]).
 
 
 store_mail(#state{mail_root=MR, email_from=EFrom, email_to=ETo}, #notify{subject=Sub, body=Body}) ->
-    file:write_file(
-        filename:join(MR, get_name()), 
-        io_lib:format(?MAIL_TEMPLATE, [ETo, EFrom, Sub, Body])
-    ).
+    file:write_file(filename:join(MR, get_name()), io_lib:format(?MAIL_TEMPLATE, [ETo, EFrom, Sub, Body])).
 
 
 
