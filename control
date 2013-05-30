@@ -1,7 +1,0 @@
-Package: caterpillar
-Section: smprc
-Description: "Caterpillar - package building tools"
-Architecture: all
-Version: 1.6.8
-Maintainer: vavdiushkin@smprc.ru
-Depends: erlang-base(>=14), smprc-mochiweb, smprc-cowboy, python-setuptools, erlang-eunit, erlang-dev, smprc-rebar, erlang-tools, python-twisted-core, python-twisted-web, python-simplejson, python-argparse, dpkg-dev
