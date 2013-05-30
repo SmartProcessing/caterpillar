@@ -51,6 +51,7 @@ get_pkg_config_record(Archive, {empty, Data}) ->
         build_deps=?GV("build_deps", Data, [])
     };
 get_pkg_config_record(_Archive, {error, Reason}) ->
+    error_logger:info_msg("failed to parse pkg.config"),
     {error, Reason}.
 
 
@@ -116,7 +117,7 @@ get_pkg_config_list(Path) ->
             {config, Term};
         [{error, enoent}, true] ->
             {control, parse_control(Path)};
-        [{error, _}, true] ->
+        [{error, _}, _] ->
             {error, invalid_pkg_config};
         _Other ->
             {empty, []}
