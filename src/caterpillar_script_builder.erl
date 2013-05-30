@@ -58,7 +58,7 @@ build_prepare(Rev, Dir) ->
             WorkId = Rev#rev_def.work_id,
             catch caterpillar_simple_builder:modify_control(ControlFile, Branch, WorkId, "all");
         _ ->
-            file:write_file(filename:join(Dir, "control"), caterpillar_pkg_utils:gen_control_from_pkg_config(Rev), [exclusive])
+            file:write_file(filename:join(Dir, "control"), caterpillar_pkg_utils:gen_control_from_pkg_config(Rev))
     end,
     {ok, ""}.
 
