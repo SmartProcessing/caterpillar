@@ -287,7 +287,8 @@ prepare(BuildPath, Archive, WorkId) ->
                             Archive#archive.tag
                         ]),
                     Body = io_lib:format("failed to parse pkg.config: ~p~n", [Reason]),
-                    notify(Subj, Body);
+                    notify(Subj, Body),
+                    exit(no_pkg_config);
                 PkgRecord = #pkg_config{} ->
                     RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId),
                     gen_server:call(caterpillar_builder, {newref, RevDef}, infinity)
