@@ -178,7 +178,7 @@ package_get_env({Rev, {_, BPath, _}, BuildPath}, Plugins) ->
     PkgConfig = Rev#rev_def.pkg_config,
     %% TODO call corresponding plugin for each package type
     [PackageT|_] = PkgConfig#pkg_config.package_t, 
-    Plugin = ?GV(PackageT, Plugins, caterpillar_deb_pluginza),
+    Plugin = ?GV(PackageT, Plugins, caterpillar_deb_plugin),
     Path = filename:join([BuildPath, BPath, binary_to_list(Name)]),
     {ok, Plugin, Path, Rev}.
 
