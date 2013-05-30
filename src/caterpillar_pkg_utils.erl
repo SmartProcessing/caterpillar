@@ -50,7 +50,7 @@ get_pkg_config_record(Archive, {empty, Data}) ->
         deps=?GV("deps", Data, []),
         build_deps=?GV("build_deps", Data, [])
     };
-get_pkg_config_record(Archive, {error, Res}) ->
+get_pkg_config_record(_Archive, {error, Reason}) ->
     {error, Reason}.
 
 
