@@ -49,7 +49,10 @@ get_pkg_config_record(Archive, {empty, Data}) ->
         platform=?GV("platform", Data, "default"),
         deps=?GV("deps", Data, []),
         build_deps=?GV("build_deps", Data, [])
-    }.
+    };
+get_pkg_config_record(Archive, {error, Res}) ->
+    {error, Reason}.
+
 
 get_dep_list(Pkg, Archive) ->
     get_valid_versions(Pkg#pkg_config.deps, Archive, deps) ++ 
@@ -111,17 +114,17 @@ get_pkg_config_list(Path) ->
             filelib:is_file(filename:join([Path, "control"]))] of
         [{ok, [Term]}|_] ->
             {config, Term};
-        [{error, _}, true] ->
+        [{error, enoent}, true] ->
             {control, parse_control(Path)};
+        [{error, _}, true] ->
+            {error, invalid_pkg_config};
         _Other ->
             {empty, []}
     end.
 
 
 get_pkg_config(Arch, Path) ->
-    Res = get_pkg_config_record(Arch, get_pkg_config_list(Path)),
-    error_logger:info_msg("got package config record: ~p~n", [Res]),
-    Res.
+    get_pkg_config_record(Arch, get_pkg_config_list(Path)).
 
 
 get_dir_name(Rev=#rev_def{}) ->

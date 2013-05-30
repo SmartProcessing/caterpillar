@@ -278,9 +278,20 @@ prepare(BuildPath, Archive, WorkId) ->
             ok = caterpillar_archive:extract(TempArch, [{type, Type}, {cwd, Cwd}]),
             file:close(Fd),
             file:delete(TempArch),
-            PkgRecord = ?CPU:get_pkg_config(Archive, Cwd),
-            RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId),
-            gen_server:call(caterpillar_builder, {newref, RevDef}, infinity);
+            case ?CPU:get_pkg_config(Archive, Cwd) of
+                PkgRecord = #pkg_info{} ->
+                    RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId),
+                    gen_server:call(caterpillar_builder, {newref, RevDef}, infinity);
+                {error, Reason} ->
+                    gen_server:call(caterpillar_builder, 
+                    Subj = io_lib:format("#~B error: ~s/~s/~s", [
+                            WorkId,
+                            Archive#archive.name),
+                            Archive#archive.branch),
+                            Archive#archive.tag)
+                        ]),
+                    Body = io_lib:format("failed to parse pkg.config: ~p~n", [Reason]),
+                    notify(Subj, Body).
         Other ->
             error_logger:error_msg("failed to get archive ~p:~p~n", [Archive, Other]),
             exit(no_archive)

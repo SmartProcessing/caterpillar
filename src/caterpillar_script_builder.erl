@@ -51,8 +51,9 @@ build_check(_Rev, _Dir) -> {ok, ""}.
 
 build_prepare(Rev, Dir) ->
     ControlFile = filename:join(Dir, "control"),
-    case filelib:is_regular(ControlFile) of
-        true ->
+    PkgConfig = filename:join(Dir, "pkg.config"),
+    case {filelib:is_regular(PkgConfig), filelib:is_regular(ControlFile)} of
+        {false, true} ->
             Branch = binary_to_list(Rev#rev_def.branch),
             WorkId = Rev#rev_def.work_id,
             catch caterpillar_simple_builder:modify_control(ControlFile, Branch, WorkId, "all");
