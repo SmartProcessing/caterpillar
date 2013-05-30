@@ -117,8 +117,8 @@ get_pkg_config_list(Path) ->
             {config, Term};
         [{error, enoent}, true] ->
             {control, parse_control(Path)};
-        [{error, _}, _] ->
-            {error, invalid_pkg_config};
+        [{error, Reason}, _] ->
+            {error, Reason};
         _Other ->
             {empty, []}
     end.
