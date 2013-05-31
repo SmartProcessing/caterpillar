@@ -18,13 +18,11 @@ start_link(Args) ->
 init(Args) ->
     ensure_started(cowboy),
     Ets = ets:new(?MODULE, [protected]),
-    Dispatch = [
-        {'_', [{'_', ?MODULE, []}]}
-    ],
-    Host = proplists:get_value(ip, Args, "127.0.0.1"),
+    Dispatch = [{'_', [{'_', ?MODULE, []}]}],
+    ListenIp = proplists:get_value(ip, Args, "127.0.0.1"),
     Port = proplists:get_value(port, Args, 8088),
     cowboy:start_listener(?MODULE, 1,
-        cowboy_tcp_transport, [{ip, Host}, {port, Port}],
+        cowboy_tcp_transport, [{ip, ListenIp}, {port, Port}],
         cowboy_http_protocol, [{dispatch, Dispatch}]
     ),
     {ok, #state{ets=Ets}}.
