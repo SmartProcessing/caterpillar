@@ -21,10 +21,10 @@ init(Args) ->
     Dispatch = [
         {'_', [{'_', ?MODULE, []}]}
     ],
-    Host = proplists:get_value(host, Args, "127.0.0.1"),
+    Host = proplists:get_value(ip, Args, "127.0.0.1"),
     Port = proplists:get_value(port, Args, 8088),
     cowboy:start_listener(?MODULE, 1,
-        cowboy_tcp_transport, [{host, Host}, {port, Port}],
+        cowboy_tcp_transport, [{ip, Host}, {port, Port}],
         cowboy_http_protocol, [{dispatch, Dispatch}]
     ),
     {ok, #state{ets=Ets}}.
