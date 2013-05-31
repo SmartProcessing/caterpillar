@@ -27,7 +27,7 @@ build_submit(Rev, Dir) ->
     case ?CMD(get_command(
                 [
                     {"BRANCH", ?BTL(Rev#rev_def.branch)},
-                    {"BUILD_ID", Rev#rev_def.work_id}
+                    {"BUILD_ID", integer_to_list(Rev#rev_def.work_id)}
                 ], "package"), [{cwd, Dir}]) of
         {0, _Msg} ->
             find_deb_file(filename:join([Dir, "dist"]));
@@ -48,7 +48,7 @@ find_deb_file(Dir) ->
     end.
 
 get_command(Env, Type) ->
-    lists:flatten(io_lib:format("make ~s BRANCH=~s PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk",
+    lists:flatten(io_lib:format("make ~s ~s PATH_MOD=../*/ PATH_MK=../devel-tools/Makefile.mk",
         [Type, build_environment(Env)])).
 
 build_environment(PL) ->
