@@ -53,7 +53,7 @@ get_command(Env, Type) ->
 
 build_environment(PL) ->
     Env = [[X, "=", Y] || {X, Y} <- PL],
-    string:join(Env, " ").
+    lists:flatten(string:join(Env, " ")).
 
 
 format(Format, Attrs) ->
