@@ -147,18 +147,21 @@ handle_call({worker_custom_command, rebuild_deps, [Name, Branch|_]}, _From, Stat
         _Other ->
             []
     end,
-    ResIo = lists:map(fun(X) -> lists:flatten(io_lib:format("~p", [X])) end, Res),
-    Reply = list_to_binary("rebuilding dependencies:\n" ++ string:join(ResIo, ",\n") ++ "\n"),
-    {reply, {ok, Reply}, State};
+    {reply, {ok, Res}, State};
 handle_call({worker_custom_command, pkg_info, [Name, Branch|_]}, _From, State) ->
     Vsn = {Name, Branch, <<>>},
-    Res = case ?CBS:fetch_dep(State#state.deps, Vsn) of
+    Res = case ?CBS:fetch_dep_non_block(State#state.deps, Vsn) of
         {ok, {{N, B, T}, Status, Obj, Subj}} ->
-            ?LTB(lists:flatten(
-                    io_lib:format("Name: ~s~nBranch: ~s~nTag: ~s~nState: ~p~nDepends: ~p~nHas in dependencies: ~p~n", 
-                        [N, B, T, Status, Obj, Subj])));
+            {ok, [
+                {"name", N},
+                {"branch", B},
+                {"tag", T},
+                {"state", Status},
+                {"depends", Obj},
+                {"has_in_deps", Subj}
+            ]};
         _Other ->
-            <<"error: not found\n">>
+            {error, <<"not found\n">>}
     end,
     {reply, {ok, Res}, State};
 handle_call(_Request, _From, State) ->
