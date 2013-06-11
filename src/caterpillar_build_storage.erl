@@ -1,7 +1,7 @@
 -module(caterpillar_build_storage).
 -include_lib("caterpillar_builder_internal.hrl").
 -export([check_isect/2, list_unres_deps/3, list_buckets/2, empty_state_buckets/2, cleanup_new_in_progress/1]).
--export([update_dep_state/3, fetch_dep/2, create_dep/2, get_subj/2]).
+-export([update_dep_state/3, fetch_dep/2, fetch_dep_non_block/2, create_dep/2, get_subj/2]).
 -export([create_bucket/2, find_bucket/2, arm_bucket/5, get_temp_path/2]).
 -export([fetch_bucket/2, update_dep_buckets/6, update_buckets/5, update_buckets/6, delete_from_bucket/4]).
 -export([delete/4]).
@@ -83,6 +83,16 @@ fetch_dep(DepTree, Version) ->
     end,
     ?UNLOCK(Version),
     Res.
+
+fetch_dep_non_block(DepTree, Version) ->
+    case catch dets:lookup(DepTree, Version) of
+        [{BuildVersion, State, Object, Subject}|_] ->
+            {ok, {BuildVersion, State, Object, Subject}};
+        [] ->
+            {ok, []};
+        _Other ->
+            {error, dets_error}
+    end.
 
 get_subj(DepTree, Version) ->
     case fetch_dep(DepTree, Version) of

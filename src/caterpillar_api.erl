@@ -118,7 +118,8 @@ handle(#http_req{path=[<<"rebuild_deps">>, Name, Branch]}=Req, State) ->
     Args = [binary_to_list(X) || X <- [Name, Branch]],
     Reply = case caterpillar_event:sync_event({worker_custom_command, rebuild_deps, Args}) of
         [{ok, Res}|_] ->
-            Res;
+            ResIo = lists:map(fun(X) -> io_lib:format("~p", [X]) end, Res),
+            list_to_binary("rebuilding dependencies:\n" ++ string:join(ResIo, ",\n") ++ "\n");
         Reason ->
             error_logger:error_msg("error: rebuild_dependencies: ~p~n", [Reason]),
             list_to_binary(lists:flatten(io_lib:format("error: ~p~n", [Reason])))
@@ -128,8 +129,20 @@ handle(#http_req{path=[<<"rebuild_deps">>, Name, Branch]}=Req, State) ->
 
 handle(#http_req{path=[<<"pkg_info">>, Name, Branch]}=Req, State) ->
     Reply = case caterpillar_event:sync_event({worker_custom_command, pkg_info, [Name, Branch]}) of
-        [{ok, Res}|_] ->
+        [{ok, Res}|_] when is_list(Res) ->
+            list_to_binary(lists:flatten(
+                    io_lib:format("Name: ~s~nBranch: ~s~nTag: ~s~nState: ~p~nDepends: ~p~nHas in dependencies: ~p~n", 
+                        [
+                            ?GV("name", Res), 
+                            ?GV("branch", Res),
+                            ?GV("tag", Res),
+                            ?GV("state", Res),
+                            ?GV("depends", Res),
+                            ?GV("has_in_deps", Res)
+                        ]))),
             Res;
+        [{error, Reason}|_] ->
+            list_to_binary(lists:flatten(io_lib:format("error: ~p~n", [Reason])));
         Reason ->
             list_to_binary(lists:flatten(io_lib:format("error: ~p~n", [Reason])))
     end,
