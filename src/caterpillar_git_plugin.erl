@@ -82,12 +82,7 @@ get_diff(_State, Package, _Branch, Revno, NewRevno) when Revno == none; Revno ==
     DiffCmd = format("git diff ~s ~s", [First, NewRevno]),
     case command(DiffCmd, [{cd, Package}]) of
         {error, _} = Error -> Error; 
-        {ok, Diff} ->
-            Size = size(Diff),
-            if
-                Size > 10240 -> {ok, binary:part(Diff, 0, 10239)};
-                true -> {ok, Diff}
-            end
+        {ok, Diff} -> {ok, Diff}
     end;
 
 
@@ -95,12 +90,7 @@ get_diff(_State, Package, _Branch, OldRevno, NewRevno) ->
     DiffCmd = format("git diff ~s ~s", [OldRevno, NewRevno]),
     case command(DiffCmd, [{cd, Package}]) of 
         {error, _} = Error -> Error;
-        {ok, Diff} ->
-            Size = size(Diff),
-            if
-                Size > 10240 -> {ok, binary:part(Diff, 0, 10239)};
-                true -> {ok, Diff}
-            end
+        {ok, Diff} -> {ok, Diff}
     end.
 
 
@@ -108,24 +98,14 @@ get_changelog(_State, Package, _Branch, Revno, NewRevno) when Revno == none; Rev
     LogCmd = format("git log ~s", [NewRevno]),
     case command(LogCmd, [{cd, Package}]) of
         {error, _} = Error -> Error;
-        {ok, Log} ->
-            Size = size(Log),
-            if
-                Size > 10240 -> {ok, binary:part(Log, 0, 10239)};
-                true -> {ok, Log}
-            end
+        {ok, Log} -> {ok, Log}
     end;
 
 get_changelog(_State, Package, _Branch, OldRevno, NewRevno) ->
     LogCmd = format("git log ~s..~s", [OldRevno, NewRevno]),
     case command(LogCmd, [{cd, Package}]) of
         {error, _} = Error -> Error;
-        {ok, Log} ->
-            Size = size(Log),
-            if
-                Size > 10240 -> {ok, binary:part(Log, 0, 10239)};
-                true -> {ok, Log}
-            end
+        {ok, Log} -> {ok, Log}
     end.
 
 
