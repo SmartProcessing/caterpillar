@@ -139,8 +139,7 @@ handle(#http_req{path=[<<"pkg_info">>, Name, Branch]}=Req, State) ->
                             ?GV("state", Res),
                             ?GV("depends", Res),
                             ?GV("has_in_deps", Res)
-                        ]))),
-            Res;
+                        ])));
         [{error, Reason}|_] ->
             list_to_binary(lists:flatten(io_lib:format("error: ~p~n", [Reason])));
         Reason ->
