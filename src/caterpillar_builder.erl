@@ -163,7 +163,7 @@ handle_call({worker_custom_command, pkg_info, [Name, Branch|_]}, _From, State) -
         _Other ->
             {error, <<"not found\n">>}
     end,
-    {reply, {ok, Res}, State};
+    {reply, Res, State};
 handle_call(_Request, _From, State) ->
     {reply, unknown, State}.
 
