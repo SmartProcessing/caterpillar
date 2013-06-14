@@ -103,7 +103,7 @@ handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
         work_id=RevDef#rev_def.work_id,
         packages=[DeployPkg]
     },
-    caterpillar_event:sync_event({deploy, Deploy}),
+    erlang:spawn(caterpillar_event, sync_event, [{deploy, Deploy}]),
     Subj = io_lib:format("#~B success: ~s/~s/~s", [
             RevDef#rev_def.work_id,
             binary_to_list(RevDef#rev_def.name),
