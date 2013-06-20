@@ -4,7 +4,7 @@
 -behaviour(gen_server).
 -export([start_link/1, state/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-         terminate/2, code_change/3, prepare/3]).
+         terminate/2, code_change/3, prepare/3, deploy/3]).
 
 -define(CPU, caterpillar_pkg_utils).
 -define(CU, caterpillar_utils).
@@ -92,7 +92,7 @@ handle_call({newref, RevDef}, _From, State) ->
     {reply, ok, NewState};
 handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
     ?CBS:update_dep_state(State#state.deps, RevDef, <<"built">>),
-    erlang:spawn(?MODULE, deploy, [RevDef, BuildInfo]),
+    erlang:spawn(?MODULE, deploy, [RevDef, BuildInfo, State]),
     NewWorkers = release_worker(Worker, State#state.workers),
     {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
     {ok, NewState} = try_build(ScheduledState),
@@ -545,7 +545,7 @@ update_work_id(File, Id) when is_integer(Id) ->
     file:close(Fd),
     Id.
 
-deploy(RevDef, BuildInfo) ->
+deploy(RevDef, BuildInfo, State) ->
     DeployPkg = #deploy_package{
         name = binary_to_list(RevDef#rev_def.name),
         branch = binary_to_list(RevDef#rev_def.branch),
