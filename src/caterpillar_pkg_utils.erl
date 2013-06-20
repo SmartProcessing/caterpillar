@@ -19,7 +19,7 @@ get_pkg_config_record(Archive, {control, Data}) ->
         section=?GV("Section", Data, "smprc"),
         package_t=["deb"],
         arch=?GV("Architecture", Data, "all"),
-        description=?GV("Description", Data, ""),
+        description=?GV("Description", Data, Archive#archive.name),
         maintainers=[?GV("Maintainer", Data, ["example@example.org"])],
         platform="default",
         deps=?GV("Depends", Data, [])
@@ -32,7 +32,7 @@ get_pkg_config_record(Archive, {config, Data}) ->
         package_t=?GV(package_plugin, Data, ["deb"]),
         arch=?GV(architecture, Data, "all"),
         maintainers=?GV(maintainers, Data, ["example@example.org"]),
-        description=?GV(description, Data, ""),
+        description=?GV(description, Data, Archive#archive.name),
         platform=?GV(platform_plugin, Data, "default"),
         deps=?GV(deps, Data, []),
         build_deps=?GV(build_deps, Data, [])
@@ -45,7 +45,7 @@ get_pkg_config_record(Archive, {empty, Data}) ->
         package_t=?GV("package_t", Data, ["deb"]),
         arch=?GV("architecture", Data, "all"),
         maintainers=?GV("maintainers", Data, ["example@example.org"]),
-        description=?GV("description", Data, ""),
+        description=?GV("description", Data, Archive#archive.name),
         platform=?GV("platform", Data, "default"),
         deps=?GV("deps", Data, []),
         build_deps=?GV("build_deps", Data, [])
