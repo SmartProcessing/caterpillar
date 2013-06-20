@@ -92,30 +92,7 @@ handle_call({newref, RevDef}, _From, State) ->
     {reply, ok, NewState};
 handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
     ?CBS:update_dep_state(State#state.deps, RevDef, <<"built">>),
-    DeployPkg = #deploy_package{
-        name = binary_to_list(RevDef#rev_def.name),
-        branch = binary_to_list(RevDef#rev_def.branch),
-        package = BuildInfo#build_info.pkg_name,
-        fd = BuildInfo#build_info.fd
-    },
-    Deploy = #deploy{
-        ident=State#state.ident,
-        work_id=RevDef#rev_def.work_id,
-        packages=[DeployPkg]
-    },
-    erlang:spawn(caterpillar_event, sync_event, [{deploy, Deploy}]),
-    Subj = io_lib:format("#~B success: ~s/~s/~s", [
-            RevDef#rev_def.work_id,
-            binary_to_list(RevDef#rev_def.name),
-            binary_to_list(RevDef#rev_def.branch),
-            binary_to_list(RevDef#rev_def.tag)
-        ]),
-    Message = io_lib:format(
-        "Mime-Version: 1.0\n"
-        "Content-type: text/html; charset=\"utf-8\"\n"
-        "built package: ~s\n"
-        "", [BuildInfo#build_info.pkg_name]),
-    notify(Subj, Message),
+    erlang:spawn(?MODULE, deploy, [RevDef, BuildInfo]),
     NewWorkers = release_worker(Worker, State#state.workers),
     {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
     {ok, NewState} = try_build(ScheduledState),
@@ -567,3 +544,29 @@ update_work_id(File, Id) when is_integer(Id) ->
     file:write(Fd, BStrId),
     file:close(Fd),
     Id.
+
+deploy(RevDef, BuildInfo) ->
+    DeployPkg = #deploy_package{
+        name = binary_to_list(RevDef#rev_def.name),
+        branch = binary_to_list(RevDef#rev_def.branch),
+        package = BuildInfo#build_info.pkg_name,
+        fd = BuildInfo#build_info.fd
+    },
+    Deploy = #deploy{
+        ident=State#state.ident,
+        work_id=RevDef#rev_def.work_id,
+        packages=[DeployPkg]
+    },
+    caterpillar_event:sync_event({deploy, Deploy}),
+    Subj = io_lib:format("#~B success: ~s/~s/~s", [
+            RevDef#rev_def.work_id,
+            binary_to_list(RevDef#rev_def.name),
+            binary_to_list(RevDef#rev_def.branch),
+            binary_to_list(RevDef#rev_def.tag)
+        ]),
+    Message = io_lib:format(
+        "Mime-Version: 1.0\n"
+        "Content-type: text/html; charset=\"utf-8\"\n"
+        "built package: ~s\n"
+        "", [BuildInfo#build_info.pkg_name]),
+    notify(Subj, Message).
