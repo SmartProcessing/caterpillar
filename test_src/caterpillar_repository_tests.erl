@@ -1196,7 +1196,7 @@ handle_call_changes_test_() ->
     end} || {Message, Request, Setup, Check, Result} <- [
         {
             "changes test",
-            {changes, #changes{packages=[#repository_package{}], archives=[#archive{}], notify=#notify{}}},
+            {changes, #changes{packages=[#repository_package{name="test", branch="test"}], archives=[#archive{}], notify=#notify{}}},
             #state{work_id_file="test_work_id_file", dets="test_d", work_id=1, ets=ets:new(t, [])},
             fun(#state{work_id_file=BIF, dets=D}) -> 
                 ?assertEqual(
@@ -1204,7 +1204,7 @@ handle_call_changes_test_() ->
                     2
                 ),
                 ?assertEqual(
-                    [{{undefined, undefined}, undefined, undefined, undefined, undefined, 2}],
+                    [{{"test", "test"}, undefined, undefined, undefined, undefined, 2}],
                     dets:select(D, [{'$1', [], ['$1']}])
                 )
             end,
