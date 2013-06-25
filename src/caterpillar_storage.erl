@@ -4,6 +4,7 @@
 
 -define(SERVER, ?MODULE).
 -define(DEFAULT_STORAGE, "/var/lib/smprc/caterpillar/storage").
+-define(DEFAULT_WORK_ID_FILE, "/var/lib/smprc/caterpillar/storage_work_id").
 -define(DTU, smprc_datetime_utils).
 -define(LIST_LENGTH, 30).
 
