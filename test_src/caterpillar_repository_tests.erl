@@ -703,7 +703,7 @@ build_changes_test_() ->
             "one successfuly processed package",
             [#repository_package{
                 name="package", branch="branch", archive_name="archive",
-                diff= <<"diff">>, changelog= <<"changelog">>
+                diff= <<"diff">>, changelog= <<"changelog">>, old_revno=old_revno, current_revno=current_revno
             }],
             {ok, #changes{
                 notify=#notify{
@@ -712,10 +712,10 @@ build_changes_test_() ->
                 },
                 packages = [#repository_package{
                     name="package", branch="branch", archive_name="archive",
-                    diff= <<>>, changelog= <<>>
+                    diff= <<>>, changelog= <<>>, old_revno=old_revno, current_revno=current_revno
                 }],
                 archives = [
-                    #archive{name="package", branch="branch", archive_name="archive"}
+                    #archive{name="package", branch="branch", archive_name="archive", old_revno=old_revno, current_revno=current_revno}
                 ]
             }}
         },
@@ -741,7 +741,7 @@ build_changes_test_() ->
             [
                 #repository_package{
                     name="package", branch="branch", archive_name="archive",
-                    diff= <<"diff">>, changelog= <<"changelog">>
+                    diff= <<"diff">>, changelog= <<"changelog">>, old_revno=old_revno, current_revno=current_revno
                 },
                 #repository_package{
                     name="p", branch="b", failed_at=somewhere, reason=some_error, status=error
@@ -759,14 +759,14 @@ build_changes_test_() ->
                 packages = [
                     #repository_package{
                         name="package", branch="branch", archive_name="archive",
-                        diff= <<>>, changelog= <<>>
+                        diff= <<>>, changelog= <<>>, old_revno=old_revno, current_revno=current_revno
                     },
                     #repository_package{
                         name="p", branch="b", failed_at=somewhere, reason=some_error, status=error
                     }
                 ],
                 archives = [
-                    #archive{name="package", branch="branch", archive_name="archive"}
+                    #archive{name="package", branch="branch", archive_name="archive", old_revno=old_revno, current_revno=current_revno}
                 ]
             }}
         }
