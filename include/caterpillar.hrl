@@ -9,6 +9,8 @@
     tag             :: term(), %tags
     archive_name    :: filelib:filename(), %name of archive file
     archive_type    :: zip|tar, %type of archive
+    old_revno       :: term(),
+    current_revno   :: term(), 
     fd              :: file:io_device() %file descriptor
 }).
 

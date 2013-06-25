@@ -166,8 +166,6 @@ handle_call({changes, Changes}, _From, State) ->
     NewWorkId = WorkId + 1,
     InsertForeach = fun
         (#repository_package{name=Name, branch=Branch, archive_name=Archive, archive_type=ArchiveType, current_revno=Revno, tag=Tag}) ->
-            caterpillar_event:event({start_build, [
-                        {list_to_binary(Name), list_to_binary(Branch)}, NewWorkId, Revno]}), 
             dets:insert(Dets, {{Name, Branch}, Archive, ArchiveType, Revno, Tag, NewWorkId});
         (BadPackage) ->
             error_logger:error_mad("bad package at changes: ~p", [BadPackage])
@@ -668,6 +666,8 @@ build_changes([Package|O], Notify, ArchiveAccum) ->
                 name=Name, branch=Branch,
                 archive_name=Package#repository_package.archive_name,
                 archive_type=Package#repository_package.archive_type,
+                old_revno=Package#repository_package.old_revno,
+                current_revno=Package#repository_package.current_revno,
                 tag=Package#repository_package.tag
             },
             {DiffLength, Diff} = limit_output(Package#repository_package.diff, 10240),
