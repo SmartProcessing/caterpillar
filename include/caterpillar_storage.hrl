@@ -1,7 +1,7 @@
 -type version() :: {binary(), binary()}.
 
 -type package_description() :: 
-{version(), description(), [build_id]}.
+{version(), description(), [build_id()]}.
 
 -type build_record() :: 
 {

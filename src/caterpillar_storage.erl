@@ -14,7 +14,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
--record(state, {storage='storage', registered=false}).
+-record(state, {storage='storage', registered=false, work_id=0}).
 
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
@@ -28,6 +28,22 @@ init(Settings) ->
             {ram_file, true}]),
     async_register(),
     {ok, #state{storage=Storage, registered=false}}.
+
+
+handle_call(storage_list_packages, From, State) ->
+    erlang:spawn(
+        fun() -> 
+            gen_server:reply(From, {ok, dets:match(State#state.storage, {'$1', '$2', ['$3'|'_']})})
+        end),
+    {noreply, State}.
+
+handle_call({storage_list_package_builds, Name}, From, State) ->
+    erlang:spawn(
+        fun() -> 
+            [Bids] = dets:match(State#state.storage, {{Name, '_'}, '_', '$1'}),
+            Res = [X || dets:match(State#state.storage, {
+        end),
+    {noreply, State}.
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
