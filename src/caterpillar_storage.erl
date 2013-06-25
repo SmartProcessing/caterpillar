@@ -50,6 +50,7 @@ handle_cast({store_start_build, [
             ?DTU:datetime_to_binary_string(calendar:universal_time()),
             <<"0000-00-00 00:00:00">>,
             CommitHash,
+            <<"...">>,
             <<"...">>
         }),
     {noreply, State};
@@ -74,6 +75,7 @@ handle_cast({store_progress_build, [
                     Start,
                     End,
                     CommitHash,
+                    <<"...">>,
                     <<"...">>
                 });
         _ ->
@@ -94,7 +96,8 @@ handle_cast({store_error_build, [
                     Start,
                     ?DTU:datetime_to_binary_string(calendar:universal_time()),
                     CommitHash,
-                    BuildLog
+                    BuildLog,
+                    <<"">>
                 });
         _ ->
             pass
@@ -105,6 +108,7 @@ handle_cast({store_complete_build, [
             complete,
             {Name, Branch},
             WorkId,
+            Package,
             BuildLog
         ]}, State=#state{storage=S}) ->
     case dets:lookup(S, {WorkId, {Name, Branch}}) of
@@ -115,7 +119,8 @@ handle_cast({store_complete_build, [
                     Start,
                     ?DTU:datetime_to_binary_string(calendar:universal_time()),
                     CommitHash,
-                    BuildLog
+                    BuildLog,
+                    Package
                 });
         _ ->
             pass
