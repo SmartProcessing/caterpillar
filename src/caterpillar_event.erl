@@ -81,6 +81,15 @@ handle_cast({event, {clean_packages, _}=Event}, #state{ets=Ets}=State) ->
     end),
     {noreply, State};
 
+handle_cast({event, {Cmd, _}=Request}, #state{ets=Ets}=State) when
+    Cmd == store_start_build;
+    Cmd == store_progress_build;
+    Cmd == store_error_build;
+    Cmd == store_complete_build
+->
+    async_event_to_service(storage, Ets, Request),
+    {noreply, State};
+
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
@@ -219,3 +228,9 @@ sync_event_to_service(Service, From, Ets, Request) ->
         end,
         gen_server:reply(From, Reply)
     end).
+
+async_event_to_service(Service, Ets, Request) ->
+    Reply = case catch select_service(Ets, Service) of
+        {ok, Pid} -> catch gen_server:cast(Pid, Request);
+        Error -> Error
+    end.
