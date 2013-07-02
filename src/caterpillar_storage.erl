@@ -107,8 +107,7 @@ handle_cast({store_start_build, [
 handle_cast({store_progress_build, [
             {Name, Branch},
             WorkId,
-            Description,
-            BuildMessage
+            Description
         ]}, State=#state{storage=S}) ->
     case dets:lookup(S, {Name, Branch}) of
         [] ->

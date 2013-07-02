@@ -92,6 +92,12 @@ handle_call({newref, RevDef}, _From, State) ->
     {reply, ok, NewState};
 handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
     ?CBS:update_dep_state(State#state.deps, RevDef, <<"built">>),
+    caterpillar_event:event({store_complete_build, [
+        {RevDef#rev_def.name, RevDef#rev_def.branch}, 
+        RevDef#rev_def.work_id,
+        BuildInfo#build_info.pkg_name,
+        <<"everything ok">>
+    ]}),
     erlang:spawn(?MODULE, deploy, [RevDef, BuildInfo, State]),
     NewWorkers = release_worker(Worker, State#state.workers),
     {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
@@ -99,6 +105,11 @@ handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
     {reply, ok, NewState};
 handle_call({err_built, Worker, RevDef, BuildInfo}, _From, State) ->
     error_logger:info_msg("error built: ~p~n", [BuildInfo]),
+    caterpillar_event:event({store_error_build, [
+        {RevDef#rev_def.name, RevDef#rev_def.branch}, 
+        RevDef#rev_def.work_id,
+        BuildInfo#build_info.description
+    ]}),
     Subj = io_lib:format("#~B error: ~s/~s/~s", [
             RevDef#rev_def.work_id,
             binary_to_list(RevDef#rev_def.name),
@@ -271,6 +282,11 @@ prepare(BuildPath, Archive, WorkId) ->
                     exit(no_pkg_config);
                 PkgRecord = #pkg_config{} ->
                     RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId),
+                    caterpillar_event:event({store_start_build, [
+                        {RevDef#rev_def.name, RevDef#rev_def.branch}, 
+                        RevDef#rev_def.work_id,
+                        Archive#archive.current_revno
+                    ]}),
                     gen_server:call(caterpillar_builder, {newref, RevDef}, infinity)
             end;
         Other ->
@@ -432,6 +448,11 @@ extract_candidate(QType, State) ->
 
 submit_next_to_build(QType, Queue, Candidate, State) ->
     ?CBS:update_dep_state(State#state.deps, Candidate, <<"in_progress">>),
+    caterpillar_event:event({store_progress_build, [
+        {Candidate#rev_def.name, Candidate#rev_def.branch}, 
+        Candidate#rev_def.work_id,
+        Candidate#rev_def.pkg_config#pkg_config.description
+    ]}),
     case QType of
         main_queue ->
             {ok, State#state{
