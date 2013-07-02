@@ -140,11 +140,11 @@ handle_cast({store_error_build, [
             WorkId,
             BuildLog
         ]}, State=#state{storage=S}) ->
-    Link = case gen_server:call({ceptaculum, State#state.ceptaculum}, {put_file, [BuildLog, [{compress, true}]]}, 10000) of
+    Link = case catch gen_server:call({ceptaculum, State#state.ceptaculum}, {put_file, [BuildLog, [{compress, true}]]}, 10000) of
         {[{ok, L}|_], _} ->
             L;
         _Other ->
-            no_log
+            <<"no_log">>
     end,
     case dets:lookup(S, {WorkId, {Name, Branch}}) of
         [{_, _, Start, _, CommitHash, _}] ->
