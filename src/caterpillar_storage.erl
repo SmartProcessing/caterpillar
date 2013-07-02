@@ -20,7 +20,8 @@
         storage='storage', 
         registered=false,
         work_id=0,
-        work_id_file="./work_id"
+        work_id_file="./work_id",
+        ceptaculum='ceptaculum@127.0.0.1'
     }).
 
 start_link() ->
@@ -35,12 +36,15 @@ init(Settings) ->
             {ram_file, true}]),
     WorkIdFile = ?GV(work_id, Settings, ?DEFAULT_WORK_ID_FILE),
     WorkId = get_work_id(WorkIdFile),
+    Ceptaculum = ?GV(ceptaculum, Settings, 'ceptaculum@127.0.0.1'),
     async_register(),
     {ok, #state{
             storage=Storage,
             registered=false,
             work_id=WorkId,
-            work_id_file=WorkIdFile}}.
+            work_id_file=WorkIdFile,
+            ceptaculum=Ceptaculum
+        }}.
 
 
 handle_call(storage_list_packages, From, State) ->
@@ -136,6 +140,12 @@ handle_cast({store_error_build, [
             WorkId,
             BuildLog
         ]}, State=#state{storage=S}) ->
+    Link = case gen_server:call({ceptaculum, State#state.ceptaculum}, {put_file, [BuildLog, [{compress, true}]]}, 10000) of
+        {[{ok, L}|_], _} ->
+            L;
+        _Other ->
+            no_log
+    end,
     case dets:lookup(S, {WorkId, {Name, Branch}}) of
         [{_, _, Start, _, CommitHash, _}] ->
             dets:insert(S, {
@@ -144,7 +154,7 @@ handle_cast({store_error_build, [
                     Start,
                     ?DTU:datetime_to_binary_string(calendar:universal_time()),
                     CommitHash,
-                    BuildLog,
+                    Link,
                     <<"">>
                 });
         _ ->
