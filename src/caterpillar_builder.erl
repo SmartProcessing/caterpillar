@@ -523,6 +523,11 @@ check_build_deps(Candidate, State) ->
                         ]),
                     Body = io_lib:format("missing dependencies: ~p~n", [Dependencies]),
                     notify(Subj, Body),
+                    caterpillar_event:event({store_error_build, [
+                        {Candidate#rev_def.name, Candidate#rev_def.branch}, 
+                        Candidate#rev_def.work_id,
+                        list_to_binary(Body)
+                    ]}),
                     missing
             end;
         {error, Res} ->

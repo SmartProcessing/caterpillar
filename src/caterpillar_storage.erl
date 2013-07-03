@@ -31,9 +31,10 @@ start_link(Settings) ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, Settings, []).
 
 init(Settings) ->
+    error_logger:info_msg("initialized storage: ~p~n", [?GV(storage, Settings)]),
+    filelib:ensure_dir(?GV(storage, Settings)),
     {ok, Storage} = dets:open_file(storage, [
-            {file, ?GV(storage, Settings, ?DEFAULT_STORAGE)},
-            {ram_file, true}]),
+            {file, ?GV(storage, Settings, ?DEFAULT_STORAGE)}]),
     WorkIdFile = ?GV(work_id, Settings, ?DEFAULT_WORK_ID_FILE),
     WorkId = get_work_id(WorkIdFile),
     Ceptaculum = ?GV(ceptaculum, Settings, 'ceptaculum@127.0.0.1'),
@@ -117,10 +118,10 @@ handle_cast({store_progress_build, [
         [] ->
             dets:insert(S, {{Name, Branch}, Description, [WorkId]});
         [{_, _, Bids}] ->
-            dets:insert(S, {{Name, Branch}, Description, [Bids]})
+            dets:insert(S, {{Name, Branch}, Description, Bids})
     end,
     case dets:lookup(S, {WorkId, {Name, Branch}}) of
-        [{_, _, Start, End, CommitHash, _}] ->
+        [{_, _, Start, End, CommitHash, _, _}] ->
             dets:insert(S, {
                     {WorkId, {Name, Branch}},
                     <<"in_progress">>,
@@ -141,13 +142,14 @@ handle_cast({store_error_build, [
             BuildLog
         ]}, State=#state{storage=S}) ->
     Link = case catch gen_server:call({ceptaculum, State#state.ceptaculum}, {put_file, [BuildLog, [{compress, true}]]}, 10000) of
-        {[{ok, L}|_], _} ->
+        {[{_, {ok, L}}|_], _} ->
             L;
-        _Other ->
+        Other ->
+            error_logger:info_msg("failed to store build log: ~p~n", [Other]),
             <<"no_log">>
     end,
     case dets:lookup(S, {WorkId, {Name, Branch}}) of
-        [{_, _, Start, _, CommitHash, _}] ->
+        [{_, _, Start, _, CommitHash, _, _}|_] ->
             dets:insert(S, {
                     {WorkId, {Name, Branch}},
                     <<"error">>,
@@ -163,14 +165,13 @@ handle_cast({store_error_build, [
     {noreply, State};
 
 handle_cast({store_complete_build, [
-            complete,
             {Name, Branch},
             WorkId,
             Package,
             BuildLog
         ]}, State=#state{storage=S}) ->
     case dets:lookup(S, {WorkId, {Name, Branch}}) of
-        [{_, _, Start, _, CommitHash, _}] ->
+        [{_, _, Start, _, CommitHash, _, _}] ->
             dets:insert(S, {
                     {WorkId, {Name, Branch}},
                     <<"success">>,
