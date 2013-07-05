@@ -4,7 +4,7 @@
 -behaviour(gen_server).
 -export([start_link/1, state/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-         terminate/2, code_change/3, prepare/3, deploy/3]).
+         terminate/2, code_change/3, prepare/4, deploy/3]).
 
 -define(CPU, caterpillar_pkg_utils).
 -define(CU, caterpillar_utils).
@@ -92,7 +92,7 @@ handle_call({newref, RevDef}, _From, State) ->
     {reply, ok, NewState};
 handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
     ?CBS:update_dep_state(State#state.deps, RevDef, <<"built">>),
-    caterpillar_event:event({store_complete_build, [
+    caterpillar_event:event({store_complete_build, [State#state.ident,
         {RevDef#rev_def.name, RevDef#rev_def.branch}, 
         RevDef#rev_def.work_id,
         BuildInfo#build_info.pkg_name,
@@ -105,7 +105,7 @@ handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
     {reply, ok, NewState};
 handle_call({err_built, Worker, RevDef, BuildInfo}, _From, State) ->
     error_logger:info_msg("error built: ~p~n", [BuildInfo]),
-    caterpillar_event:event({store_error_build, [
+    caterpillar_event:event({store_error_build, [State#state.ident,
         {RevDef#rev_def.name, RevDef#rev_def.branch}, 
         RevDef#rev_def.work_id,
         BuildInfo#build_info.description
@@ -233,25 +233,25 @@ code_change(_OldVsn, State, _Extra) ->
 
 %% Preprocessing
 process_archives([], State, _WorkId) -> {ok, State};
-process_archives([A|O], #state{unpack_state=UnpackState, build_path=BuildPath}=State, WorkId) ->
+process_archives([A|O], #state{unpack_state=UnpackState, build_path=BuildPath, ident=Ident}=State, WorkId) ->
     Vsn = ?CPU:get_archive_version(A),
     case can_prepare(A, State) of
         true ->
             Preparing = [Vsn|State#state.queued],
             Prebuild = State#state.prebuild,
-            process_archive(BuildPath, A, UnpackState, WorkId);
+            process_archive(BuildPath, A, UnpackState, WorkId, Ident);
         false ->
             Preparing = State#state.queued,
             Prebuild = lists:ukeysort(1, [{Vsn, A, WorkId}|State#state.prebuild])
     end,
     process_archives(O, State#state{queued=Preparing, prebuild=Prebuild}, WorkId).
 
-process_archive(BuildPath, Archive, UnpackState, WorkId) ->
-    {_Pid, Monitor} = erlang:spawn_monitor(?MODULE, prepare, [BuildPath, Archive, WorkId]),
+process_archive(BuildPath, Archive, UnpackState, WorkId, Ident) ->
+    {_Pid, Monitor} = erlang:spawn_monitor(?MODULE, prepare, [BuildPath, Archive, WorkId, Ident]),
     ets:insert(UnpackState, {Monitor, ?CPU:get_archive_version(Archive)}).
 
 
-prepare(BuildPath, Archive, WorkId) ->
+prepare(BuildPath, Archive, WorkId, Ident) ->
     Vsn = ?CPU:get_archive_version(Archive),
     TempName = get_temp_name(Vsn),
     TempArch = filename:join([BuildPath, "temp", TempName]) ++ "." ++ "tmp",
@@ -282,7 +282,7 @@ prepare(BuildPath, Archive, WorkId) ->
                     exit(no_pkg_config);
                 PkgRecord = #pkg_config{} ->
                     RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId),
-                    caterpillar_event:event({store_start_build, [
+                    caterpillar_event:event({store_start_build, [Ident,
                         {RevDef#rev_def.name, RevDef#rev_def.branch}, 
                         RevDef#rev_def.work_id,
                         Archive#archive.current_revno
@@ -448,7 +448,7 @@ extract_candidate(QType, State) ->
 
 submit_next_to_build(QType, Queue, Candidate, State) ->
     ?CBS:update_dep_state(State#state.deps, Candidate, <<"in_progress">>),
-    caterpillar_event:event({store_progress_build, [
+    caterpillar_event:event({store_progress_build, [State#state.ident,
         {Candidate#rev_def.name, Candidate#rev_def.branch}, 
         Candidate#rev_def.work_id,
         Candidate#rev_def.pkg_config#pkg_config.description
@@ -523,7 +523,7 @@ check_build_deps(Candidate, State) ->
                         ]),
                     Body = io_lib:format("missing dependencies: ~p~n", [Dependencies]),
                     notify(Subj, Body),
-                    caterpillar_event:event({store_error_build, [
+                    caterpillar_event:event({store_error_build, [State#state.ident,
                         {Candidate#rev_def.name, Candidate#rev_def.branch}, 
                         Candidate#rev_def.work_id,
                         list_to_binary(Body)

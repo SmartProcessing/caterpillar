@@ -1,17 +1,20 @@
 -type version() :: {binary(), binary()}.
 
 -type package_description() :: 
-{version(), description(), [build_id()]}.
+{{ident(), version()}, description(), [build_id()]}.
 
 -type build_record() :: 
 {
-    {build_id(), version()},
+    {ident(), build_id(), version()},
     state(),
     smprc_datetime_utils:datetime(),
     smprc_datetime_utils:datetime(),
     commit_hash(),
     build_log(),
-    package_name()}.
+    package_name()
+}.
+
+-type ident() :: atom().
 
 -type build_id() :: integer().
 
