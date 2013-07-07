@@ -45,26 +45,19 @@ init_ets_test_() ->
             Ets = (catch caterpillar_deploy:init_ets(Data)),
             ?assertEqual(
                 Result,
-                [
-                    {{Ident, Branch}, lists:last(filename:split(Path))} ||
-                    {{Ident, Branch}, Path} <- lists:sort(ets:tab2list(Ets))
-                ]
+                [{Ident, lists:last(filename:split(Path))} || {Ident, Path} <- lists:sort(ets:tab2list(Ets))]
             )
         end}
     end} || {Message, Setup, Result} <- [
         {
-            "check default deploy in",
+            "no paths",
             [],
-            [{{default, default}, "unknown"}]
+            []
         },
         {
             "some idents in cfg, but without default values",
-            [{amd64, [{branch, "__test_amd"}]}],
-            [
-                {{amd64, branch} ,"__test_amd"},
-                {{amd64, default}, "unknown"},
-                {{default, default}, "unknown"}
-            ]
+            [{os_type, [{amd64, [{branch, "__test_amd"}]}]}],
+            [{{os_type, branch, amd64}, "__test_amd"}]
         }
     ]
 ]}.
@@ -83,56 +76,42 @@ find_deploy_paths_test_() ->
     end,
     fun(Idents, #state{ets=Ets}) ->
         ets:delete(Ets),
-        lists:foreach(
-            fun({Ident, Branches}) ->
-                [caterpillar_utils:del_dir(Branch) || {_, Branch} <- Branches]
-            end,
-            Idents
-        )
+        lists:foreach(fun({Ident, _Arches}) -> caterpillar_utils:del_dir(Ident) end, Idents)
     end,
 [
     {Idents, fun(_, State) ->
         {Message, fun() ->
-            R = caterpillar_deploy:find_deploy_paths(Deploy, State),
-            ?assertMatch(
-                {ok, {_, #deploy{}}},
-                R
-            ),
+            R = (catch caterpillar_deploy:find_deploy_paths(Deploy, State)),
+            ?assertMatch({ok, {_, #deploy{}}}, R),
             {ok, {Paths, _}} = R,
-            ?assertEqual(
-                Result,
-                lists:sort([
-                    {{Ident, Branch}, lists:last(filename:split(Path))} ||
-                    {{Ident, Branch}, Path} <- Paths
-                ])
-            )
+            ?assertEqual(Result, Paths)
         end}
     end} || {Message, Idents, Deploy, Result} <- [
         {
             "default values selected",
-            [],
-            #deploy{ident=test},
-            [{{default, default}, "unknown"}]
+            [{default, [{default, [{default, filename:absname("unknown")}]}]}],
+            #deploy{ident=#ident{type=test}},
+            [{{default, default, default}, filename:absname("unknown")}]
         },
         {
             "some paths found for ident",
-            [{test, [{test, "__test_test"}]}],
-            #deploy{ident=test},
+            [{test, [{test, [{branch, filename:absname("__test_test")}]}]}],
+            #deploy{ident=#ident{type=test, arch=test}},
             [
-                {{default, default}, "unknown"},
-                {{test, default}, "unknown"},
-                {{test, test}, "__test_test"}
+                {{test, branch, test}, filename:absname("__test_test")}
             ]
         },
         {
             "some idents in ets, but no path for 'x' ident",
-            [{test, [{test, "__test_test"}]}],
-            #deploy{ident=x},
             [
-                {{default, default}, "unknown"}
+                {test, [{test, [{test, filename:absname("__test_test")}]}]},
+                {default, [{default, [{default, filename:absname("unknown")}]}]}
+            ],
+            #deploy{ident=#ident{type=x, arch=x}},
+            [
+                {{default, default, default}, filename:absname("unknown")}
             ]
         }
-        
     ]
 ]}.
 
@@ -164,43 +143,28 @@ copy_packages_test_() ->
     end} || {Message, Paths, Deploy, Check} <- [
         {
             "no default path for test, but default/default exists",
-            [{{default, default}, "__test"}],
-            #deploy{packages=[], ident=test},
-            fun(Result, _) ->
-                ?assertMatch(
-                    {ok, #deploy{}},
-                    Result
-                )
-            end
+            [{{default, default, default}, "__test"}],
+            #deploy{packages=[], ident=#ident{arch=test}},
+            fun(Result, _) -> ?assertMatch({ok, #deploy{}}, Result) end
         },
         {
             "no default path for test, no default/default exists",
             [],
-            #deploy{packages=[], ident=test},
-            fun(Result, _) ->
-                ?assertEqual(
-                    {'EXIT', {no_value, {default, default}}},
-                    Result
-                )
-            end
+            #deploy{packages=[], ident=#ident{arch=test}},
+            fun(Result, _) -> ?assertEqual({'EXIT', {copy_packages, no_default_path}}, Result) end
             
         },
         {
             "nothing to copy",
-            [{{test, default}, "__test"}], 
-            #deploy{packages=[], ident=test},
-            fun(Result, _) ->
-                ?assertMatch(
-                    {ok, #deploy{}},
-                    Result
-                )
-            end
+            [{{type, default, arch}, "__test"}], 
+            #deploy{packages=[], ident=#ident{type=type, arch=arch}},
+            fun(Result, _) -> ?assertMatch({ok, #deploy{}}, Result) end
         },
         {
             "some packages copied",
             [
-                {{test, test}, "__test_test"},
-                {{test, default}, "__test_default"}
+                {{test, test, test}, "__test_test"},
+                {{test, default, test}, "__test_default"}
             ],
             #deploy{
                 packages=[
@@ -217,25 +181,17 @@ copy_packages_test_() ->
                         {"package3", "name3", trunk}
                     ]
                 ],
-                ident = test
+                ident = #ident{type=test, arch=test}
             },
             fun(Result, #state{dets=D}) ->
+                ?assertMatch({ok, #deploy{}}, Result),
                 ?assertMatch(
-                    {ok, #deploy{}},
-                    Result
-                ),
-                ?assertEqual(
                     [
-                        {test, "__test_default/package3", "name3", trunk},
-                        {test, "__test_test/package1", "name1", test},
-                        {test, "__test_test/package2", "name2", test}
+                        {{test, test, "__test_default/package3"}, {"name3", trunk}, _},
+                        {{test, test, "__test_test/package1"}, {"name1", test}, _},
+                        {{test, test, "__test_test/package2"}, {"name2", test}, _}
                     ],
-                    lists:sort(
-                        [
-                            {Ident, Package, Name, Branch} || 
-                            [{{Ident, Package}, {Name, Branch}, _}] <- dets:match(D, '$1')
-                        ]
-                    )
+                    lists:sort(lists:flatten(dets:match(D, '$1')))
                 ),
                 {ok, Default} = file:list_dir("__test_default"),
                 {ok, Test} = file:list_dir("__test_test"),
@@ -303,28 +259,16 @@ run_post_deploy_test_() ->
 ]}. 
 
 
-
-cast_rotate_test() ->
-    caterpillar_deploy:cast_rotate(deploy, state),
-    ?assertMatch(
-        {_, {rotate, deploy}},
-        receive Msg -> Msg after 50 -> timeout end
-    ).
-
-
-
-%FIXME:
-
-rotate_test_() ->
+rotate_packages_test_() ->
 {foreachx,
     fun(Packages) -> 
         caterpillar_utils:ensure_dir("__test_packages"),
         {ok, D} = dets:open_file("__test_dets.deploy", [{access, read_write}]),
         lists:foreach(
-            fun({Ident, Package, Name, Branch, Time}) ->
+            fun({Type, Arch, Package, Name, Branch, Time}) ->
                 filelib:ensure_dir(Package),
                 file:write_file(Package, Name),
-                dets:insert(D, {{Ident, Package}, {Name, Branch}, Time})
+                dets:insert(D, {{Type, Arch, Package}, {Name, Branch}, Time})
             end,
             Packages
         ),
@@ -338,42 +282,37 @@ rotate_test_() ->
 [
     {Packages, fun(_, State) ->
         {Message, fun() ->
-            ?assertEqual(
-                ok,
-                caterpillar_deploy:rotate(Deploy, State)
-            ),
+            Result = (catch caterpillar_deploy:rotate_packages(Deploy, State)),
+            ?assertEqual(ok, Result),
             Check(State)
         end}
     end} || {Message, Packages, Deploy, Check} <- [
         {
             "no package rotated",
             [],
-            #deploy{},
+            #deploy{ident=#ident{type=type, arch=arch}},
             fun(_) -> ok end
         },
         {
             "some package rotated, some not",
             [
-                {test, "__test_packages/p1", "p1", "b1", 1},
-                {test, "__test_packages/p1_1", "p1", "b1", 2},
-                {test, "__test_packages/p1_2", "p1", "b1", 3},
-                {default, "__test_packages/p1_1", "p1", "b1", 2}
+                {test, test, "__test_packages/p1", "p1", "b1", 1},
+                {test, test, "__test_packages/p1_1", "p1", "b1", 2},
+                {test, test, "__test_packages/p1_2", "p1", "b1", 3},
+                {default, test, "__test_packages/p1_1", "p1", "b1", 2}
             ],
-            #deploy{ident=test, packages=[#deploy_package{name="p1", branch="b1"}]},
+            #deploy{ident=#ident{type=test, arch=test}, packages=[#deploy_package{name="p1", branch="b1"}]},
             fun(#state{dets=D}) ->
                 ?assertEqual(
                     [
-                        [{{default, "__test_packages/p1_1"}, {"p1", "b1"}, 2}],
-                        [{{test, "__test_packages/p1_1"}, {"p1", "b1"}, 2}],
-                        [{{test,"__test_packages/p1_2"}, {"p1","b1"}, 3}]
+                        {{default, test, "__test_packages/p1_1"}, {"p1", "b1"}, 2},
+                        {{test, test, "__test_packages/p1_1"}, {"p1", "b1"}, 2},
+                        {{test, test, "__test_packages/p1_2"}, {"p1","b1"}, 3}
                     ],
-                    lists:sort(dets:match(D, '$1'))
+                    lists:flatten(lists:sort(dets:match(D, '$1')))
                 ),
                 {ok, Listing} = file:list_dir("__test_packages"),
-                ?assertEqual(
-                    ["p1_1", "p1_2"],
-                    lists:sort(Listing)
-                )
+                ?assertEqual(["p1_1", "p1_2"], lists:sort(Listing))
             end
         }
 

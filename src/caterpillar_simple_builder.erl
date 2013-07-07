@@ -104,7 +104,7 @@ unarchive([ #archive{name=Name, branch=Branch, archive_name=AR, archive_type=Arc
     ArchiveRoot = State#state.archive_root,
     RepositoryRoot = State#state.repository_root,
     ArchivePath = caterpillar_utils:filename_join([ArchiveRoot, AR]),
-    UnArchivePath = caterpillar_utils:filename_join([RepositoryRoot, Name, Branch]),
+    UnArchivePath = caterpillar_utils:filename_join([RepositoryRoot, Branch, Name]),
     caterpillar_utils:del_dir(UnArchivePath),
     caterpillar_utils:ensure_dir(UnArchivePath),
     case caterpillar_archive:extract(ArchivePath, [{cwd, UnArchivePath}, {type, ArchiveType}]) of
@@ -139,7 +139,7 @@ make_packages(Archives, State) ->
 
 make_packages([], Accum, _State) ->  {ok, Accum};
 make_packages([ #build_package{name=Name, branch=Branch}=Package|T ], Accum, #state{next_work_id=WorkId}=State) ->
-    UnArchivePath = caterpillar_utils:filename_join([State#state.repository_root, Name, Branch]),
+    UnArchivePath = caterpillar_utils:filename_join([State#state.repository_root, Branch, Name]),
     ControlFile = caterpillar_utils:filename_join(UnArchivePath, "control"),
     case filelib:is_regular(ControlFile) of
         true -> catch modify_control(ControlFile, Branch, WorkId, State#state.ident);

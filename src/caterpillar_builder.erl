@@ -490,9 +490,19 @@ submit_missing(QType, Queue, Candidate, State) ->
 
 %% External communication
 %% ------------------------------------------------------------------
+
+-spec get_notify_message(Subject::binary()|string(), Body::binary()|string()) -> #notify{}.
+get_notify_message(Subject, Body) ->
+    ToBin = fun
+        (X) when is_list(X) -> list_to_binary(X);
+        (X) when is_binary(X) -> X
+    end,
+    #notify{subject=ToBin(Subject), body=ToBin(Body)}.
+
+
 -spec notify(list(), list()) -> ok.
 notify(Subject, Body) ->
-    Notify = #notify{subject=list_to_binary(Subject), body=list_to_binary(Body)},
+    Notify = get_notify_message(Subject, Body),
     caterpillar_event:sync_event({notify, Notify}).
 
 -spec check_build_deps(Candidate :: #rev_def{}, State :: #state{}) -> 
@@ -556,6 +566,8 @@ ask_for_rebuild(Dependencies, State) ->
             end
         end, Dependencies).
 
+
+%FIXME: caterpillar_utils:read_work_id?
 get_work_id(File) ->
     case file:consult(File) of
         {ok, [Id]} when is_integer(Id) ->
@@ -564,12 +576,14 @@ get_work_id(File) ->
             update_work_id(File, 0)
     end.
 
+%FIXME: caterpillar_utils:write_work_id ?
 update_work_id(File, Id) when is_integer(Id) ->
     BStrId = list_to_binary(io_lib:format("~B.", [Id])),
     {ok, Fd} = file:open(File, [write]),
     file:write(Fd, BStrId),
     file:close(Fd),
     Id.
+
 
 deploy(RevDef, BuildInfo, State) ->
     DeployPkg = #deploy_package{
@@ -578,21 +592,22 @@ deploy(RevDef, BuildInfo, State) ->
         package = BuildInfo#build_info.pkg_name,
         fd = BuildInfo#build_info.fd
     },
-    Deploy = #deploy{
-        ident=State#state.ident,
-        work_id=RevDef#rev_def.work_id,
-        packages=[DeployPkg]
-    },
-    caterpillar_event:sync_event({deploy, Deploy}),
     Subj = io_lib:format("#~B success: ~s/~s/~s", [
-            RevDef#rev_def.work_id,
-            binary_to_list(RevDef#rev_def.name),
-            binary_to_list(RevDef#rev_def.branch),
-            binary_to_list(RevDef#rev_def.tag)
-        ]),
+        RevDef#rev_def.work_id,
+        binary_to_list(RevDef#rev_def.name),
+        binary_to_list(RevDef#rev_def.branch),
+        binary_to_list(RevDef#rev_def.tag)
+    ]),
     Message = io_lib:format(
         "Mime-Version: 1.0\n"
         "Content-type: text/html; charset=\"utf-8\"\n"
         "built package: ~s\n"
-        "", [BuildInfo#build_info.pkg_name]),
-    notify(Subj, Message).
+        "", [BuildInfo#build_info.pkg_name]
+    ),
+    Deploy = #deploy{
+        ident=State#state.ident,
+        work_id=RevDef#rev_def.work_id,
+        packages=[DeployPkg],
+        post_deploy_actions = [{caterpillar_event, sync_event, [{notify, get_notify_message(Subj, Message)}]}]
+    },
+    caterpillar_event:sync_event({deploy, Deploy}).

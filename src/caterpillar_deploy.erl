@@ -22,13 +22,19 @@ stop() ->
 
 init(Args) ->
     DetsFile = proplists:get_value(deploy_db, Args, ?DEPLOY_DATABASE),
+    DeployScriptDelay = proplists:get_value(deploy_script_delay, Args, 10),
+    DeployScriptMaxWaiting = proplists:get_value(deploy_script_max_waiting, Args, 2),
+    DeployPath = check_deploy_path(proplists:get_value(deploy_path, Args, ?DEFAULT_DEPLOY_PATH)),
     filelib:ensure_dir(DetsFile),
     {ok, Dets} = dets:open_file(DetsFile, [{access, read_write}]),
     State = #state{
-        ets = init_ets(proplists:get_value(idents, Args, [])),
+        ets = init_ets(proplists:get_value(idents, Args, []), DeployPath),
         dets = Dets,
         deploy_script = proplists:get_value(deploy_script, Args),
-        rotate = proplists:get_value(rotate, Args, 1)
+        rotate = proplists:get_value(rotate, Args, 1),
+        deploy_script_delay = DeployScriptDelay,
+        deploy_info = [],
+        deploy_max_waiting = DeployScriptMaxWaiting
     },
     register_as_service(0),
     {ok, State}.
@@ -47,13 +53,13 @@ handle_info(register_as_service, #state{registered=false}=State) ->
             State
     end,
     {noreply, NewState};
+handle_info(run_deploy, State) ->
+    run_deploy(State),
+    {noreply, State};
 handle_info(_Message, State) ->
     {noreply, State}.
 
 
-handle_cast({rotate, Deploy}, State) ->
-    rotate(Deploy, State),
-    {noreply, State};
 handle_cast(_Message, State) ->
     {noreply, State}.
 
@@ -61,8 +67,10 @@ handle_cast(_Message, State) ->
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 
-handle_call({deploy, #deploy{}=D}, _, State) ->
-    {reply, deploy(D, State), State};
+handle_call({deploy, #deploy{}=Deploy}, _, State) ->
+    NewState = init_deploy(Deploy, State),
+    copy_deploy(Deploy, State),
+    {reply, ok, NewState};
 
 handle_call(_Message, _From, State) ->
     {reply, {error, bad_msg}, State}.
@@ -82,71 +90,105 @@ code_change(_OldVsn, State, _Extra) ->
 %----------
 
 
+check_deploy_path(Path) ->
+    case Path of
+        "/" ++ _ -> Path;
+        _ -> exit({check_deploy_path, {bad_path, Path}})
+    end.
+
+
 register_as_service(Delay) ->
     erlang:send_after(Delay, self(), register_as_service).
 
 
 init_ets(Idents) ->
-    Ets = ets:new(?MODULE, [protected, named_table]),
-    ets:insert(Ets, {{default, default}, ?DEPLOY_DEFAULT_PATH}),
-    case is_list(Idents) of
-        true ->
-            InsertFun = fun({Ident, Branches}) ->
-                Flag = lists:foldl(
-                    fun({Branch, Path}, Bool) ->
-                        AbsPath = caterpillar_utils:ensure_dir(Path),
-                        ets:insert(Ets, {{Ident, Branch}, AbsPath}),
-                        case {Bool, Branch} of
-                            {false, default} -> true;
-                            {true, _} -> true;
-                            _ -> false
-                        end
-                    end,
-                    false,
-                    Branches
-                ),
-                case Flag of 
-                    false -> ets:insert(Ets, {{Ident, default}, ?DEPLOY_DEFAULT_PATH});
-                    _ -> ok
-                end
-            end,
-            lists:foreach(InsertFun, Idents);
-        false ->
-            error_logger:error_msg("bad idents type: ~p~n", [Idents])
+    init_ets(Idents, ?DEFAULT_DEPLOY_PATH).
+
+
+init_ets(Idents, DeployPath) ->
+    ToAbsPath = fun(Path) ->
+        case Path of
+            "/" ++ _ -> Path;
+            _ -> filename:join(DeployPath, Path)
+        end
     end,
+    Ets = ets:new(?MODULE, [protected, named_table]),
+    [
+        ets:insert(Ets, {{Type, Branch, Arch}, ToAbsPath(Path)}) || 
+        {Type, Archs} <- Idents, {Arch, Branches} <- Archs, {Branch, Path} <- Branches
+    ],
     Ets.
 
 
+%-----
 
-%---------- deploy pipe ----------%
+
+init_deploy(#deploy{}=Deploy, State) ->
+    #state{
+        deploy_script_delay = Delay, deploy_script_timer=Timer, 
+        deploy_info=Info, deploy_max_waiting=MaxWaiting
+    }=State,
+    NewInfo = [Deploy|MaxWaiting],
+    NewTimer = case MaxWaiting >= length(NewInfo) of
+        true ->
+            Timer;
+        false ->
+            catch erlang:cancel_timer(Timer),
+            erlang:send_after(Delay, ?MODULE, run_deploy)
+    end,
+    State#state{deploy_script_timer=NewTimer, deploy_info=NewInfo}.
 
 
-deploy(Deploy, State) ->
+%-----
+
+
+-spec copy_packages(#deploy{}, #state{}) -> {ok, done}|{error, term()}.
+copy_deploy(Deploy, State) ->
     FunList = [
         {run_pre_deploy, fun run_pre_deploy/2},
         {find_deploy_paths, fun find_deploy_paths/2},
         {copy_packages, fun copy_packages/2},
-        {run_deploy_script, fun run_deploy_script/2},
-        {run_post_deploy, fun run_post_deploy/2},
-        {cast_rotate, fun cast_rotate/2}
+        {rotate_packages, fun rotate_packages/2}
     ],
     case caterpillar_utils:pipe(FunList, Deploy, State) of
-        {ok, _} -> ok;
+        {ok, _} -> {ok, done};
         Error -> Error
     end.
 
 
+%-----
+
+
+-spec run_deploy(#state{}) -> {ok, done}.
+run_deploy(State) ->
+    FunList = [
+        {run_deploy_script, fun run_deploy_script/2},
+        {run_post_deploy, fun run_post_deploy/2}
+    ],
+    caterpillar_utils:pipe(FunList, none, State),
+    {ok, done}.
+
+
+%-----
+
+
 run_pre_deploy(Deploy, _State) -> 
+    %FIXME:
     {ok, Deploy}.
 
 
-find_deploy_paths(#deploy{ident=Ident}=Deploy, #state{ets=Ets}) -> 
-    Select = [{
-        {{'$1', '$2'}, '$3'}, 
-        [{'orelse', {'==', '$1', Ident}, {'==', '$1', 'default'}}],
-        [['$1', '$2', '$3']]
-    }],
-    SelectResult = [{{I, Branch}, Path} || [I, Branch, Path] <- ets:select(Ets, Select)],
+find_deploy_paths(#deploy{ident=#ident{arch=Arch, type=Type}}=Deploy, #state{ets=Ets}) -> 
+    Select = [
+        {
+            {{'$1', '$2', '$3'}, '$4'}, 
+            [
+                {'orelse', {'==', '$1', Type}, {'==', '$1', default}},
+                {'orelse', {'==', '$3', Arch}, {'==', '$3', default}}
+            ],
+            [['$1', '$2', '$3', '$4']]
+        }
+    ],
+    SelectResult = [{{Type, Branch, Arch}, Path} || [Type, Branch, Arch, Path] <- ets:select(Ets, Select)],
     case SelectResult of
         [] ->
             %FIXME: notify about
@@ -156,16 +198,22 @@ find_deploy_paths(#deploy{ident=Ident}=Deploy, #state{ets=Ets}) ->
     end.
 
 
-copy_packages({Paths, #deploy{packages=Packages, ident=Ident}=Deploy}, #state{dets=Dets}) ->
-    DefaultPathValue = case proplists:get_value({Ident, default}, Paths, '$none$') of
-        '$none$' -> caterpillar_utils:get_value_or_die({default, default}, Paths);
+copy_packages({Paths, #deploy{packages=Packages, ident=#ident{arch=Arch, type=Type}}=Deploy}, #state{dets=Dets}) ->
+    DefaultPathValue = case proplists:get_value({Type, default, Arch}, Paths, '$none$') of
+        '$none$' ->
+            case proplists:get_value({default, default, default}, Paths, '$none') of
+                '$none' ->
+                    error_logger:error_msg("no default path exists~n"),
+                    exit({copy_packages, no_default_path});
+                Val -> Val
+            end;
         DefaultPath -> DefaultPath
     end,
     Fun = fun(#deploy_package{package=Package, name=Name, branch=Branch, fd=FD}) ->
-        Path = proplists:get_value({Ident, Branch}, Paths, DefaultPathValue),
+        Path = proplists:get_value({Type, Branch, Arch}, Paths, DefaultPathValue),
         AbsPackage = filename:join(Path, Package),
         {ok, _} = file:copy(FD, AbsPackage),
-        dets:insert(Dets, {{Ident, AbsPackage}, {Name, Branch}, unixtime()})
+        dets:insert(Dets, {{Type, Arch, AbsPackage}, {Name, Branch}, unixtime()})
     end,
     lists:foreach(Fun, Packages),
     {ok, Deploy}.
@@ -186,52 +234,69 @@ run_post_deploy(#deploy{post_deploy_actions=BadAction}=Deploy, _State) ->
     {ok, Deploy}.
 
 
-cast_rotate(Deploy, _State) ->
-    gen_server:cast(self(), {rotate, Deploy}),
-    {ok, Deploy}.
+rotate_packages(#deploy{packages=Packages, ident=#ident{arch=Arch, type=Type}=Ident}, #state{dets=Dets, rotate=Rotate}) ->
+    error_logger:info_msg("rotating packages~n"),
+    Fun = fun(#deploy_package{name=Name, branch=Branch}) ->
+        Select = [{
+            {{'$1', '$2', '$3'}, {'$4', '$5'}, '$6'},
+            [
+                {'==', '$1', Type},
+                {'==', '$2', Arch},
+                {'==', '$4', Name},
+                {'==', '$5', Branch}
+            ],
+            [['$3', '$6']]
+        }],
+        SelectResult = lists:sort(
+            fun([_Package1, Time1], [_Package2, Time2]) -> Time1 =< Time2 end, 
+            dets:select(Dets, Select)
+        ),
+        case length(SelectResult) > Rotate of
+            true -> delete(SelectResult, length(SelectResult) - Rotate, Dets);
+            false -> ok
+        end
+    end,
+    lists:foreach(Fun, Packages).
 
 
-run_deploy_script(#deploy{packages=[]}=Deploy, State) -> {ok, Deploy};
-run_deploy_script(Deploy, #state{deploy_script=DS}) -> 
-    error_logger:info_msg("deploy script result: ~p~n", [os:cmd(DS)]),
-    {ok, Deploy}.
+run_deploy_script(_, #state{deploy_script=Script, deploy_info=Info}) ->
+    PackagesFoldFun = fun(#deploy_package{branch=Branch}, {Arch, Type, Accum}) ->
+        Element = {Type, Branch, Arch},
+        NewAccum = case lists:member(Element, Accum) of
+            true -> Accum;
+            false -> [Element|Accum]
+        end,
+        {Arch, Type, NewAccum}
+    end,
+    DeployFoldFun = fun(#deploy{packages=Packages, ident=#ident{arch=Arch, type=Type}}, Accum) ->
+        {Arch, Type, NewAccum} = lists:foldl(PackagesFoldFun, {Arch, Type, Accum}, Packages),
+        NewAccum
+    end,
+    ScriptInfo = lists:foldl(DeployFoldFun, [], Info),
+    case ScriptInfo of
+        [] -> 
+            error_logger:error_msg("nothing to update, deploy_info: ~p~n", [Info]);
+        _ ->
+            Commands = [lists:flatten(io_lib:format("~s ~s ~s ~s", [Script, Type, Branch, Arch])) || {Type, Branch, Arch} <- ScriptInfo],
+            UpdateFun = fun(Cmd) ->
+                error_logger:info_msg("running:~s~n", [Cmd]),
+                error_logger:info_msg("deploy script result: ~p~n", [os:cmd(Cmd)])
+            end,
+            lists:foreach(UpdateFun, Commands)
+    end,
+    {ok, done}.
 
 
 %---------- end of deploy pipe ----------%
 
 
-rotate(#deploy{packages=Packages, ident=Ident}, #state{dets=Dets, rotate=Rotate}) ->
-    error_logger:info_msg("rotating packages~n"),
-    Fun = fun(#deploy_package{name=Name, branch=Branch}) ->
-        Select = [{
-            {{'$1', '$2'}, {'$3', '$4'}, '$5'},
-            [{'==', '$1', Ident}, {'==', '$3', Name}, {'==', '$4', Branch}],
-            [['$2', '$5']]
-        }],
-        SelectResult = lists:sort(
-            fun([_Package1, Time1], [_Package2, Time2]) ->
-                Time1 < Time2
-            end, 
-            dets:select(Dets, Select)
-        ),
-        error_logger:info_msg("select result: ~p~n", [SelectResult]),
-        case length(SelectResult) > Rotate of
-            true ->
-                error_logger:info_msg("deleting some files~n"),
-                delete(SelectResult, length(SelectResult) - Rotate, Dets);
-            false ->
-                error_logger:info_msg("nothing to delete~n"),
-                ok
-        end
-    end,
-    lists:foreach(Fun, Packages).
 
 
 delete(_, 0, _) -> ok;
 delete([ [Package, _Time]|O ], Num, Dets) ->
     error_logger:info_msg("deleting ~p~n", [Package]),
     file:delete(Package),
-    dets:match_delete(Dets, {{'_', Package}, '_', '_'}),
+    dets:match_delete(Dets, {{'_', '_', Package}, '_', '_'}),
     delete(O, Num-1, Dets).
 
 

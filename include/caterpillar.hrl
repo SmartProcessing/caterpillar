@@ -35,13 +35,19 @@
 }).
 
 
+-record(ident, {
+    arch :: amd64|i386,
+    type :: atom()
+}).
+
+
 -record(deploy, {
-    ident :: term(),
+    ident :: #ident{},
     work_id :: term(),
     tag :: term(),
     packages = [] :: [#deploy_package{}],
     pre_deploy_actions = [],
-    post_deploy_actions = []
+    post_deploy_actions = [] :: [{module(), function(), [term()]}]
 }).
 
 
