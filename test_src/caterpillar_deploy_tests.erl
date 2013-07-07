@@ -42,7 +42,7 @@ init_ets_test_() ->
 [
     {Setup, fun(_, Data) ->
         {Message, fun() ->
-            Ets = (catch caterpillar_deploy:init_ets(Data)),
+            Ets = (catch caterpillar_deploy:init_ets(Data, "./test")),
             ?assertEqual(
                 Result,
                 [{Ident, lists:last(filename:split(Path))} || {Ident, Path} <- lists:sort(ets:tab2list(Ets))]
@@ -76,7 +76,7 @@ find_deploy_paths_test_() ->
     end,
     fun(Idents, #state{ets=Ets}) ->
         ets:delete(Ets),
-        lists:foreach(fun({Ident, _Arches}) -> caterpillar_utils:del_dir(Ident) end, Idents)
+        [caterpillar_utils:del_dir(Path) || {Ident, Archs} <- Idents, {Arch, Branches} <- Archs, {Branch, Path} <- Branches]
     end,
 [
     {Idents, fun(_, State) ->
@@ -120,7 +120,6 @@ find_deploy_paths_test_() ->
 copy_packages_test_() ->
 {foreachx,
     fun({Paths, #deploy{}}) -> 
-        tty_on(),
         caterpillar_utils:ensure_dir("__test_packages"),
         [caterpillar_utils:ensure_dir(Path) || {_, Path} <- Paths],
         {ok, D} = dets:open_file("__test_dets.deploy", [{access, read_write}]),
@@ -283,7 +282,7 @@ rotate_packages_test_() ->
     {Packages, fun(_, State) ->
         {Message, fun() ->
             Result = (catch caterpillar_deploy:rotate_packages(Deploy, State)),
-            ?assertEqual(ok, Result),
+            ?assertEqual({ok, done}, Result),
             Check(State)
         end}
     end} || {Message, Packages, Deploy, Check} <- [
