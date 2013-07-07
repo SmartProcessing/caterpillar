@@ -42,7 +42,7 @@
         ]},
 
          {caterpillar_worker, [
-             {ident, {squeeze, amd64}},
+             {ident, {squeeze, i386}},
              {worker_plugin, caterpillar_simple_builder},
              {worker_plugin_init, [
                  {work_id_file, "./test/test_simple_builder/work_id"},
