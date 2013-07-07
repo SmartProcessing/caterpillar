@@ -11,14 +11,14 @@
 
 
         {caterpillar_builder, [
-            {build_path, "/var/lib/caterpillar/build"},
-            {deps, "/var/lib/caterpillar/build/dependencies"},
-            {buckets, "/var/lib/caterpillar/build/buckets"},
+            {build_path, "./test/builder"},
+            {deps, "./test/builder/dependencies"},
+            {buckets, "./test/builder/buckets"},
             {poll_time, 1000},
             {ident, {squeeze, amd64}},
             {build_workers_number, 5},
             {queue_missing, true},
-            {work_id, "/var/lib/caterpillar/build/work_id"}
+            {work_id, "./test/builder/work_id"}
         ]},
         
         {caterpillar_repository, [
