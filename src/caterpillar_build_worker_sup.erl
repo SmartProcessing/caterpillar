@@ -35,19 +35,23 @@ start_link() ->
 -endif.
 
 start_link(Settings) ->
-    {ok, Pid} = supervisor:start_link(
-        {local, ?MODULE}, ?MODULE, Settings),
-    erlang:unlink(Pid),
-    {ok, Pid}.
+    case supervisor:start_link({local, ?MODULE}, ?MODULE, Settings) of
+        {ok, Pid} -> {ok, Pid};
+        {error, {already_started, Pid}} -> {ok, Pid};
+        {error, Reason} -> {error, Reason}
+    end.
+    %WTF?
+    %erlang:unlink(Pid),
+    %{ok, Pid}.
 
 
 init(Settings) ->
-    {ok, {{simple_one_for_one, 3, 60}, 
-            [{
-                caterpillar_build_worker, 
-                {caterpillar_build_worker, start_link, [Settings]},
-                permanent,
-                5000,
-                worker,
-                [caterpillar_build_worker]
-            }]}}.
+    Builder = {
+        caterpillar_build_worker, 
+        {caterpillar_build_worker, start_link, [Settings]},
+        permanent,
+        5000,
+        worker,
+        [caterpillar_build_worker]
+    },
+    {ok, {{simple_one_for_one, 4, 3600}, [Builder]}}.

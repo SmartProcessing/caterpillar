@@ -24,7 +24,7 @@ init(Args) ->
     DetsFile = proplists:get_value(deploy_db, Args, ?DEPLOY_DATABASE),
     DeployScriptDelay = proplists:get_value(deploy_script_delay, Args, 10),
     DeployScriptMaxWaiting = proplists:get_value(deploy_script_max_waiting, Args, 2),
-    DeployPath = check_deploy_path(proplists:get_value(deploy_path, Args, ?DEFAULT_DEPLOY_PATH)),
+    DeployPath = filename:absname(proplists:get_value(deploy_path, Args, ?DEFAULT_DEPLOY_PATH)),
     filelib:ensure_dir(DetsFile),
     {ok, Dets} = dets:open_file(DetsFile, [{access, read_write}]),
     State = #state{
@@ -32,6 +32,7 @@ init(Args) ->
         dets = Dets,
         deploy_script = proplists:get_value(deploy_script, Args),
         rotate = proplists:get_value(rotate, Args, 1),
+        deploy_script_timer = none,
         deploy_script_delay = DeployScriptDelay,
         deploy_info = [],
         deploy_max_waiting = DeployScriptMaxWaiting
@@ -54,9 +55,11 @@ handle_info(register_as_service, #state{registered=false}=State) ->
     end,
     {noreply, NewState};
 handle_info(run_deploy, State) ->
+    error_logger:info_msg("running deploy~n"),
     run_deploy(State),
     {noreply, State};
 handle_info(_Message, State) ->
+    error_logger:error_msg("unknown message: ~p~n", [_Message]),
     {noreply, State}.
 
 
@@ -90,13 +93,6 @@ code_change(_OldVsn, State, _Extra) ->
 %----------
 
 
-check_deploy_path(Path) ->
-    case Path of
-        "/" ++ _ -> Path;
-        _ -> exit({check_deploy_path, {bad_path, Path}})
-    end.
-
-
 register_as_service(Delay) ->
     erlang:send_after(Delay, self(), register_as_service).
 
@@ -107,10 +103,12 @@ init_ets(Idents) ->
 
 init_ets(Idents, DeployPath) ->
     ToAbsPath = fun(Path) ->
-        case Path of
+        NewPath = case Path of
             "/" ++ _ -> Path;
             _ -> filename:join(DeployPath, Path)
-        end
+        end,
+        caterpillar_utils:ensure_dir(NewPath),
+        NewPath
     end,
     Ets = ets:new(?MODULE, [protected, named_table]),
     [
@@ -123,18 +121,20 @@ init_ets(Idents, DeployPath) ->
 %-----
 
 
+%FIXME: save deploy info (maybe another dets tab?)
 init_deploy(#deploy{}=Deploy, State) ->
     #state{
         deploy_script_delay = Delay, deploy_script_timer=Timer, 
         deploy_info=Info, deploy_max_waiting=MaxWaiting
     }=State,
-    NewInfo = [Deploy|MaxWaiting],
-    NewTimer = case MaxWaiting >= length(NewInfo) of
+    NewInfo = [Deploy|Info],
+    NewTimer = case MaxWaiting =< length(NewInfo) of
+        true when Timer /= none -> Timer;
         true ->
-            Timer;
+            erlang:send_after(Delay, self(), run_deploy);
         false ->
             catch erlang:cancel_timer(Timer),
-            erlang:send_after(Delay, ?MODULE, run_deploy)
+            erlang:send_after(Delay, self(), run_deploy)
     end,
     State#state{deploy_script_timer=NewTimer, deploy_info=NewInfo}.
 
@@ -212,6 +212,7 @@ copy_packages({Paths, #deploy{packages=Packages, ident=#ident{arch=Arch, type=Ty
     Fun = fun(#deploy_package{package=Package, name=Name, branch=Branch, fd=FD}) ->
         Path = proplists:get_value({Type, Branch, Arch}, Paths, DefaultPathValue),
         AbsPackage = filename:join(Path, Package),
+        error_logger:info_msg("deploying to ~p~n", [AbsPackage]),
         {ok, _} = file:copy(FD, AbsPackage),
         dets:insert(Dets, {{Type, Arch, AbsPackage}, {Name, Branch}, unixtime()})
     end,
@@ -256,7 +257,8 @@ rotate_packages(#deploy{packages=Packages, ident=#ident{arch=Arch, type=Type}=Id
             false -> ok
         end
     end,
-    lists:foreach(Fun, Packages).
+    lists:foreach(Fun, Packages),
+    {ok, done}.
 
 
 run_deploy_script(_, #state{deploy_script=Script, deploy_info=Info}) ->

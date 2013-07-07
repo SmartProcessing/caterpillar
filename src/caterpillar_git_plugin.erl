@@ -79,7 +79,12 @@ get_diff(_State, Package, _Branch, Revno, NewRevno) when Revno == none; Revno ==
         {error, Err} ->  error_logger:error_msg("get_diff error: ~p~n", [Err]), <<>>
     end,
     First = lists:last([Rev || Rev <- binary:split(Revisions, <<"\n">>, [global]), Rev /= <<>>]),
-    DiffCmd = format("git diff ~s ~s", [First, NewRevno]),
+    DiffCmd = case First == NewRevno of
+        true ->
+            format("git show --pretty=format:%b ~s", [First]);
+        false ->
+            format("git diff ~s ~s", [First, NewRevno])
+    end,
     case command(DiffCmd, [{cd, Package}]) of
         {error, _} = Error -> Error; 
         {ok, Diff} -> {ok, Diff}

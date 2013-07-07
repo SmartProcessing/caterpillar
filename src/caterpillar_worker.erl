@@ -18,8 +18,8 @@ start_link(Args) ->
         '$none' ->
             error_logger:error_msg("no ident given, stopping~n"),
             {error, no_ident};
-        Ident when is_atom(Ident) ->
-            gen_server:start_link({local, Ident}, ?MODULE, Args, []);
+        {Type, Arch}=Ident when is_atom(Type), is_atom(Arch) ->
+            gen_server:start_link(?MODULE, Args, []);
         Ident ->
             error_logger:error_msg("bad ident type: ~p~n", [Ident]),
             {error, bad_ident}

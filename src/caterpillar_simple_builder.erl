@@ -8,14 +8,14 @@
 -export([init_worker/2, changes/3, get_work_id/1, terminate_worker/1, modify_control/4, clean_packages/2]).
 
 
-init_worker({Type, Arch}=Ident, Args) when is_atom(Type) andalso is_atom(Arch) ->
+init_worker({Type, Arch}, Args) when is_atom(Type) andalso is_atom(Arch) ->
     WorkIdFile = ?GVOD(work_id_file, Args),
     [ArchiveRoot, RepositoryRoot, DeployRoot] = [
         caterpillar_utils:ensure_dir(?GVOD(Root, Args)) ||
         Root <- [archive_root, repository_root, deploy_root]
     ],
     State = #state{
-        ident=Ident,
+        ident=#ident{type=Type, arch=Arch},
         work_id = caterpillar_utils:read_work_id(WorkIdFile),
         work_id_file = WorkIdFile,
         archive_root = ArchiveRoot,

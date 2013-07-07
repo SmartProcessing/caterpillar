@@ -88,7 +88,11 @@ get_valid_versions(L, Archive, build_deps) ->
     end, L).
 
 get_archive_version(Archive) ->
-    {?LTB(Archive#archive.name), ?LTB(Archive#archive.branch), ?LTB(Archive#archive.tag)}.
+    {
+        ?LTB(Archive#archive.name),
+        ?LTB(Archive#archive.branch),
+        ?LTB(Archive#archive.tag)
+    }.
 
 get_version_archive({Name, Branch, Tag}) ->
     #archive{

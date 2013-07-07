@@ -29,10 +29,7 @@
             {export_root, "./test/test_export/"},
             {notify_root, "./test/test_notify/"},
             {scan_interval, 10},
-            {vcs_plugin, caterpillar_bzr_plugin},
-            {vcs_plugin_init, [
-                {bzr_server, "python priv/bzr_server.py with_log=log.log"}
-            ]}
+            {vcs_plugin, caterpillar_git_plugin}
         ]},
 
         {caterpillar_notifier, [
