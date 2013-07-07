@@ -59,24 +59,24 @@ init(Settings) ->
     BuildPath = ?GV(build_path, Settings, ?DEFAULT_BUILD_PATH),
     WorkIdFile = ?GV(work_id, Settings, ?DEFAULT_WORK_ID_FILE),
     WorkId = get_work_id(WorkIdFile),
-    Ident = ?GV(ident, Settings, "unknown"),
+    {Type, Arch}=?GV(ident, Settings, {unknown, unknown}),
+    Ident = #ident{type=Type, arch=Arch},
     start_timer(PollTime),
     {ok, #state{
-            deps=Deps,
-            buckets=Buckets,
-            main_queue=BuildQueue,
-            wait_queue=WaitQueue,
-            workers=WorkerList,
-            next_to_build=none,
-            unpack_state=UnpackState,
-            build_path=BuildPath,
-            queue_missing=QueueMissing,
-            poll_time=PollTime,
-            work_id=WorkIdFile,
-            wid = WorkId,
-            ident=Ident
-        }
-    }.
+        deps=Deps,
+        buckets=Buckets,
+        main_queue=BuildQueue,
+        wait_queue=WaitQueue,
+        workers=WorkerList,
+        next_to_build=none,
+        unpack_state=UnpackState,
+        build_path=BuildPath,
+        queue_missing=QueueMissing,
+        poll_time=PollTime,
+        work_id=WorkIdFile,
+        wid = WorkId,
+        ident=Ident
+    }}.
 
 handle_call({newref, RevDef}, _From, State) ->
     error_logger:info_msg("received new revision: ~p~n", [?VERSION(RevDef)]),

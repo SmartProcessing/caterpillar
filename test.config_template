@@ -15,7 +15,7 @@
             {deps, "/var/lib/caterpillar/build/dependencies"},
             {buckets, "/var/lib/caterpillar/build/buckets"},
             {poll_time, 1000},
-            {ident, amd64},
+            {ident, {squeeze, amd64}},
             {build_workers_number, 5},
             {queue_missing, true},
             {work_id, "/var/lib/caterpillar/build/work_id"}
@@ -42,7 +42,7 @@
         ]},
 
          {caterpillar_worker, [
-             {ident, amd64},
+             {ident, {squeeze, amd64}},
              {worker_plugin, caterpillar_simple_builder},
              {worker_plugin_init, [
                  {work_id_file, "./test/test_simple_builder/work_id"},
@@ -55,16 +55,24 @@
         {caterpillar_deploy, [
             {rotate, 1},
             {deploy_db, "./test/test_deploy/deploy.db"},
+            {deploy_path, "./test/test_deploy"},
             {idents, [
-                {amd64, [
-                    {"stable", "./test/test_deploy/stable/binary-amd64"},
-                    {"test", "./test/test_deploy/test/binary-amd64"},
-                    {default, "./test/test_deploy/trunk/binary-amd64"}
+                {squeeze, [
+                    {amd64, [
+                        {"stable", "stable/binary-amd64"},
+                        {"test", ".test/binary-amd64"},
+                        {default, "trunk/binary-amd64"}
+                    ]},
+                    {i386, [
+                        {"stable", "stable/binary-i386"},
+                        {"test", "test/binary-i386"},
+                        {default, "trunk/binary-i386"}
+                    ]}
                 ]},
-                {i386, [
-                    {"stable", "./test/test_deploy/stable/binary-i386"},
-                    {"test", "./test/test_deploy/test/binary-i386"},
-                    {default, "./test/test_deploy/trunk/binary-i386"}
+                {default, [
+                    {default, [
+                        {default, "unknown"}
+                    ]}
                 ]}
             ]}
         ]},
