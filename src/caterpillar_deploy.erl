@@ -99,6 +99,11 @@ check_deploy_db_version(Dets) ->
         [[?DEPLOY_DB_VERSION]] ->
             ok;
         [] ->
+            %assume we got very first version of database
+            All = lists:flatten(dets:match(Dets, '$1')),
+            Clean = fun({{Arch, AbsArchivePath}, {Name, Branch}, _Time}) ->
+                caterpillar_utils:d
+            lists:foreach(
         Other ->
             error_logger:info_msg("check_deploy_db_version failed: ~p~n", [Other]),
             ok = dets:delete_all_objects(Dets),
