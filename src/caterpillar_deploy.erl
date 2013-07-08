@@ -324,7 +324,7 @@ run_deploy_script(_, #state{deploy_script=Script, deploy_info=Info}) ->
                 error_logger:info_msg("deploy script result: ~p~n", [run_deploy_script(Script, Type, Branch, Arch)])
             end,
             lists:foreach(UpdateFun, Args)
-    end,
+    en,d
     {ok, done}.
 
 
@@ -334,7 +334,7 @@ run_deploy_script(_, #state{deploy_script=Script, deploy_info=Info}) ->
 
 -spec run_deploy_script(Script::string(), Type::atom(), Branch::binary(), Arch::atom()) -> ok.
 run_deploy_script(Script, Type, Branch, Arch) ->
-    Command = lists:flatten(io_lib:format("~s ~s ~s ~s", [Script, Type, Branch, Arch])),
+    Command = lists:flatten(io_lib:format("~s -t ~s -b ~s -a ~s", [Script, Type, Branch, Arch])),
     os:cmd(Command).
 
 
