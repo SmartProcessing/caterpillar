@@ -216,10 +216,7 @@ run_post_deploy_test_() ->
 [
     {Message, fun() ->
         register(deploy_test, self()),
-        ?assertEqual(
-            {ok, Deploy},
-            caterpillar_deploy:run_post_deploy(Deploy, state)
-        ),
+        ?assertEqual({ok, done}, catch caterpillar_deploy:run_post_deploy(none, #state{deploy_info=[Deploy]})),
         Check()
     end} || {Message, Deploy, Check} <- [
         {
@@ -231,10 +228,7 @@ run_post_deploy_test_() ->
             "some postdeploy actions, sending message to self",
             #deploy{post_deploy_actions=[{erlang, send, [deploy_test, post_deploy]}]},
             fun() ->
-                ?assertEqual(
-                    post_deploy,
-                    receive Msg -> Msg after 50 -> timeout end
-                )
+                ?assertEqual(post_deploy, caterpillar_test_support:recv(50))
             end
         },
         {
