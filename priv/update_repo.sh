@@ -14,13 +14,13 @@ ARCH=
 while getopts "a:b:t:" OPT; do
     case $OPT in
         "a")
-            ARCH=$OPT
+            ARCH=$OPTARG
             ;;
         "b")
-            BRANCH=$OPT
+            BRANCH=$OPTARG
             ;;
         "t")
-            TYPE=$OPT
+            TYPE=$OPTARG
             ;;
         ?)
             usage
