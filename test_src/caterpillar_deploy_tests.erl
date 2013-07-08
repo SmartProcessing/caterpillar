@@ -21,11 +21,7 @@ tty_on() ->
 
 register_as_service_test() ->
     caterpillar_deploy:register_as_service(0),
-    timer:sleep(1),
-    ?assertEqual(
-        register_as_service,
-        receive Msg -> Msg after 50 -> timeout end
-    ).
+    ?assertEqual(register_as_service, caterpillar_test_support:recv(50)).
 
 
 init_ets_test_() ->

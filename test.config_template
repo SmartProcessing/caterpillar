@@ -56,14 +56,26 @@
             {idents, [
                 {squeeze, [
                     {amd64, [
-                        {"stable", "stable/binary-amd64"},
-                        {"test", ".test/binary-amd64"},
-                        {default, "trunk/binary-amd64"}
+                        {"stable", "squeeze/stable/binary-amd64"},
+                        {"test", "squeeze/test/binary-amd64"},
+                        {default, "squeeze/trunk/binary-amd64"}
                     ]},
                     {i386, [
-                        {"stable", "stable/binary-i386"},
-                        {"test", "test/binary-i386"},
-                        {default, "trunk/binary-i386"}
+                        {"stable", "squeeze/stable/binary-i386"},
+                        {"test", "squeeze/test/binary-i386"},
+                        {default, "squeeze/trunk/binary-i386"}
+                    ]}
+                ]},
+                {wheezy, [
+                    {amd64, [
+                        {"stable", "wheezy/stable/binary-amd64"},
+                        {"test", "wheezy/test/binary-amd64"},
+                        {default, "wheezy/trunk/binary-amd64"}
+                    ]},
+                    {i386, [
+                        {"stable", "wheezy/stable/binary-i386"},
+                        {"test", "wheezy/test/binary-i386"},
+                        {default, "wheezy/trunk/binary-i386"}
                     ]}
                 ]},
                 {default, [
