@@ -103,18 +103,20 @@ handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
     {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
     {ok, NewState} = try_build(ScheduledState),
     {reply, ok, NewState};
-handle_call({err_built, Worker, RevDef, BuildInfo}, _From, State) ->
+handle_call({err_built, Worker, RevDef, BuildInfo}, _From, #state{ident=Ident}=State) ->
     error_logger:info_msg("error built: ~p~n", [BuildInfo]),
-    caterpillar_event:event({store_error_build, [State#state.ident,
+    caterpillar_event:event({store_error_build, [Ident,
         {RevDef#rev_def.name, RevDef#rev_def.branch}, 
         RevDef#rev_def.work_id,
         BuildInfo#build_info.description
     ]}),
-    Subj = io_lib:format("#~B error: ~s/~s/~s", [
+    Subj = io_lib:format("#~B error: ~s/~s/~s at ~s/~s", [
             RevDef#rev_def.work_id,
             binary_to_list(RevDef#rev_def.name),
             binary_to_list(RevDef#rev_def.branch),
-            binary_to_list(RevDef#rev_def.tag)
+            binary_to_list(RevDef#rev_def.tag),
+            Ident#ident.type,
+            Ident#ident.arch
         ]),
     notify(Subj, BuildInfo#build_info.description),
     BuildState = BuildInfo#build_info.state,
