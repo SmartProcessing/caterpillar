@@ -233,9 +233,9 @@ receive_data_from_port(Log) ->
 
 
 
-pre_deploy(Packages, #state{deploy_root=DR, next_work_id=NWI, ident=Ident}) ->
+pre_deploy(Packages, #state{deploy_root=DR, next_work_id=NWI, ident=#ident{type=Type, arch=Arch}=Ident}) ->
     RawNotify = #notify{
-        subject = list_to_binary(io_lib:format(<<"deploy for build ~p">>, [NWI])),
+        subject = list_to_binary(io_lib:format(<<"deploy for build ~p ~s/~s">>, [NWI, Type, Arch])),
         body = <<>>
     },
     DeployFold = fun

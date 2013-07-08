@@ -509,8 +509,7 @@ notify(Subject, Body) ->
     independent|dependent|missing|{error, term()}.
 check_build_deps(Candidate, State) ->
     Preparing = State#state.queued,
-    case ?CBS:list_unres_deps(
-            State#state.deps, Candidate, Preparing) of
+    case ?CBS:list_unres_deps(State#state.deps, Candidate, Preparing) of
         {ok, [], []} ->
             {ok, NowBuilding} = list_building_revs(State),
             {ok, Res} = ?CBS:check_isect(
@@ -585,18 +584,20 @@ update_work_id(File, Id) when is_integer(Id) ->
     Id.
 
 
-deploy(RevDef, BuildInfo, State) ->
+deploy(RevDef, BuildInfo, #state{ident=#ident{arch=Arch, type=Type}=Ident}=State) ->
     DeployPkg = #deploy_package{
         name = binary_to_list(RevDef#rev_def.name),
         branch = binary_to_list(RevDef#rev_def.branch),
         package = BuildInfo#build_info.pkg_name,
         fd = BuildInfo#build_info.fd
     },
-    Subj = io_lib:format("#~B success: ~s/~s/~s", [
+    Subj = io_lib:format("#~B success: ~s/~s/~s at ~s/~s", [
         RevDef#rev_def.work_id,
         binary_to_list(RevDef#rev_def.name),
         binary_to_list(RevDef#rev_def.branch),
-        binary_to_list(RevDef#rev_def.tag)
+        binary_to_list(RevDef#rev_def.tag),
+        Type,
+        Arch
     ]),
     Message = io_lib:format(
         "Mime-Version: 1.0\n"
@@ -605,7 +606,7 @@ deploy(RevDef, BuildInfo, State) ->
         "", [BuildInfo#build_info.pkg_name]
     ),
     Deploy = #deploy{
-        ident=State#state.ident,
+        ident=Ident,
         work_id=RevDef#rev_def.work_id,
         packages=[DeployPkg],
         post_deploy_actions = [{caterpillar_event, sync_event, [{notify, get_notify_message(Subj, Message)}]}]

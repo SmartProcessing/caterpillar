@@ -320,7 +320,9 @@ run_deploy_script(_, #state{deploy_script=Script, deploy_info=Info}) ->
             error_logger:error_msg("nothing to update, deploy_info: ~p~n", [Info]);
         _ ->
             Args =  [{Script, Type, Branch, Arch} || {Type, Branch, Arch} <- ScriptInfo],
-            UpdateFun = fun({Script, Type, Branch, Arch}) -> run_deploy_script(Script, Type, Branch, Arch) end,
+            UpdateFun = fun({Script, Type, Branch, Arch}) -> 
+                error_logger:info_msg("deploy script result: ~p~n", [run_deploy_script(Script, Type, Branch, Arch)])
+            end,
             lists:foreach(UpdateFun, Args)
     end,
     {ok, done}.
