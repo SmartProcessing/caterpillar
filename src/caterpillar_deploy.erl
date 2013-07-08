@@ -26,7 +26,7 @@ init(Args) ->
     DeployScriptMaxWaiting = proplists:get_value(deploy_script_max_waiting, Args, 2),
     DeployPath = filename:absname(proplists:get_value(deploy_path, Args, ?DEFAULT_DEPLOY_PATH)),
     filelib:ensure_dir(DetsFile),
-    {ok, Dets} = dets:open_file(DetsFile, [{access, read_write}]),
+    {ok, Dets} = dets:open_file(DetsFile, [{access, read_write}, {ram_file, true}]),
     check_deploy_db_version(Dets),
     State = #state{
         ets = init_ets(proplists:get_value(idents, Args, []), DeployPath),
@@ -194,8 +194,11 @@ copy_deploy(Deploy, State) ->
         {rotate_packages, fun rotate_packages/2}
     ],
     case caterpillar_utils:pipe(FunList, Deploy, State) of
-        {ok, _} -> {ok, done};
-        Error -> Error
+        {ok, _} ->
+            error_logger:info_msg("copy_deploy done~n"),
+            {ok, done};
+        Error -> 
+            Error
     end.
 
 
