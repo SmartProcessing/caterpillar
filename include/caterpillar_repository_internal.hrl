@@ -11,7 +11,7 @@
 -define(SCAN_INTERVAL, 600).
 -define(CLEANUP_INTERVAL, 600).
 
--define(REPOSITORY_DB_VERSION, "0.1").
+-define(REPOSITORY_DB_VERSION, "0.2").
 
 
 -type work_id() :: non_neg_integer().

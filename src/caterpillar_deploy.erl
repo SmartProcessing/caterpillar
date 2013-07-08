@@ -27,6 +27,7 @@ init(Args) ->
     DeployPath = filename:absname(proplists:get_value(deploy_path, Args, ?DEFAULT_DEPLOY_PATH)),
     filelib:ensure_dir(DetsFile),
     {ok, Dets} = dets:open_file(DetsFile, [{access, read_write}]),
+    check_deploy_db_version(Dets),
     State = #state{
         ets = init_ets(proplists:get_value(idents, Args, []), DeployPath),
         dets = Dets,
@@ -91,6 +92,21 @@ code_change(_OldVsn, State, _Extra) ->
 
 
 %----------
+
+
+check_deploy_db_version(Dets) ->
+    case dets:match(Dets, {version, '$1'}) of
+        [[?DEPLOY_DB_VERSION]] ->
+            ok;
+        [] ->
+        Other ->
+            error_logger:info_msg("check_deploy_db_version failed: ~p~n", [Other]),
+            ok = dets:delete_all_objects(Dets),
+            dets:insert(Dets, {version, ?DEPLOY_DB_VERSION})
+    end,
+    dets:sync(Dets),
+    ok.
+        
 
 
 register_as_service(Delay) ->
