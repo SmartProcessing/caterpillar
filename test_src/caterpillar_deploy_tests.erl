@@ -30,23 +30,15 @@ register_as_service_test() ->
 
 init_ets_test_() ->
 {foreachx,
-    fun(Data) -> Data end,
-    fun(Data, _) ->
-        lists:foreach(
-            fun({Ident, Branches}) ->
-                [caterpillar_utils:del_dir(Branch) || {_, Branch} <- Branches]
-            end,
-            Data
-        )
+    fun(Idents) -> {Idents, "./test/test_deploy"} end,
+    fun(_, {_Idents, Path}) ->
+        caterpillar_utils:del_dir(Path)
     end,
 [
-    {Setup, fun(_, Data) ->
+    {Setup, fun(_, {Idents, DeployPath}) ->
         {Message, fun() ->
-            Ets = (catch caterpillar_deploy:init_ets(Data, "./test")),
-            ?assertEqual(
-                Result,
-                [{Ident, lists:last(filename:split(Path))} || {Ident, Path} <- lists:sort(ets:tab2list(Ets))]
-            )
+            Ets = (catch caterpillar_deploy:init_ets(Idents, DeployPath)),
+            ?assertEqual(Result, lists:sort(ets:tab2list(Ets)))
         end}
     end} || {Message, Setup, Result} <- [
         {
@@ -57,7 +49,7 @@ init_ets_test_() ->
         {
             "some idents in cfg, but without default values",
             [{os_type, [{amd64, [{branch, "__test_amd"}]}]}],
-            [{{os_type, branch, amd64}, "__test_amd"}]
+            [{{os_type, branch, amd64}, "./test/test_deploy/__test_amd"}]
         }
     ]
 ]}.
