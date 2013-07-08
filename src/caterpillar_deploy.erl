@@ -335,6 +335,7 @@ run_deploy_script(_, #state{deploy_script=Script, deploy_info=Info}) ->
 -spec run_deploy_script(Script::string(), Type::atom(), Branch::binary(), Arch::atom()) -> ok.
 run_deploy_script(Script, Type, Branch, Arch) ->
     Command = lists:flatten(io_lib:format("~s -t ~s -b ~s -a ~s", [Script, Type, Branch, Arch])),
+    error_logger:info_msg("deploy cmd: ~s~n", [Command]),
     os:cmd(Command).
 
 
