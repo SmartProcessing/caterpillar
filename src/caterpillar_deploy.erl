@@ -221,18 +221,15 @@ copy_packages({Paths, #deploy{packages=Packages, ident=#ident{arch=Arch, type=Ty
 
 
 
-run_post_deploy(#deploy{post_deploy_actions=Actions}=Deploy, _State) when is_list(Actions) ->
+run_post_deploy(_, #state{deploy_info=Info}=State) ->
     lists:foreach(
         fun
             ({M, F, A}) -> error_logger:info_msg("post_deploy ~p/~p result: ~p~n", [M, F, catch apply(M, F, A)]);
             (Bad) -> error_logger:error_msg( "post_deploy badarg: ~p~n", [Bad])
         end,
-        Actions
+        lists:flatten([Actions || #deploy{post_deploy_actions=Actions} <- Info])
     ),
-    {ok, Deploy};
-run_post_deploy(#deploy{post_deploy_actions=BadAction}=Deploy, _State) ->
-    error_logger:error_msg("bad post_deploy actions: ~p~n", [BadAction]),
-    {ok, Deploy}.
+    {ok, done}.
 
 
 rotate_packages(#deploy{packages=Packages, ident=#ident{arch=Arch, type=Type}=Ident}, #state{dets=Dets, rotate=Rotate}) ->
