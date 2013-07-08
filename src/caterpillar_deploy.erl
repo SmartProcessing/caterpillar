@@ -22,7 +22,7 @@ stop() ->
 
 init(Args) ->
     DetsFile = proplists:get_value(deploy_db, Args, ?DEPLOY_DATABASE),
-    DeployScriptDelay = proplists:get_value(deploy_script_delay, Args, 10),
+    DeployScriptDelay = proplists:get_value(deploy_script_delay, Args, 10) * 1000,
     DeployScriptMaxWaiting = proplists:get_value(deploy_script_max_waiting, Args, 2),
     DeployPath = filename:absname(proplists:get_value(deploy_path, Args, ?DEFAULT_DEPLOY_PATH)),
     filelib:ensure_dir(DetsFile),
@@ -59,7 +59,7 @@ handle_info(register_as_service, #state{registered=false}=State) ->
 handle_info(run_deploy, State) ->
     error_logger:info_msg("running deploy~n"),
     run_deploy(State),
-    {noreply, State};
+    {noreply, State#state{deploy_info=[]}};
 handle_info(update_all_deploy_branches, State) ->
     update_all_deploy_branches(State),
     {noreply, State};
