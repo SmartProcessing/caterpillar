@@ -182,25 +182,15 @@ copy_packages_test_() ->
                 ),
                 {ok, Default} = file:list_dir("__test_default"),
                 {ok, Test} = file:list_dir("__test_test"),
-                ?assertEqual(
-                    ["package3"],
-                    Default
-                ),
-                ?assertEqual(
-                    ["package1", "package2"],
-                    lists:sort(Test)
-                ),
+                ?assertEqual(["package3"], Default),
+                ?assertEqual(["package1", "package2"], lists:sort(Test)),
                 ?assertEqual(
                     [
                         file:read_file(F) || F <- [
                             "__test_test/package1", "__test_test/package2", "__test_default/package3"
                         ]
                     ],
-                    [
-                        {ok,<<"name1">>},
-                        {ok,<<"name2">>},
-                        {ok,<<"name3">>}
-                    ]
+                    [ {ok,<<"name1">>}, {ok,<<"name2">>}, {ok,<<"name3">>}]
                 )
             end
         }
@@ -210,9 +200,7 @@ copy_packages_test_() ->
 
 run_post_deploy_test_() ->
 {foreach,
-    fun() -> 
-        ok
-    end,
+    fun() -> ok end,
 [
     {Message, fun() ->
         register(deploy_test, self()),
@@ -227,9 +215,7 @@ run_post_deploy_test_() ->
         {
             "some postdeploy actions, sending message to self",
             #deploy{post_deploy_actions=[{erlang, send, [deploy_test, post_deploy]}]},
-            fun() ->
-                ?assertEqual(post_deploy, caterpillar_test_support:recv(50))
-            end
+            fun() -> ?assertEqual(post_deploy, caterpillar_test_support:recv(50)) end
         },
         {
             "postdeploy mfa crash",
