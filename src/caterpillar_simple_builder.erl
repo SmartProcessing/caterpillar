@@ -54,14 +54,16 @@ get_work_id(#state{work_id=WI}) -> {ok, WI}.
 -spec clean_packages(#state{}, [#archive{}]) -> ok.
 clean_packages(_State, []) -> ok;
 clean_packages(#state{repository_root=RepositoryRoot}=State, [#archive{name=Name, branch=Branch}|Other]) ->
-    AbsBranchPath = filename:join([RepositoryRoot, Name, Branch]),
-    AbsRepoPath = filename:join([RepositoryRoot, Name]),
+    AbsBranchPath = filename:join([RepositoryRoot, Branch, Name]),
+    AbsRepoPath = filename:join([RepositoryRoot, Branch]),
     caterpillar_utils:del_dir(AbsBranchPath),
     case caterpillar_utils:list_packages(AbsRepoPath) of
-        {ok, []} -> caterpillar_utils:del_dir(AbsRepoPath);
+        {ok, []} ->
+            error_logger:info_msg("no packages in ~p, cleaning~n", [AbsRepoPath]),
+            caterpillar_utils:del_dir(AbsRepoPath);
         _ -> ok
     end,
-    error_logger:info_msg("~p/~p cleaned~n", [Name, Branch]),
+    error_logger:info_msg("~p/~p cleaned~n", [Branch, Name]),
     clean_packages(State, Other).
 
 

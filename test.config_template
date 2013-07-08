@@ -22,6 +22,7 @@
         ]},
         
         {caterpillar_repository, [
+            {cleanup_interval, 10},
             {work_id_file, "./test/test_work_id"},
             {repository_root, "./test/caterpillar_test"},
             {repository_db, "./test/test_repo.dets"},
