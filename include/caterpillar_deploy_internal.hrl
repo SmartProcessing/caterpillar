@@ -4,7 +4,7 @@
 -define(DEPLOY_DB_VERSION, "0.1").
 
 -record(state, {
-    ets :: ets:tab(), %{default|{Type, Branch, Arch}, Path}
+    ets :: ets:tab(), %{{Type, Branch, Arch}, Path}
     dets :: dets:tab(),
     deploy_path = ?DEFAULT_DEPLOY_PATH,
     deploy_script :: string(),

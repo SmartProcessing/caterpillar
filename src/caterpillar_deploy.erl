@@ -39,6 +39,7 @@ init(Args) ->
         deploy_max_waiting = DeployScriptMaxWaiting
     },
     register_as_service(0),
+    update_all_deploy_branches(),
     {ok, State}.
 
 
@@ -58,6 +59,9 @@ handle_info(register_as_service, #state{registered=false}=State) ->
 handle_info(run_deploy, State) ->
     error_logger:info_msg("running deploy~n"),
     run_deploy(State),
+    {noreply, State};
+handle_info(update_all_deploy_branches, State) ->
+    update_all_deploy_branches(State),
     {noreply, State};
 handle_info(_Message, State) ->
     error_logger:error_msg("unknown message: ~p~n", [_Message]),
@@ -142,6 +146,19 @@ init_ets(Idents, DeployPath) ->
     Ets.
 
 
+update_all_deploy_branches() -> 
+    erlang:send_after(0, self(), update_all_deploy_branches).
+
+
+update_all_deploy_branches(#state{deploy_script=DeployScript, ets=Ets}) ->
+    Data = [{DeployScript, Type, Branch, Arch} || {{Type, Branch, Arch}, _} <- ets:tab2list(Ets)],
+    lists:foreach(
+        fun({DeployScript, Type, Branch, Arch}) -> run_deploy_script(DeployScript, Type, Branch, Arch) end,
+        Data
+    ).
+
+
+
 %-----
 
 
@@ -161,6 +178,7 @@ init_deploy(#deploy{}=Deploy, State) ->
             erlang:send_after(Delay, self(), run_deploy)
     end,
     State#state{deploy_script_timer=NewTimer, deploy_info=NewInfo}.
+
 
 
 %-----
@@ -300,18 +318,23 @@ run_deploy_script(_, #state{deploy_script=Script, deploy_info=Info}) ->
         [] -> 
             error_logger:error_msg("nothing to update, deploy_info: ~p~n", [Info]);
         _ ->
-            Commands = [lists:flatten(io_lib:format("~s ~s ~s ~s", [Script, Type, Branch, Arch])) || {Type, Branch, Arch} <- ScriptInfo],
-            UpdateFun = fun(Cmd) ->
-                error_logger:info_msg("running:~s~n", [Cmd]),
-                error_logger:info_msg("deploy script result: ~p~n", [os:cmd(Cmd)])
+            Args =  [{Script, Type, Branch, Arch} || {Type, Branch, Arch} <- ScriptInfo],
+            UpdateFun = fun({Script, Type, Branch, Arch}) ->
+                error_logger:info_msg("deploy script result: ~p~n", [run_deploy_script(Script, Type, Branch, Arch)])
             end,
-            lists:foreach(UpdateFun, Commands)
+            lists:foreach(UpdateFun, Args)
     end,
     {ok, done}.
 
 
+
 %---------- end of deploy pipe ----------%
 
+
+-spec run_deploy_script(Script::string(), Type::atom(), Branch::binary(), Arch::atom()) -> ok.
+run_deploy_script(Script, Type, Branch, Arch) ->
+    Command = lists:flatten(io_lib:format("~s ~s ~s ~s", [Script, Type, Branch, Arch])),
+    os:cmd(Command).
 
 
 
