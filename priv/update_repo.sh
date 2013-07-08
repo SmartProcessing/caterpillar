@@ -44,4 +44,4 @@ case $BRANCH in
         BRANCH="unstable"
 esac
 
-cd /srv/packages/smprc/dists/$TYPE/$BRANCH/main/binary-amd64 && dpkg-scanpackages . &>/dev/null | gzip -c9 > Packages.gz
+cd /srv/packages/smprc/dists/$TYPE/$BRANCH/main/binary-amd64 && dpkg-scanpackages . | gzip -c9 > Packages.gz
