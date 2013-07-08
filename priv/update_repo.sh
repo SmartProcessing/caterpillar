@@ -33,4 +33,15 @@ if [[ -z $TYPE ]] || [[ -z $BRANCH ]] || [[ -z $ARCH ]]; then
     usage
 fi
 
+
+case $BRANCH in
+    "stable")
+        ;;
+    "test")
+        $BRANCH="testing"
+        ;;
+    *)
+        $BRANCH="unstable"
+esac
+
 cd /srv/packages/smprc/dists/$TYPE/$BRANCH/main/binary-amd64 && dpkg-scanpackages . | gzip -c9 > Packages.gz
