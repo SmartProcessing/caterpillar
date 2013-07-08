@@ -324,7 +324,7 @@ run_deploy_script(_, #state{deploy_script=Script, deploy_info=Info}) ->
                 error_logger:info_msg("deploy script result: ~p~n", [run_deploy_script(Script, Type, Branch, Arch)])
             end,
             lists:foreach(UpdateFun, Args)
-    en,d
+    end,
     {ok, done}.
 
 
