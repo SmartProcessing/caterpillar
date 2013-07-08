@@ -152,6 +152,7 @@ update_all_deploy_branches() ->
 
 update_all_deploy_branches(#state{deploy_script=DeployScript, ets=Ets}) ->
     Data = [{DeployScript, Type, Branch, Arch} || {{Type, Branch, Arch}, _} <- ets:tab2list(Ets)],
+    error_logger:info_msg("updating all deploy branches: ~p~n", [[{Type, Branch, Arch} || {_, Type, Branch, Arch} <- Data]]),
     lists:foreach(
         fun({DeployScript, Type, Branch, Arch}) -> run_deploy_script(DeployScript, Type, Branch, Arch) end,
         Data
