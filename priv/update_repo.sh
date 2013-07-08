@@ -38,10 +38,10 @@ case $BRANCH in
     "stable")
         ;;
     "test")
-        $BRANCH="testing"
+        BRANCH="testing"
         ;;
     *)
-        $BRANCH="unstable"
+        BRANCH="unstable"
 esac
 
 cd /srv/packages/smprc/dists/$TYPE/$BRANCH/main/binary-amd64 && dpkg-scanpackages . &>/dev/null | gzip -c9 > Packages.gz
