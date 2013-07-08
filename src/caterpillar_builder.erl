@@ -273,11 +273,13 @@ prepare(BuildPath, Archive, WorkId, Ident) ->
             file:delete(TempArch),
             case ?CPU:get_pkg_config(Archive, Cwd) of
                 {error, Reason} ->
-                    Subj = io_lib:format("#~B error: ~s/~s/~s", [
+                    Subj = io_lib:format("#~B error: ~s/~s/~s at ~s/~s", [
                             WorkId,
                             Archive#archive.name,
                             Archive#archive.branch,
-                            Archive#archive.tag
+                            Archive#archive.tag,
+                            Ident#ident.type,
+                            Ident#ident.arch
                         ]),
                     Body = io_lib:format("failed to parse pkg.config: ~p~n", [Reason]),
                     notify(Subj, Body),
@@ -526,11 +528,13 @@ check_build_deps(Candidate, State) ->
                     ask_for_rebuild(Dependencies, State),
                     dependent;
                 _Other ->
-                    Subj = io_lib:format("#~B error: ~s/~s/~s", [
+                    Subj = io_lib:format("#~B error: ~s/~s/~s at ~s/~s", [
                             Candidate#rev_def.work_id,
                             binary_to_list(Candidate#rev_def.name),
                             binary_to_list(Candidate#rev_def.branch),
-                            binary_to_list(Candidate#rev_def.tag)
+                            binary_to_list(Candidate#rev_def.tag),
+                            State#state.ident#ident.type,
+                            State#state.ident#ident.arch
                         ]),
                     Body = io_lib:format("missing dependencies: ~p~n", [Dependencies]),
                     notify(Subj, Body),
