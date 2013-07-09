@@ -68,13 +68,17 @@ handle_info(_Msg, State) ->
 
 
 handle_cast({event, {changes, _, _}=Event}, #state{ets=Ets}=State) ->
-    ForeachFun = fun(Pid) -> spawn(fun() -> gen_server:cast(Pid, Event) end) end,
-    lists:foreach(ForeachFun, select_workers_pids(Ets)),
+    spawn(fun() ->
+        ForeachFun = fun(Pid) -> gen_server:cast(Pid, Event) end,
+        lists:foreach(ForeachFun, select_workers_pids(Ets))
+    end),
     {noreply, State};
 
 handle_cast({event, {clean_packages, _}=Event}, #state{ets=Ets}=State) ->
-    ForeachFun = fun(Pid) -> spawn(fun() -> gen_server:cast(Pid, Event) end) end,
-    lists:foreach(ForeachFun, select_workers_pids(Ets)),
+    spawn(fun() ->
+        ForeachFun = fun(Pid) -> gen_server:cast(Pid, Event) end,
+        lists:foreach(ForeachFun, select_workers_pids(Ets))
+    end),
     {noreply, State};
 
 handle_cast({event, {Cmd, _}=Request}, #state{ets=Ets}=State) when
