@@ -2,6 +2,7 @@
 
 -on_load(tty_off/0).
 
+-include_lib("caterpillar.hrl").
 -include_lib("eunit/include/eunit.hrl").
 -define(BUILD_ID, "test_work_id").
 
@@ -318,3 +319,20 @@ filename_join_test_() ->
         }
     ]
 ]}.
+
+
+gen_ident_test_() ->
+{foreach, fun() -> ok end,
+[
+    {Message, fun() ->
+        ?assertEqual(Result, caterpillar_utils:gen_ident(Type, Arch))
+    end} || {Message, Type, Arch, Result} <- [
+        {"from atom/list", squeeze, "amd64", #ident{type= <<"squeeze">>, arch= <<"amd64">>}},
+        {"from binary/integer", <<"bin">>, 2141, #ident{type= <<"bin">>, arch= <<"2141">>}},
+        {"from tuple/float", {'wat?'}, 1.125, #ident{type= <<"{'wat?'}">>, arch= <<"1.125">>}}
+    ]
+]}.
+
+
+any_ident_test() ->
+    ?assertEqual('_', caterpillar_utils:any_ident()).

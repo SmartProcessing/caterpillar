@@ -114,37 +114,41 @@ handle(#http_req{path=[<<"init_repository">>, Path]}=Req, State) ->
     end,
     {ok, Req2, State};
 
-handle(#http_req{path=[<<"rebuild_deps">>, Name, Branch]}=Req, State) ->
+handle(#http_req{path=[<<"rebuild_deps">>, Name, Branch|MaybeIdent]}=Req, State) ->
     Args = [binary_to_list(X) || X <- [Name, Branch]],
-    Reply = case caterpillar_event:sync_event({worker_custom_command, rebuild_deps, Args}) of
+    Reply = case caterpillar_event:sync_event({worker_custom_command, rebuild_deps, Args, get_ident(MaybeIdent)}) of
         [{ok, Res}|_] ->
             ResIo = lists:map(fun(X) -> io_lib:format("~p", [X]) end, Res),
             list_to_binary("rebuilding dependencies:\n" ++ string:join(ResIo, ",\n") ++ "\n");
         Reason ->
             error_logger:error_msg("error: rebuild_dependencies: ~p~n", [Reason]),
-            list_to_binary(lists:flatten(io_lib:format("error: ~p~n", [Reason])))
+            list_to_binary(io_lib:format("error: ~p~n", [Reason]))
     end,
     {ok, Req2} = cowboy_http_req:reply(200, [], Reply, Req),
     {ok, Req2, State};
 
-handle(#http_req{path=[<<"pkg_info">>, Name, Branch]}=Req, State) ->
-    Reply = case caterpillar_event:sync_event({worker_custom_command, pkg_info, [Name, Branch]}) of
-        [{ok, Res}|_] when is_list(Res) ->
-            list_to_binary(lists:flatten(
-                    io_lib:format("Name: ~s~nBranch: ~s~nTag: ~s~nState: ~p~nDepends: ~p~nHas in dependencies: ~p~n", 
-                        [
-                            ?GV("name", Res), 
-                            ?GV("branch", Res),
-                            ?GV("tag", Res),
-                            ?GV("state", Res),
-                            ?GV("depends", Res),
-                            ?GV("has_in_deps", Res)
-                        ])));
-        [{error, Reason}|_] ->
-            list_to_binary(lists:flatten(io_lib:format("error: ~p~n", [Reason])));
-        Reason ->
-            list_to_binary(lists:flatten(io_lib:format("error: ~p~n", [Reason])))
-    end,
+handle(#http_req{path=[<<"pkg_info">>, Name, Branch|MaybeIdent]}=Req, State) ->
+    Result = caterpillar_event:sync_event({worker_custom_command, pkg_info, [Name, Branch], get_ident(MaybeIdent)}),
+    Reply = lists:foldl(
+        fun
+            ({ok, Res}, Acc) ->
+                Info = io_lib:format(
+                    "Name: ~s~nBranch: ~s~nTag: ~s~nState: ~p~nDepends: ~p~nHas in dependencies: ~p~n", 
+                    [?GV("name", Res), ?GV("branch", Res), ?GV("tag", Res), ?GV("state", Res), ?GV("depends", Res), ?GV("has_in_deps", Res)]
+                ),
+                Bin = list_to_binary(Info),
+                <<Bin/binary, "\n", Acc>>;
+            (Error, Acc) ->
+                Reason = case Error of
+                    {error, Rsn} -> Rsn;
+                    _ -> {bad_result, Error}
+                end,
+                Bin = list_to_binary(io_lib:format("error: ~p~n", [Reason])),
+                <<Bin/binary, "\n", Acc>>
+        end,
+        <<>>,
+        Result
+    ), 
     {ok, Req2} = cowboy_http_req:reply(200, [], Reply, Req),
     {ok, Req2, State};
 
@@ -165,3 +169,7 @@ ensure_started(App) ->
 
 format(Template, Args) ->
     list_to_binary(io_lib:format(Template, Args)).
+
+
+get_ident([Type, Arch]) -> caterpillar_utils:gen_ident(Type, Arch);
+get_ident(_) -> caterpillar_utils:any_ident().

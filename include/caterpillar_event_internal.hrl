@@ -1,16 +1,8 @@
--ifndef(caterpillar_event_internal).
--define(caterpillar_event_internal, true).
+-ifndef(caterpillar_event_internal_hrl).
+-define(caterpillar_event_internal_hrl, true).
 
 -record(state, {
-    ets :: ets:tab()
+    ets :: ets:tab() % {{ref, pid}, worker|service, #ident{}|service_name, pid}
 }).
-
-
--record(scan_pipe_result, {
-    notity :: NotifyRecord::record(),
-    archives :: [ArchiveRecord::record()],
-    packaeges :: [PackageRecord::record()]
-}).
-
 
 -endif.

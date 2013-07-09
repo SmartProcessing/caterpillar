@@ -444,20 +444,21 @@ events_test_() ->
             end
         },
         {
-            "sync event: workers custom command",
+            "sync event: workers custom command, any_ident",
             fun() -> 
                 Self = self(),
                 spawn(fun() ->
                     caterpillar_event:register_worker(worker1, work_id),
                     Self ! spawned,
                     case caterpillar_test_support:recv(10) of
-                        {_, From, {worker_custom_command, command, args}} -> gen_server:reply(From, call_received);
+                        {_, From, {worker_custom_command, command, args, Ident}} -> gen_server:reply(From, {call_received, Ident});
                         _ -> ok
                     end
                 end),
                 ?assertEqual(spawned, caterpillar_test_support:recv(10)),
                 ?assertEqual([{worker, worker1}], caterpillar_event:get_info()),
-                ?assertEqual([call_received], caterpillar_event:sync_event({worker_custom_command, command, args}))
+                Result = caterpillar_event:sync_event({worker_custom_command, command, args, caterpillar_utils:any_ident()}),
+                ?assertEqual([{call_received, caterpillar_utils:any_ident()}], Result)
             end
         },
         {

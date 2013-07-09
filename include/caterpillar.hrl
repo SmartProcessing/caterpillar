@@ -36,8 +36,8 @@
 
 
 -record(ident, {
-    arch :: amd64|i386,
-    type :: atom()
+    arch :: binary(),
+    type :: binary()
 }).
 
 

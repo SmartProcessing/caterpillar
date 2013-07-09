@@ -13,7 +13,7 @@
 -export([sync_event/1, event/1]).
 -export([register_service/1, register_worker/2]).
 -export([init/1, handle_info/2, handle_cast/2, handle_call/3, code_change/3, terminate/2]).
-
+-export([register_name/2, unregister_name/1, whereis_name/1, send/2]).
 
 
 -spec register_service(Type::term()) -> {ok, pid()} | {error, Reason :: term()}.
@@ -23,7 +23,33 @@
 -spec sync_event(Event::term()) -> any().
 
 
-start_link(_Args) -> gen_server:start_link({global, ?MODULE}, ?MODULE, [], []).
+%------ register name
+
+
+register_name(Name, Pid) ->
+    register(Name, Pid),
+    global:register_name(Name, Pid).
+
+
+unregister_name(Name) ->
+    unregister(Name),
+    global:unregister_name(Name).
+
+
+send(Name, Msg) ->
+    global:send(Name, Msg).
+
+
+whereis_name(Name) ->
+    global:whereis_name(Name).
+
+
+
+%------
+
+
+
+start_link(_Args) -> gen_server:start_link({via, ?MODULE, ?MODULE}, ?MODULE, [], []).
 
 
 stop() ->
@@ -51,15 +77,13 @@ register_worker(Ident, WorkId) ->
 
 
 init(_) ->
-    State = #state{
-        ets = ets:new(?MODULE, [protected]) %{ref, type, pid, ident|service}
-    },
+    State = #state{ets = ets:new(?MODULE, [named_table, protected])},
     {ok, State}.
 
 
 
-handle_info({'DOWN', Ref, _Type, _Pid, _Reason}, #state{ets=Ets}=State) ->
-    ets:delete(Ets, Ref),
+handle_info({'DOWN', Ref, _Type, Pid, _Reason}, #state{ets=Ets}=State) ->
+    ets:delete(Ets, {Ref, Pid}),
     {noreply, State};
 
 handle_info(_Msg, State) ->
@@ -104,8 +128,8 @@ handle_call({register_worker, Ident, WorkId}, {Pid, _}, #state{ets=Ets}=State) -
             );
         _ -> ok
     end,
+    ets:insert(Ets, {{erlang:monitor(process, Pid), Pid}, worker, Ident, Pid}),
     push_archives_to_new_worker(State, WorkId, Pid),
-    ets:insert(Ets, {erlang:monitor(process, Pid), worker, Ident, Pid}),
     {reply, {ok, self()}, State};
 
 handle_call({register_service, Service}, {Pid, _}, #state{ets=Ets}=State) ->
@@ -117,7 +141,7 @@ handle_call({register_service, Service}, {Pid, _}, #state{ets=Ets}=State) ->
             );
         _ -> ok
     end,
-    ets:insert(Ets, {erlang:monitor(process, Pid), service, Service, Pid}),
+    ets:insert(Ets, {{erlang:monitor(process, Pid), Pid}, service, Service, Pid}),
     {reply, {ok, self()}, State};
 
 handle_call({sync_event, {get_archive, #archive{}}=Request}, From, #state{ets=Ets}=State) ->
@@ -148,10 +172,10 @@ handle_call({sync_event, {repository_custom_command, _Command, _Args}=Request}, 
     sync_event_to_service(repository, From, Ets, Request),
     {noreply, State};
 
-handle_call({sync_event, {worker_custom_command, Command, Args}=Event}, From, #state{ets=Ets}=State) ->
+handle_call({sync_event, {worker_custom_command, Command, Args, Ident}=Event}, From, #state{ets=Ets}=State) ->
     spawn(fun() ->
         ForeachFun = fun(Pid) -> catch gen_server:call(Pid, Event, 30000) end,
-        Result = (catch lists:map(ForeachFun, select_workers_pids(Ets))),
+        Result = (catch lists:map(ForeachFun, select_workers_pids(Ets, Ident))),
         gen_server:reply(From, Result)
     end),
     {noreply, State};
@@ -203,7 +227,11 @@ select_worker(Ets, Name) ->
     
 
 select_workers_pids(Ets) ->
-    ets:select(Ets, [{{'_', '$1', '_', '$2'}, [{'==', worker, '$1'}], ['$2']}]).
+    select_workers_pids(Ets, caterpillar_utils:any_ident()).
+
+
+select_workers_pids(Ets, Ident) ->
+    ets:select(Ets, [{{'_', '$1', Ident, '$2'}, [{'==', worker, '$1'}], ['$2']}]).
 
 
 push_archives_to_new_worker(#state{ets=Ets}, WorkId, WorkerPid) ->

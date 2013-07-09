@@ -14,31 +14,33 @@
 -define(LTB, list_to_binary).
 
 -record(state, {
-        master_pid=none,
-        deps,
-        buckets,
-        main_queue,
-        wait_queue,
-        queue_switch=true,
-        next_to_build,
-        workers=[],
-        unpack_state,
-        build_path,
-        poll_time,
-        queue_missing=false,
-        prebuild=[],
-        queued=[],
-        work_id,
-        wid,
-        ident
-    }).
+    master_pid=none,
+    deps,
+    buckets,
+    main_queue,
+    wait_queue,
+    queue_switch=true,
+    next_to_build,
+    workers=[],
+    unpack_state,
+    build_path,
+    poll_time,
+    queue_missing=false,
+    prebuild=[],
+    queued=[],
+    work_id,
+    wid,
+    ident
+}).
 
 
 start_link(Settings) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, Settings, []).
 
+
 state() ->
     gen_server:call(?MODULE, state, 10000).
+
 
 init(Settings) ->
     error_logger:info_msg("starting caterpillar_builder~n", []),
@@ -201,7 +203,7 @@ handle_info({'DOWN', Reference, _, _, Reason}, State) ->
     {noreply, State#state{queued=Preparing}};
 handle_info(schedule, State) when State#state.master_pid == none ->
     error_logger:info_msg("trying to register self~n"),
-    case catch caterpillar_event:register_worker(caterpillar_builder, State#state.wid) of
+    case catch caterpillar_event:register_worker(State#state.ident, State#state.wid) of
         {ok, Pid} ->
             error_logger:info_msg("registered worker at ~p~n", [Pid]),
             erlang:monitor(process, Pid),

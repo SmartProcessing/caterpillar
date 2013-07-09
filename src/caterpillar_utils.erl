@@ -13,6 +13,8 @@
 -export([get_value_or_die/2]).
 -export([command/1, command/2, command/4]).
 -export([filename_join/1, filename_join/2]).
+-export([gen_ident/2, any_ident/0]).
+
 
 -define(DEFAULT_TIMEOUT, 300000).
 
@@ -251,3 +253,17 @@ filename_join_([], Accum) -> lists:flatten(lists:reverse(Accum));
 filename_join_([Name|Other], []) -> filename_join_(Other, ["/", to_list(Name)|[]]);
 filename_join_([Name|[]], Accum) -> filename_join_([], [to_list(Name)|Accum]);
 filename_join_([Name|Other], Accum) -> filename_join_(Other, ["/", to_list(Name)|Accum]).
+
+
+-spec gen_ident(Type::atom(), Arch::atom()) -> #ident{}.
+gen_ident(Type, Arch) ->
+    ToBin = fun
+        (X) when is_atom(X) -> atom_to_binary(X, latin1);
+        (X) when is_list(X) -> list_to_binary(X);
+        (X) when is_binary(X) -> X;
+        (X) -> list_to_binary(io_lib:format("~p", [X]))
+    end,
+    #ident{type=ToBin(Type), arch=ToBin(Arch)}.
+
+
+any_ident() -> '_'.
