@@ -62,7 +62,7 @@ init(Settings) ->
     WorkIdFile = ?GV(work_id, Settings, ?DEFAULT_WORK_ID_FILE),
     WorkId = get_work_id(WorkIdFile),
     {Type, Arch}=?GV(ident, Settings, {unknown, unknown}),
-    Ident = #ident{type=Type, arch=Arch},
+    Ident = caterpillar_utils:gen_ident(Type, Arch),
     start_timer(PollTime),
     {ok, #state{
         deps=Deps,

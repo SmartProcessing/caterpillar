@@ -49,7 +49,9 @@ whereis_name(Name) ->
 
 
 
-start_link(_Args) -> gen_server:start_link({via, ?MODULE, ?MODULE}, ?MODULE, [], []).
+%doesnt work on erlang 14
+%start_link(_Args) -> gen_server:start_link({via, ?MODULE, ?MODULE}, ?MODULE, [], []).
+start_link(_Args) -> gen_server:start_link({global, ?MODULE}, ?MODULE, [], []).
 
 
 stop() ->
@@ -77,6 +79,7 @@ register_worker(Ident, WorkId) ->
 
 
 init(_) ->
+    register(?MODULE, self()),
     State = #state{ets = ets:new(?MODULE, [named_table, protected])},
     {ok, State}.
 
