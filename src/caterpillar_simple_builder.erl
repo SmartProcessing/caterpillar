@@ -15,7 +15,7 @@ init_worker({Type, Arch}, Args) when is_atom(Type) andalso is_atom(Arch) ->
         Root <- [archive_root, repository_root, deploy_root]
     ],
     State = #state{
-        ident=#ident{type=Type, arch=Arch},
+        ident=caterpillar_utils:gen_ident(Type, Arch),
         work_id = caterpillar_utils:read_work_id(WorkIdFile),
         work_id_file = WorkIdFile,
         archive_root = ArchiveRoot,

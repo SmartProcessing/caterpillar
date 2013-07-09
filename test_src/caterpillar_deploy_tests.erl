@@ -45,7 +45,7 @@ init_ets_test_() ->
         {
             "some idents in cfg, but without default values",
             [{os_type, [{amd64, [{branch, "__test_amd"}]}]}],
-            [{{os_type, branch, amd64}, "./test/test_deploy/__test_amd"}]
+            [{{<<"os_type">>, branch, <<"amd64">>}, "./test/test_deploy/__test_amd"}]
         }
     ]
 ]}.
@@ -59,6 +59,7 @@ run_pre_deploy_test() ->
 find_deploy_paths_test_() ->
 {foreachx,
     fun(Idents) -> 
+        tty_on(),
         Ets = caterpillar_deploy:init_ets(Idents),
         #state{ets=Ets}
     end,
@@ -78,15 +79,15 @@ find_deploy_paths_test_() ->
         {
             "default values selected",
             [{default, [{default, [{default, filename:absname("unknown")}]}]}],
-            #deploy{ident=#ident{type=test}},
-            [{{default, default, default}, filename:absname("unknown")}]
+            #deploy{ident=caterpillar_utils:gen_ident(test, test)},
+            [{{<<"default">>, default, <<"default">>}, filename:absname("unknown")}]
         },
         {
             "some paths found for ident",
             [{test, [{test, [{branch, filename:absname("__test_test")}]}]}],
-            #deploy{ident=#ident{type=test, arch=test}},
+            #deploy{ident=caterpillar_utils:gen_ident(test, test)},
             [
-                {{test, branch, test}, filename:absname("__test_test")}
+                {{<<"test">>, branch, <<"test">>}, filename:absname("__test_test")}
             ]
         },
         {
@@ -95,9 +96,9 @@ find_deploy_paths_test_() ->
                 {test, [{test, [{test, filename:absname("__test_test")}]}]},
                 {default, [{default, [{default, filename:absname("unknown")}]}]}
             ],
-            #deploy{ident=#ident{type=x, arch=x}},
+            #deploy{ident=caterpillar_utils:gen_ident(x, x)},
             [
-                {{default, default, default}, filename:absname("unknown")}
+                {{<<"default">>, default, <<"default">>}, filename:absname("unknown")}
             ]
         }
     ]
@@ -130,21 +131,24 @@ copy_packages_test_() ->
     end} || {Message, Paths, Deploy, Check} <- [
         {
             "no default path for test, but default/default exists",
-            [{{default, default, default}, "__test"}],
-            #deploy{packages=[], ident=#ident{arch=test}},
+            [{{<<"default">>, default, <<"default">>}, "__test"}],
+            #deploy{packages=[], ident=caterpillar_utils:gen_ident(test, test)},
             fun(Result, _) -> ?assertMatch({ok, #deploy{}}, Result) end
         },
         {
             "no default path for test, no default/default exists",
             [],
-            #deploy{packages=[], ident=#ident{arch=test}},
+            #deploy{packages=[], ident=caterpillar_utils:gen_ident(test, test)},
             fun(Result, _) -> ?assertEqual({'EXIT', {copy_packages, no_default_path}}, Result) end
             
         },
         {
             "nothing to copy",
-            [{{type, default, arch}, "__test"}], 
-            #deploy{packages=[], ident=#ident{type=type, arch=arch}},
+            [
+                {{<<"default">>, default, <<"default">>}, "__test"},
+                {{<<"type">>, default, <<"arch">>}, "__test"}
+            ], 
+            #deploy{packages=[], ident=caterpillar_utils:gen_ident(test, arch)},
             fun(Result, _) -> ?assertMatch({ok, #deploy{}}, Result) end
         },
         {
@@ -257,24 +261,24 @@ rotate_packages_test_() ->
         {
             "no package rotated",
             [],
-            #deploy{ident=#ident{type=type, arch=arch}},
+            #deploy{ident=caterpillar_utils:gen_ident(test, arch)},
             fun(_) -> ok end
         },
         {
             "some package rotated, some not",
             [
-                {test, test, "__test_packages/p1", "p1", "b1", 1},
-                {test, test, "__test_packages/p1_1", "p1", "b1", 2},
-                {test, test, "__test_packages/p1_2", "p1", "b1", 3},
-                {default, test, "__test_packages/p1_1", "p1", "b1", 2}
+                {<<"test">>, <<"test">>, "__test_packages/p1", "p1", "b1", 1},
+                {<<"test">>, <<"test">>, "__test_packages/p1_1", "p1", "b1", 2},
+                {<<"test">>, <<"test">>, "__test_packages/p1_2", "p1", "b1", 3},
+                {<<"default">>, <<"test">>, "__test_packages/p1_1", "p1", "b1", 2}
             ],
-            #deploy{ident=#ident{type=test, arch=test}, packages=[#deploy_package{name="p1", branch="b1"}]},
+            #deploy{ident=caterpillar_utils:gen_ident(test, test), packages=[#deploy_package{name="p1", branch="b1"}]},
             fun(#state{dets=D}) ->
                 ?assertEqual(
                     [
-                        {{default, test, "__test_packages/p1_1"}, {"p1", "b1"}, 2},
-                        {{test, test, "__test_packages/p1_1"}, {"p1", "b1"}, 2},
-                        {{test, test, "__test_packages/p1_2"}, {"p1","b1"}, 3}
+                        {{<<"default">>, <<"test">>, "__test_packages/p1_1"}, {"p1", "b1"}, 2},
+                        {{<<"test">>, <<"test">>, "__test_packages/p1_1"}, {"p1", "b1"}, 2},
+                        {{<<"test">>, <<"test">>, "__test_packages/p1_2"}, {"p1","b1"}, 3}
                     ],
                     lists:flatten(lists:sort(dets:match(D, '$1')))
                 ),

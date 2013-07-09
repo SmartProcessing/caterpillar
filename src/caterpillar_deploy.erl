@@ -140,7 +140,7 @@ init_ets(Idents, DeployPath) ->
     end,
     Ets = ets:new(?MODULE, [protected, named_table]),
     [
-        ets:insert(Ets, {{Type, Branch, Arch}, ToAbsPath(Path)}) || 
+        ets:insert(Ets, {{atom_to_binary(Type, latin1), Branch, atom_to_binary(Arch, latin1)}, ToAbsPath(Path)}) || 
         {Type, Archs} <- Idents, {Arch, Branches} <- Archs, {Branch, Path} <- Branches
     ],
     Ets.
@@ -228,8 +228,8 @@ find_deploy_paths(#deploy{ident=#ident{arch=Arch, type=Type}}=Deploy, #state{ets
         {
             {{'$1', '$2', '$3'}, '$4'}, 
             [
-                {'orelse', {'==', '$1', Type}, {'==', '$1', default}},
-                {'orelse', {'==', '$3', Arch}, {'==', '$3', default}}
+                {'orelse', {'==', '$1', Type}, {'==', '$1', <<"default">>}},
+                {'orelse', {'==', '$3', Arch}, {'==', '$3', <<"default">>}}
             ],
             [['$1', '$2', '$3', '$4']]
         }
@@ -238,6 +238,7 @@ find_deploy_paths(#deploy{ident=#ident{arch=Arch, type=Type}}=Deploy, #state{ets
     case SelectResult of
         [] ->
             %FIXME: notify about
+            error_logger:error_msg("cant find deploy path for ~s/~s~n", [Arch, Type]),
             {error, no_deploy};
         _ -> 
             {ok, {SelectResult, Deploy}}
@@ -247,7 +248,7 @@ find_deploy_paths(#deploy{ident=#ident{arch=Arch, type=Type}}=Deploy, #state{ets
 copy_packages({Paths, #deploy{packages=Packages, ident=#ident{arch=Arch, type=Type}}=Deploy}, #state{dets=Dets}) ->
     DefaultPathValue = case proplists:get_value({Type, default, Arch}, Paths, '$none$') of
         '$none$' ->
-            case proplists:get_value({default, default, default}, Paths, '$none') of
+            case proplists:get_value({<<"default">>, default, <<"default">>}, Paths, '$none') of
                 '$none' ->
                     error_logger:error_msg("no default path exists~n"),
                     exit({copy_packages, no_default_path});
