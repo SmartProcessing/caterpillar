@@ -6,7 +6,7 @@
 -include_lib("caterpillar_event_internal.hrl").
 -define(
     SELECT(Type, ServiceOrIdent), 
-    [{{'_', '$1', '$2', '$3'}, [{'andalso', {'==', '$1', Type}, {'==', '$2', ServiceOrIdent}}], ['$3']}]
+    [{{'_', '$1', ServiceOrIdent, '$3'}, [{'==', '$1', Type}], ['$3']}]
 ).
 
 -export([start_link/1, stop/0, get_info/0]).
@@ -219,8 +219,8 @@ select_service(Ets, Name) ->
     end.
 
 
-select_worker(Ets, Name) ->
-    case catch ets:select(Ets, ?SELECT(worker, Name)) of
+select_worker(Ets, Ident) ->
+    case catch ets:select(Ets, ?SELECT(worker, Ident)) of
         [] -> {error, no_worker};
         [Pid|_] -> {ok, Pid};
         Error ->  
@@ -234,7 +234,7 @@ select_workers_pids(Ets) ->
 
 
 select_workers_pids(Ets, Ident) ->
-    ets:select(Ets, [{{'_', '$1', Ident, '$2'}, [{'==', worker, '$1'}], ['$2']}]).
+    ets:select(Ets, ?SELECT(worker, Ident)).
 
 
 push_archives_to_new_worker(#state{ets=Ets}, WorkId, WorkerPid) ->
