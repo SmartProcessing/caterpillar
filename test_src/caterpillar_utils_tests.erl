@@ -336,3 +336,36 @@ gen_ident_test_() ->
 
 any_ident_test() ->
     ?assertEqual('_', caterpillar_utils:any_ident()).
+
+
+do_in_pool_test_() ->
+{foreach, fun() -> ok end,
+[
+    {
+        "testing parralel work",
+        fun() -> 
+            Start = caterpillar_utils:unixtime() / 1000,
+            Cb = fun(_) -> timer:sleep(100) end,
+            caterpillar_utils:do_in_pool(Cb, 5, [1,1,1,1,1,1]),
+            End = caterpillar_utils:unixtime() / 1000,
+            ?assert(200 < End - Start andalso End - Start < 250)
+        end
+    },
+    {
+        "testing sequential work",
+        fun() ->
+            Start = caterpillar_utils:unixtime() / 1000,
+            Cb = fun(_) -> timer:sleep(10) end,
+            caterpillar_utils:do_in_pool(Cb, 1, lists:seq(1, 10)),
+            End = caterpillar_utils:unixtime() / 1000,
+            ?assert(100 < End - Start andalso End - Start < 150)
+        end
+    },
+    {
+        "cb crashed",
+        fun() ->
+            Cb = fun(_) -> exit(some_reason) end,
+            ?assertEqual([{'EXIT', some_reason}], caterpillar_utils:do_in_pool(Cb, 5, [1]))
+        end
+    }
+]}.

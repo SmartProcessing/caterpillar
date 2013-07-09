@@ -14,6 +14,8 @@
 -export([command/1, command/2, command/4]).
 -export([filename_join/1, filename_join/2]).
 -export([gen_ident/2, any_ident/0]).
+-export([unixtime/0]).
+-export([do_in_pool/3]).
 
 
 -define(DEFAULT_TIMEOUT, 300000).
@@ -267,3 +269,37 @@ gen_ident(Type, Arch) ->
 
 
 any_ident() -> '_'.
+
+
+recv(Timeout) ->
+    receive
+        A -> A
+    after 
+        Timeout -> timeout 
+    end.
+
+
+unixtime() ->
+    {A, B, C} = erlang:now(),
+    A * 1000000 * 1000000 + B * 1000000 + C.
+
+
+do_in_pool(CallBackFun, Size, Data) ->
+    do_in_pool(CallBackFun, Size, Data, [], 0).
+
+
+do_in_pool(_CallBackFun, _Size, [], Accum, 0) ->  Accum;
+do_in_pool(CallBackFun, Size, [Element|Rest], Accum, ActualSize) when Size > ActualSize ->
+    Self = self(),
+    spawn_monitor(fun() -> link(Self), Self ! {result, (catch CallBackFun(Element))} end),
+    do_in_pool(CallBackFun, Size, Rest, Accum, ActualSize+1);
+do_in_pool(_CallBackFun, _Size, Data, Accum, ActualSize) ->
+    case recv(infinity) of
+        {'DOWN', _, _, _, _} ->
+            do_in_pool(_CallBackFun, _Size, Data, Accum, ActualSize-1);
+        {result, Result} ->
+            do_in_pool(_CallBackFun, _Size, Data, [Result|Accum], ActualSize);
+        Other ->
+            exit({do_in_pool, {bad_msg, Other}})
+    end.
+
