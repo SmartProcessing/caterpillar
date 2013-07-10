@@ -175,9 +175,9 @@ handle_call({sync_event, {repository_custom_command, _Command, _Args}=Request}, 
     sync_event_to_service(repository, From, Ets, Request),
     {noreply, State};
 
-handle_call({sync_event, {worker_custom_command, Command, Args, Ident}=Event}, From, #state{ets=Ets}=State) ->
+handle_call({sync_event, {worker_custom_command, Command, Args, Ident}}, From, #state{ets=Ets}=State) ->
     spawn(fun() ->
-        ForeachFun = fun(Pid) -> catch gen_server:call(Pid, Event, 30000) end,
+        ForeachFun = fun(Pid) -> catch gen_server:call(Pid, {worker_custom_command, Command, Args}, 30000) end,
         Result = (catch lists:map(ForeachFun, select_workers_pids(Ets, Ident))),
         gen_server:reply(From, Result)
     end),

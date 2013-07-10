@@ -451,14 +451,14 @@ events_test_() ->
                     caterpillar_event:register_worker(worker1, work_id),
                     Self ! spawned,
                     case caterpillar_test_support:recv(10) of
-                        {_, From, {worker_custom_command, command, args, Ident}} -> gen_server:reply(From, {call_received, Ident});
+                        {_, From, {worker_custom_command, command, args}} -> gen_server:reply(From, call_received);
                         _ -> ok
                     end
                 end),
                 ?assertEqual(spawned, caterpillar_test_support:recv(10)),
                 ?assertEqual([{worker, worker1}], caterpillar_event:get_info()),
                 Result = caterpillar_event:sync_event({worker_custom_command, command, args, caterpillar_utils:any_ident()}),
-                ?assertEqual([{call_received, caterpillar_utils:any_ident()}], Result)
+                ?assertEqual([call_received], Result)
             end
         },
         {
