@@ -163,7 +163,7 @@ handle_cast({clean_packages, Archives}, State) ->
             list_to_binary(Archive#archive.branch),
             <<>>
         },
-        ?CBS:delete(State#state.deps, State#state.buckets, State#state.build_path, Version)
+        ?CBS:delete(State#state.deps, State#state.build_path, Version)
     end,
     lists:map(Fun, Archives),
     {noreply, State};
@@ -459,10 +459,6 @@ submit_next_to_build(QType, Queue, Candidate, State) ->
 
 submit_missing(QType, Queue, Candidate, State) ->
     ?CBS:update_dep_state(State#state.deps, Candidate, <<"none">>),
-    lists:map(fun(X) -> 
-                ?CBS:delete_from_bucket(State#state.buckets, State#state.build_path, X, Candidate)
-            end, ?CBS:list_buckets(State#state.deps, Candidate)),
-    ?CBS:empty_state_buckets(State#state.deps, Candidate),
     case QType of
         main_queue ->
             {ok, State#state{

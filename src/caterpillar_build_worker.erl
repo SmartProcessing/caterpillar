@@ -147,7 +147,6 @@ unpack_rev(Rev, {BuildPath, DepsDets}) ->
         {none, {Rev, BuildPath}}
     }.
     
-
 platform_get_env({Rev, BuildPath}, Plugins) ->
     {Name, _B, _T} = ?VERSION(Rev),
     PkgConfig = Rev#rev_def.pkg_config,
