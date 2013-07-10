@@ -6,7 +6,7 @@
 -export([get_dep_list/2]).
 -export([get_archive_version/1]).
 -export([get_version_archive/1]).
--export([pack_rev_def/3, get_dir_name/1]).
+-export([pack_rev_def/3]).
 -export([gen_control_from_pkg_config/1]).
 -define(LTB, list_to_binary).
 -define(BTL, binary_to_list).
@@ -133,19 +133,6 @@ get_pkg_config_list(Path) ->
 get_pkg_config(Arch, Path) ->
     get_pkg_config_record(Arch, get_pkg_config_list(Path)).
 
-
-get_dir_name(Rev=#rev_def{}) ->
-    Name = ?BTL(Rev#rev_def.name),
-    Branch = ?BTL(Rev#rev_def.branch),
-    Tag = ?BTL(Rev#rev_def.tag),
-    io_lib:format(
-        "~s-~s~s", [Name, Branch, Tag]);
-get_dir_name({N, B, T}) ->
-    Name = ?BTL(N),
-    Branch = ?BTL(B),
-    Tag = ?BTL(T),
-    io_lib:format(
-        "~s-~s~s", [Name, Branch, Tag]).
 
 parse_control(Path) ->
     case catch file:read_file(filename:join([Path, "control"])) of

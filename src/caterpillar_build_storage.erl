@@ -2,14 +2,15 @@
 -include_lib("caterpillar_builder_internal.hrl").
 -export([check_isect/2, list_unres_deps/3, list_buckets/2, empty_state_buckets/2, cleanup_new_in_progress/1]).
 -export([update_dep_state/3, fetch_dep/2, fetch_dep_non_block/2, create_dep/2, get_subj/2]).
--export([create_bucket/2, find_bucket/2, arm_bucket/5, get_temp_path/2]).
+-export([create_bucket/2, find_bucket/2, arm_bucket/5]).
 -export([fetch_bucket/2, update_dep_buckets/6, update_buckets/5, update_buckets/6, delete_from_bucket/4]).
--export([delete/4]).
+-export([delete/4, get_path/3, get_statpack_path/3, get_temp_path/2]).
 
 -define(LOCK(X), gen_server:call(caterpillar_lock, {lock, X}, infinity)).
 -define(UNLOCK(X), gen_server:call(caterpillar_lock, {unlock, X})).
 -define(CPU, caterpillar_pkg_utils).
 -define(CU, caterpillar_utils).
+-define(BTL, binary_to_list).
 
 -spec list_unres_deps(reference(), #rev_def{}, [version()]) ->
     {ok, Unresolved :: [version()]}.
@@ -166,8 +167,7 @@ delete(Deps, Buckets, Path, Version) ->
         ?UNLOCK(X),
         ?CU:del_dir(filename:join([Path, BPath, binary_to_list(Name)]))
     end,
-    lists:map(BucketDel, InBuckets),
-    ?CU:del_dir(filename:join([Path, "temp", ?CPU:get_dir_name(Version)])).
+    lists:map(BucketDel, InBuckets).
 
 
 -spec create_bucket(reference(), #rev_def{}) ->
@@ -275,7 +275,7 @@ arm_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
                     ok = dets:insert(BucketsDets, {BName, BPath, lists:usort([Dep|BPackages])}),
                     ?UNLOCK(Dep);
                 [] ->
-                    DepPath = get_temp_path(BuildPath, Dep),
+                    DepPath = get_path(BuildPath, Dep, <<"new">>),
                     copy_package_to_bucket(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)])),
                     ?LOCK(Dep),
                     [{Dep, {NewState, NewDepBuckets}, NewDepOn, NewHasInDep}|_] = dets:lookup(Deps, Dep),
@@ -289,9 +289,6 @@ arm_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
             end
     end,
     arm_bucket(BucketsDets, Deps, {BName, BPath, [Dep|BPackages]}, BuildPath, O).
-
-get_temp_path(BuildPath, Rev) ->
-    filename:join([BuildPath, "temp", ?CPU:get_dir_name(Rev)]).
 
 copy_package_to_bucket(Source, Path) ->
     error_logger:info_msg("copying ~p to ~p~n", [Source, Path]),
@@ -384,3 +381,38 @@ update_new_in_progress(Deps, [{Vsn, {State, InB}, Subj, Obj}]) when State == <<"
     dets:insert(Deps, {Vsn, {<<"none">>, InB}, Subj, Obj});
 update_new_in_progress(Deps, _) ->
     ok.
+
+-spec get_temp_path(list(), version()|#rev_def{}) -> list().
+get_temp_path(Prefix, Rev) ->
+    TmpName = filename:join([Prefix, "temp", get_dir_name(Rev, "tmp")]),
+    filelib:ensure_dir(TmpName),
+    TmpName.
+
+-spec get_path(list(), version(), list()|binary()) -> list().
+get_path(Prefix, Vsn, State) ->
+    Dir = filename:join([Prefix, "pstore", get_dir_name(Vsn, State)]),
+    filelib:ensure_dir(Dir ++ "/empty"),
+    Dir.
+
+-spec get_statpack_path(list(), integer(), version()) -> list().
+get_statpack_path(Prefix, WorkId, RV) ->
+    Dir = filename:join([Prefix, "buckets", get_dir_name(RV, integer_to_list(WorkId))]),
+    filelib:ensure_dir(Dir),
+    Dir.
+
+get_dir_name(RV) ->
+    get_dir_name(RV, <<"new">>).
+
+get_dir_name(Rev=#rev_def{}, Postfix) ->
+    Name = ?BTL(Rev#rev_def.name),
+    Branch = ?BTL(Rev#rev_def.branch),
+    Tag = ?BTL(Rev#rev_def.tag),
+    lists:flatten(io_lib:format(
+        "~s-~s-~s.~s", [Name, Branch, Tag, Postfix]));
+
+get_dir_name({N, B, T}, Postfix) ->
+    Name = ?BTL(N),
+    Branch = ?BTL(B),
+    Tag = ?BTL(T),
+    lists:flatten(io_lib:format(
+        "~s-~s-~s.~s", [Name, Branch, Tag, Postfix])).

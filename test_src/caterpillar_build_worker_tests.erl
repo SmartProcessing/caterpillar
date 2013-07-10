@@ -200,7 +200,7 @@ get_temp_path_test() ->
                 pkg_config=#pkg_config{name = "name"}
             }
     ),
-    ?assertEqual(true, string:equal(Path, "/test/temp/name-trunk1.0.1")).
+    ?assertEqual(true, string:equal(Path, "/test/temp/name-trunk-1.0.1.tmp")).
 
 update_bucket_test_() ->
     {setup,

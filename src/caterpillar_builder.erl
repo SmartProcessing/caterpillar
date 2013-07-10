@@ -60,7 +60,7 @@ init(Settings) ->
     UnpackState = ets:new(unpack_state, []),
     BuildPath = ?GV(build_path, Settings, ?DEFAULT_BUILD_PATH),
     WorkIdFile = ?GV(work_id, Settings, ?DEFAULT_WORK_ID_FILE),
-    WorkId = get_work_id(WorkIdFile),
+    WorkId = ?CU:read_work_id(WorkIdFile),
     {Type, Arch}=?GV(ident, Settings, {unknown, unknown}),
     Ident = caterpillar_utils:gen_ident(Type, Arch),
     start_timer(PollTime),
@@ -112,17 +112,12 @@ handle_call({err_built, Worker, RevDef, BuildInfo}, _From, #state{ident=Ident}=S
         RevDef#rev_def.work_id,
         BuildInfo#build_info.description
     ]}),
-    Subj = io_lib:format("#~B error: ~s/~s/~s at ~s/~s", [
-            RevDef#rev_def.work_id,
-            binary_to_list(RevDef#rev_def.name),
-            binary_to_list(RevDef#rev_def.branch),
-            binary_to_list(RevDef#rev_def.tag),
-            Ident#ident.type,
-            Ident#ident.arch
-        ]),
-    notify(Subj, BuildInfo#build_info.description),
-    BuildState = BuildInfo#build_info.state,
-    ?CBS:update_dep_state(State#state.deps, RevDef, BuildState),
+    notify(BuildInfo#build_info.state,
+        RevDef#rev_def.work_id,
+        Ident,
+        ?VERSION(RevDef),
+        BuildInfo#build_info.description),
+    ?CBS:update_dep_state(State#state.deps, RevDef, BuildInfo#build_info.state),
     NewWorkers = release_worker(Worker, State#state.workers),
     {ok, ScheduledState} = schedule_build(State#state{workers=NewWorkers}),
     {ok, NewState} = try_build(ScheduledState),
@@ -160,9 +155,8 @@ handle_call(_Request, _From, State) ->
     {reply, unknown, State}.
 
 handle_cast({changes, WorkId, Archives}, State) ->
-    %FIXME: why work_id updated before building?
-    error_logger:info_msg("Changed for ~p arrived~n", [WorkId]),
-    update_work_id(State#state.work_id, WorkId),
+    error_logger:info_msg("changes for ~p arrived~n", [WorkId]),
+    ?CU:write_work_id(State#state.work_id, WorkId),
     ToPreprocess = lists:usort(Archives),
     {ok, NewState} = process_archives(ToPreprocess, State, WorkId),
     {noreply, NewState#state{wid = WorkId}};
@@ -235,7 +229,7 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 
-%% Preprocessing
+%% preprocessing
 process_archives([], State, _WorkId) -> {ok, State};
 process_archives([A|O], #state{unpack_state=UnpackState, build_path=BuildPath, ident=Ident}=State, WorkId) ->
     Vsn = ?CPU:get_archive_version(A),
@@ -250,6 +244,7 @@ process_archives([A|O], #state{unpack_state=UnpackState, build_path=BuildPath, i
     end,
     process_archives(O, State#state{queued=Preparing, prebuild=Prebuild}, WorkId).
 
+
 process_archive(BuildPath, Archive, UnpackState, WorkId, Ident) ->
     {_Pid, Monitor} = erlang:spawn_monitor(?MODULE, prepare, [BuildPath, Archive, WorkId, Ident]),
     ets:insert(UnpackState, {Monitor, ?CPU:get_archive_version(Archive)}).
@@ -257,55 +252,47 @@ process_archive(BuildPath, Archive, UnpackState, WorkId, Ident) ->
 
 prepare(BuildPath, Archive, WorkId, Ident) ->
     Vsn = ?CPU:get_archive_version(Archive),
-    TempName = get_temp_name(Vsn),
-    TempArch = filename:join([BuildPath, "temp", TempName]) ++ "." ++ "tmp",
-    filelib:ensure_dir(TempArch),
+    TempArch = ?CBS:get_temp_path(BuildPath, Vsn),
     {ok, Fd} = file:open(TempArch, [read, write]),
     ArchiveWithFd = Archive#archive{fd=Fd},
     Msg = {get_archive, ArchiveWithFd},
-    error_logger:info_msg("getting archive: ~p~n", [ArchiveWithFd]),
     case caterpillar_event:sync_event(Msg) of
         {ok, NewArchive} ->
-            Type = NewArchive#archive.archive_type,
-            Cwd = filename:join([BuildPath, "temp", TempName]) ++ "/",
-            catch ?CU:del_dir(Cwd),
-            filelib:ensure_dir(Cwd),
-            ok = caterpillar_archive:extract(TempArch, [{type, Type}, {cwd, Cwd}]),
-            file:close(Fd),
-            file:delete(TempArch),
-            case ?CPU:get_pkg_config(Archive, Cwd) of
-                {error, Reason} ->
-                    Subj = io_lib:format("#~B error: ~s/~s/~s at ~s/~s", [
-                            WorkId,
-                            Archive#archive.name,
-                            Archive#archive.branch,
-                            Archive#archive.tag,
-                            Ident#ident.type,
-                            Ident#ident.arch
-                        ]),
-                    Body = io_lib:format("failed to parse pkg.config: ~p~n", [Reason]),
-                    notify(Subj, Body),
-                    exit(no_pkg_config);
-                PkgRecord = #pkg_config{} ->
-                    RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId),
-                    caterpillar_event:event({store_start_build, [Ident,
-                        {RevDef#rev_def.name, RevDef#rev_def.branch}, 
-                        RevDef#rev_def.work_id,
-                        Archive#archive.current_revno
-                    ]}),
-                    gen_server:call(caterpillar_builder, {newref, RevDef}, infinity)
-            end;
+            unpack_archive(BuildPath, NewArchive, WorkId, Ident);
         Other ->
             error_logger:error_msg("failed to get archive ~p:~p~n", [Archive, Other]),
             exit(no_archive)
     end.
 
 
-get_temp_name({N, B, T}) ->
-    lists:flatten(io_lib:format(
-       "~s-~s~s",
-        [?BTL(N), ?BTL(B), ?BTL(T)]
-    )).
+unpack_archive(Prefix, Archive, WorkId, Ident) ->
+    Vsn = ?CPU:get_archive_version(Archive),
+    Type = Archive#archive.archive_type,
+    Cwd = ?CBS:get_path(Prefix, Vsn, <<"new">>),
+    catch ?CU:del_dir(Cwd),
+    filelib:ensure_dir(Cwd ++ "/empty"),
+    ok = caterpillar_archive:extract(?CBS:get_temp_path(Prefix, Vsn), [{type, Type}, {cwd, Cwd}]),
+    file:close(Archive#archive.fd),
+    file:delete(?CBS:get_temp_path(Prefix, Vsn)),
+    case ?CPU:get_pkg_config(Archive, Cwd) of
+        {error, Reason} ->
+            Body = io_lib:format("failed to parse pkg.config: ~p~n", [Reason]),
+            notify("error",
+                WorkId,
+                Ident,
+                Vsn,
+                Body),
+            exit(no_pkg_config);
+        PkgRecord = #pkg_config{} ->
+            RevDef = ?CPU:pack_rev_def(Archive, PkgRecord, WorkId),
+            caterpillar_event:event({store_start_build, [
+                {Ident#ident.type, Ident#ident.arch},
+                {RevDef#rev_def.name, RevDef#rev_def.branch}, 
+                RevDef#rev_def.work_id,
+                Archive#archive.current_revno
+            ]}),
+            gen_server:call(caterpillar_builder, {newref, RevDef}, infinity)
+    end.
 
 
 can_prepare(Archive, State) ->
@@ -497,6 +484,20 @@ submit_missing(QType, Queue, Candidate, State) ->
 %% External communication
 %% ------------------------------------------------------------------
 
+-spec notify(State :: list(), WorkId :: integer(), Ident :: #ident{}, Version :: version(), Body :: list()) -> ok|error.
+
+notify(State, WorkId, Ident, {N, B, T}, Body) ->
+    Subj = io_lib:format("#~B ~s: ~s/~s/~s/~s/~s", [
+            WorkId,
+            State,
+            ?BTL(N),
+            ?BTL(B),
+            ?BTL(T),
+            Ident#ident.type,
+            Ident#ident.arch
+        ]),
+    notify(Subj, Body).
+
 -spec get_notify_message(Subject::binary()|string(), Body::binary()|string()) -> #notify{}.
 get_notify_message(Subject, Body) ->
     ToBin = fun
@@ -525,33 +526,29 @@ check_build_deps(Candidate, State) ->
         {ok, [], Deps} ->
             dependent;
         {ok, Dependencies, _} when is_list(Dependencies) ->
-            case State#state.queue_missing of
-                true ->
-                    ask_for_rebuild(Dependencies, State),
-                    dependent;
-                _Other ->
-                    Subj = io_lib:format("#~B error: ~s/~s/~s at ~s/~s", [
-                            Candidate#rev_def.work_id,
-                            binary_to_list(Candidate#rev_def.name),
-                            binary_to_list(Candidate#rev_def.branch),
-                            binary_to_list(Candidate#rev_def.tag),
-                            State#state.ident#ident.type,
-                            State#state.ident#ident.arch
-                        ]),
-                    Body = io_lib:format("missing dependencies: ~p~n", [Dependencies]),
-                    notify(Subj, Body),
-                    caterpillar_event:event({store_error_build, [State#state.ident,
-                        {Candidate#rev_def.name, Candidate#rev_def.branch}, 
-                        Candidate#rev_def.work_id,
-                        list_to_binary(Body)
-                    ]}),
-                    missing
-            end;
+            missing_actions(State#state.queue_missing, Dependencies, State, Candidate);
         {error, Res} ->
             {error, Res};
         Other ->
             {error, Other}
     end.
+
+missing_actions(true, Dependencies, State, _) ->
+    ask_for_rebuild(Dependencies, State),
+    dependent;
+missing_actions(_, Dependencies, State, Candidate) ->
+    Body = io_lib:format("missing dependencies: ~p~n", [Dependencies]),
+    notify("error", 
+        Candidate#rev_def.work_id,
+        State#state.ident,
+        ?VERSION(Candidate),
+        Body),
+    caterpillar_event:event({store_error_build, [State#state.ident,
+        {Candidate#rev_def.name, Candidate#rev_def.branch}, 
+        Candidate#rev_def.work_id,
+        list_to_binary(Body)
+    ]}),
+    missing.
 
 %% Utils
 %%
@@ -574,24 +571,6 @@ ask_for_rebuild(Dependencies, State) ->
         end, Dependencies).
 
 
-%FIXME: caterpillar_utils:read_work_id?
-get_work_id(File) ->
-    case file:consult(File) of
-        {ok, [Id]} when is_integer(Id) ->
-            Id;
-        _Other ->
-            update_work_id(File, 0)
-    end.
-
-%FIXME: caterpillar_utils:write_work_id ?
-update_work_id(File, Id) when is_integer(Id) ->
-    BStrId = list_to_binary(io_lib:format("~B.", [Id])),
-    {ok, Fd} = file:open(File, [write]),
-    file:write(Fd, BStrId),
-    file:close(Fd),
-    Id.
-
-
 deploy(RevDef, BuildInfo, #state{ident=#ident{arch=Arch, type=Type}=Ident}=State) ->
     DeployPkg = #deploy_package{
         name = binary_to_list(RevDef#rev_def.name),
@@ -599,7 +578,7 @@ deploy(RevDef, BuildInfo, #state{ident=#ident{arch=Arch, type=Type}=Ident}=State
         package = BuildInfo#build_info.pkg_name,
         fd = BuildInfo#build_info.fd
     },
-    Subj = io_lib:format("#~B success: ~s/~s/~s at ~s/~s", [
+    Subj = io_lib:format("#~B success: ~s/~s/~s/~s/~s", [
         RevDef#rev_def.work_id,
         binary_to_list(RevDef#rev_def.name),
         binary_to_list(RevDef#rev_def.branch),

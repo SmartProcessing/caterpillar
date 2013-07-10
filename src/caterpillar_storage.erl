@@ -24,6 +24,8 @@
     ceptaculum='ceptaculum@127.0.0.1'
 }).
 
+-define(CU, caterpillar_utils).
+
 
 start_link() -> start_link([]).
 
@@ -34,11 +36,10 @@ start_link(Settings) ->
 
 init(Settings) ->
     error_logger:info_msg("initialized storage: ~p~n", [?GV(storage, Settings)]),
-    filelib:ensure_dir(?GV(storage, Settings)),
-    %FIXME: default abspath as macro always better.
+    filelib:ensure_dir(?GV(storage, Settings, ?DEFAULT_STORAGE)),
     {ok, Storage} = dets:open_file(storage, [{file, ?GV(storage, Settings, ?DEFAULT_STORAGE)}]),
     WorkIdFile = ?GV(work_id, Settings, ?DEFAULT_WORK_ID_FILE),
-    WorkId = get_work_id(WorkIdFile),
+    WorkId = ?CU:read_work_id(WorkIdFile),
     Ceptaculum = ?GV(ceptaculum, Settings, 'ceptaculum@127.0.0.1'),
     async_register(),
     {ok, #state{
@@ -70,7 +71,7 @@ handle_call({storage_list_builds, Ident}, From, State) ->
         SelectPattern = [
             {{Ident, '$1', {'$2', '$3'}}, '$4', '$5', '$6', '_', '_', '_'},
             [{'>', '$1', State#state.work_id-?LIST_LENGTH}],
-            [] %FIXME: nothing in result?
+            ['$1', '$2', '$3', '$4', '$5', '$6']
         ],
         Reply = {ok, (catch dets:select(State#state.storage, SelectPattern))},
         gen_server:reply(From, Reply)
@@ -91,7 +92,7 @@ handle_call(_Request, _From, State) ->
 
 handle_cast({store_start_build, [IdentRecord, {Name, Branch}, WorkId, CommitHash]}, State=#state{storage=S}) ->
     Ident = {IdentRecord#ident.type, IdentRecord#ident.arch},
-    update_work_id(State#state.work_id_file, WorkId),
+    ?CU:write_work_id(State#state.work_id_file, WorkId),
     case dets:lookup(S, {Ident, {Name, Branch}}) of
         [] ->
             dets:insert(S, {{Ident, {Name, Branch}}, "...", [WorkId]});
@@ -223,22 +224,3 @@ async_register() ->
 
 async_register(Delay) ->
     erlang:send_after(Delay, self(), async_register).
-
-
-%FIXME: caterpillar_utils:read_work_id
-get_work_id(File) ->
-    case file:consult(File) of
-        {ok, [Id]} when is_integer(Id) ->
-            Id;
-        _Other ->
-            update_work_id(File, 0)
-    end.
-
-
-%FIXME: caterpillar_utils:write_work_id
-update_work_id(File, Id) when is_integer(Id) ->
-    BStrId = list_to_binary(io_lib:format("~B.", [Id])),
-    {ok, Fd} = file:open(File, [write]),
-    file:write(Fd, BStrId),
-    file:close(Fd),
-    Id.

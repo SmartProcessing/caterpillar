@@ -130,12 +130,15 @@ init_ets(Idents) ->
 
 
 init_ets(Idents, DeployPath) ->
+    error_logger:info_msg("initializing ets: ~p ~p~n", [Idents, DeployPath]),
     ToAbsPath = fun(Path) ->
         NewPath = case Path of
             "/" ++ _ -> Path;
             _ -> filename:join(DeployPath, Path)
         end,
+        error_logger:info_msg("ensuring path: ~p~n", [NewPath]),
         caterpillar_utils:ensure_dir(NewPath),
+        error_logger:info_msg("ensured path: ~p~n", [NewPath]),
         NewPath
     end,
     Ets = ets:new(?MODULE, [protected, named_table]),

@@ -265,7 +265,7 @@ create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev) ->
             DepsDets, 
             [Bucket], 
             BuildPath, 
-            ?CBS:get_temp_path(BuildPath, Rev),
+            ?CBS:get_path(BuildPath, Rev, <<"new">>),
             Rev),
         ?CBS:arm_bucket(Buckets, DepsDets, NewBucket, BuildPath, Deps)
     catch
