@@ -99,6 +99,7 @@ build_rev(ToBuild, State) ->
     ],
     case catch caterpillar_utils:build_pipe(Funs, {none, ToBuild}) of
         {ok, {{Fd, Name}, Env}} ->
+            informer(<<"built">>, {ok, <<>>}, Env),
             ok = gen_server:call(caterpillar_builder, 
                 {built, self(), ToBuild, #build_info{
                         state = <<"built">>,

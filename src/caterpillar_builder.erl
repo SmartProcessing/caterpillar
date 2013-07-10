@@ -120,7 +120,7 @@ handle_call({err_built, Worker, RevDef, BuildInfo}, _From, #state{ident=Ident}=S
     {reply, ok, NewState};
 handle_call(state, _From, State) ->
     {reply, State, State};
-handle_call({worker_custom_command, rebuild_deps, [Name, Branch|_]}, _From, State) ->
+handle_call({worker_custom_command, rebuild_deps, [Name, Branch|_], _}, _From, State) ->
     Vsn = {?LTB(Name), ?LTB(Branch), <<>>},
     Res = case ?CBS:get_subj(State#state.deps, Vsn) of
         Subj when is_list(Subj) ->
@@ -131,7 +131,7 @@ handle_call({worker_custom_command, rebuild_deps, [Name, Branch|_]}, _From, Stat
             []
     end,
     {reply, {ok, Res}, State};
-handle_call({worker_custom_command, pkg_info, [Name, Branch|_]}, _From, State) ->
+handle_call({worker_custom_command, pkg_info, [Name, Branch|_], _}, _From, State) ->
     Vsn = {Name, Branch, <<>>},
     Res = case ?CBS:fetch_dep_non_block(State#state.deps, Vsn) of
         {ok, {{N, B, T}, Status, Obj, Subj}} ->
@@ -147,7 +147,8 @@ handle_call({worker_custom_command, pkg_info, [Name, Branch|_]}, _From, State) -
             {error, <<"not found\n">>}
     end,
     {reply, Res, State};
-handle_call(_Request, _From, State) ->
+handle_call(Request, _From, State) ->
+    error_logger:info_msg("unknown message: ~p~n", [Request]),
     {reply, unknown, State}.
 
 handle_cast({changes, WorkId, Archives}, State) ->
@@ -551,7 +552,7 @@ ask_for_rebuild(Dependencies, State) ->
             {BPackage, BBranch, _} = Dep,
             QueuedState = lists:member(Dep, State#state.queued),
             PrebuildState = lists:keymember(Dep, 1, State#state.prebuild),
-            {ok, {_, {BS, _}, _, _}} = ?CBS:fetch_dep(State#state.deps, Dep),
+            {ok, {_, BS, _, _}} = ?CBS:fetch_dep(State#state.deps, Dep),
             if (not QueuedState) and (not PrebuildState)
                 and (BS == <<"missing">>)
                 ->
