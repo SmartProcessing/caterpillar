@@ -5,6 +5,7 @@
 -export([create_bucket/2, find_bucket/2, arm_bucket/4]).
 -export([fetch_bucket/2, update_dep_buckets/6, update_buckets/5, update_buckets/6, delete_from_bucket/4]).
 -export([delete/4, get_path/3, get_statpack_path/3, get_temp_path/2, delete_statpack/2]).
+-export([store_package_with_state/3]).
 
 -define(LOCK(X), gen_server:call(caterpillar_lock, {lock, X}, infinity)).
 -define(UNLOCK(X), gen_server:call(caterpillar_lock, {unlock, X})).
@@ -378,7 +379,7 @@ get_path(Prefix, Vsn, State) ->
 -spec get_statpack_path(list(), version(), integer()) -> list().
 get_statpack_path(Prefix, RV, WorkId) ->
     Dir = filename:join([Prefix, "buckets", get_dir_name(RV, integer_to_list(WorkId))]),
-    filelib:ensure_dir(Dir ++ "empty"),
+    filelib:ensure_dir(Dir),
     Dir.
 
 get_dir_name(RV) ->

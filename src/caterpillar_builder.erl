@@ -45,10 +45,7 @@ state() ->
 init(Settings) ->
     error_logger:info_msg("starting caterpillar_builder~n", []),
     DepsFile = ?GV(deps, Settings, ?DEFAULT_DEPENDENCIES_DETS),
-    BucketsFile = ?GV(buckets, Settings, ?DEFAULT_BUCKETS_DETS),
     filelib:ensure_dir(DepsFile),
-    filelib:ensure_dir(BucketsFile),
-    {ok, Buckets} = dets:open_file(buckets, [{file, BucketsFile}]),
     {ok, Deps} = dets:open_file(deps, [{file, DepsFile}]),
     ?CBS:cleanup_new_in_progress(Deps),
     PollTime = ?GV(poll_time, Settings, 10000),
@@ -66,7 +63,6 @@ init(Settings) ->
     start_timer(PollTime),
     {ok, #state{
         deps=Deps,
-        buckets=Buckets,
         main_queue=BuildQueue,
         wait_queue=WaitQueue,
         workers=WorkerList,
