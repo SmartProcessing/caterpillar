@@ -245,14 +245,3 @@ update_package_buckets_test_() ->
             ?assertMatch({_, {<<"new">>, [<<"0001">>, <<"0003">>]}, _, _}, ResD)
         end
     }.
-
-arm_build_bucket_test_() ->
-    {setup,
-        fun setup/0,
-        fun cleanup/1,
-        fun() ->
-            Vsn = {<<"newpkg_dep">>, <<"test">>, <<>>},
-            ?CBS:arm_bucket('buckets', 'deps', {<<"0001">>, "0001", []}, "./test", [Vsn]),
-            ?assertEqual(file:consult("./test/0001/newpkg_dep/dep_test"), {ok, [{test, 2}]})
-        end
-    }.

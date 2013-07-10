@@ -16,7 +16,6 @@
     build_plugins       :: [{atom(), list()}],
     platform_plugins    :: [{atom(), list()}],
     build_path          :: list(),
-    buckets             :: reference(),
     deps                :: reference()
 }).
 
@@ -54,15 +53,12 @@ init(Settings) ->
         Settings, 
         ?DEFAULT_BUILD_PATH 
     ),
-    {ok, BuildBuckets} = dets:open_file(buckets,
-        [{file, ?GV(buckets, Settings, ?DEFAULT_BUCKETS_DETS)}]),
     {ok, Deps} = dets:open_file(deps,
         [{file, ?GV(deps, Settings, ?DEFAULT_DEPENDENCIES_DETS)}]),
     {ok, #state{
         build_plugins=BuildPlugins,
         platform_plugins=PlatformPlugins,
         build_path=BuildPath,
-        buckets=BuildBuckets,
         deps=Deps
     }}.
 
@@ -90,10 +86,9 @@ build_rev(ToBuild, State) ->
     PlatformPlugins = State#state.platform_plugins,
     BuildPlugins = State#state.build_plugins,
     BuildPath = State#state.build_path,
-    BuildBuckets = State#state.buckets,
     DepsDets = State#state.deps,
     Funs = [
-        {fun unpack_rev/2, {BuildPath, BuildBuckets, DepsDets}},
+        {fun unpack_rev/2, {BuildPath, DepsDets}},
         {fun platform_prepare/2, PlatformPlugins},
         {fun platform_clean/2, PlatformPlugins},
         {fun platform_test/2, PlatformPlugins},
@@ -111,7 +106,7 @@ build_rev(ToBuild, State) ->
                         pkg_name=Name,
                         description="ok"
                     }}, infinity),
-            make_complete_actions(<<"built">>, Env, DepsDets, BuildBuckets);
+            make_complete_actions(Env);
         {error, Value, Msg, Env} ->
             ok = gen_server:call(caterpillar_builder, 
                 {err_built, self(), ToBuild, #build_info{
@@ -120,7 +115,7 @@ build_rev(ToBuild, State) ->
                         pkg_name=none,
                         description=Msg
                     }}, infinity),
-            make_complete_actions(Value, Env, DepsDets, BuildBuckets);
+            make_complete_actions(Env);
         {error, Value, Msg} ->
             ok = gen_server:call(caterpillar_builder, 
                 {err_built, self(), ToBuild, #build_info{
@@ -146,40 +141,27 @@ build_rev(ToBuild, State) ->
 
 %% {{{{2 Pipe functions
 
-unpack_rev(Rev, {BuildPath, Buckets, DepsDets}) ->
-    Res = case ?CBS:find_bucket(Buckets, Rev) of
-        [Bucket] ->
-            create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev),
-            {ok, 
-                {none, {Rev, Bucket, BuildPath}}
-            };
-        [] ->
-            {ok, Bucket} = ?CBS:create_bucket(Buckets, Rev),
-            create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev),
-            {ok, 
-                {none, {Rev, Bucket, BuildPath}}
-            };
-        _Other ->
-            {error, "failed to find a place to build, sorry"}
-    end,
-    Res.
+unpack_rev(Rev, {BuildPath, DepsDets}) ->
+    create_workspace(DepsDets, BuildPath, Rev),
+    {ok, 
+        {none, {Rev, BuildPath}}
+    }.
     
 
-platform_get_env({Rev, {_, BPath, _}, BuildPath}, Plugins) ->
+platform_get_env({Rev, BuildPath}, Plugins) ->
     {Name, _B, _T} = ?VERSION(Rev),
     PkgConfig = Rev#rev_def.pkg_config,
     Platform = PkgConfig#pkg_config.platform,
     Plugin = ?GV(Platform, Plugins, caterpillar_default_builder),
-    Path = filename:join([BuildPath, BPath, binary_to_list(Name)]),
+    Path = filename:join([?CBS:get_statpack_path(BuildPath, Rev, Rev#rev_def.work_id), binary_to_list(Name)]),
     {ok, Plugin, Path, Rev}.
 
-package_get_env({Rev, {_, BPath, _}, BuildPath}, Plugins) ->
+package_get_env({Rev, BuildPath}, Plugins) ->
     {Name, _B, _T} = ?VERSION(Rev),
     PkgConfig = Rev#rev_def.pkg_config,
-    %% TODO call corresponding plugin for each package type
     [PackageT|_] = PkgConfig#pkg_config.package_t, 
     Plugin = ?GV(PackageT, Plugins, caterpillar_deb_plugin),
-    Path = filename:join([BuildPath, BPath, binary_to_list(Name)]),
+    Path = filename:join([?CBS:get_statpack_path(BuildPath, Rev, Rev#rev_def.work_id), binary_to_list(Name)]),
     {ok, Plugin, Path, Rev}.
 
 platform_prepare(Env, Plugins) ->
@@ -221,9 +203,10 @@ build_submit(Env, Plugins) ->
             {error, "unknown error while submitting package"}
     end.
 
-informer(Phase, {State, Msg}, Env) ->
+informer(Phase, {State, Msg}, Env={Rev, Path}) ->
     case State of
         ok ->
+            ?CBS:store_package_with_state(Phase, Rev, Path),
             {ok, {Phase, Env}};
         error ->
             {error, Msg}
@@ -232,45 +215,15 @@ informer(Phase, {State, Msg}, Env) ->
 
 %% 2}}}}
 
+make_complete_actions({Rev, BuildPath}) ->
+    ?CBS:delete_statpack(Rev, BuildPath).
 
-
-make_complete_actions(
-    Status, 
-    {Rev, {BName, BPath, _}, BuildPath}, 
-    DepsDets, 
-    BucketsDets) when Status == <<"built">>; Status == <<"tested">>
-->
-    InBuckets = ?CBS:list_buckets(DepsDets, Rev),
-    UpdateInBuckets = lists:delete(BName, InBuckets),
-    Buckets = lists:map(fun(X) -> 
-                ?CBS:fetch_bucket(BucketsDets, X) end, UpdateInBuckets),
-    Source = filename:join([BuildPath, BPath, binary_to_list(Rev#rev_def.name)]),
-    ?CBS:update_buckets(BucketsDets, BuildPath, Source, Rev, Buckets, []);
-make_complete_actions(
-    _Status, 
-    {Rev, {BName, BPath, _}, Path}, 
-    DepsDets, 
-    BucketsDets) 
-->
-    lists:map(fun(X) -> 
-                ?CBS:delete_from_bucket(BucketsDets, Path, X, Rev)
-            end, ?CBS:list_buckets(DepsDets, Rev)),
-    ?CBS:empty_state_buckets(DepsDets, Rev).
-
-create_workspace(Buckets, DepsDets, Bucket, BuildPath, Rev) ->
+create_workspace(DepsDets, BuildPath, Rev) ->
     try
-        Deps = [{N, B, T} || {{N, B, T}, _S} <- Rev#rev_def.dep_object],
-        {ok, [NewBucket]} = ?CBS:update_dep_buckets(
-            Buckets,
-            DepsDets, 
-            [Bucket], 
-            BuildPath, 
-            ?CBS:get_path(BuildPath, Rev, <<"new">>),
-            Rev),
-        ?CBS:arm_bucket(Buckets, DepsDets, NewBucket, BuildPath, Deps)
+        ?CBS:arm_bucket(Rev, DepsDets, BuildPath, Rev#rev_def.dep_object)
     catch
         _:Reason ->
             error_logger:error_msg("failed to unpack revision ~p to bucket ~p: ~p~n", 
-                [Rev, Bucket, erlang:get_stacktrace()]),
+                [Rev, erlang:get_stacktrace()]),
             throw(Reason)
     end.

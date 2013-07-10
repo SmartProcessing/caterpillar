@@ -2,9 +2,9 @@
 -include_lib("caterpillar_builder_internal.hrl").
 -export([check_isect/2, list_unres_deps/3, list_buckets/2, empty_state_buckets/2, cleanup_new_in_progress/1]).
 -export([update_dep_state/3, fetch_dep/2, fetch_dep_non_block/2, create_dep/2, get_subj/2]).
--export([create_bucket/2, find_bucket/2, arm_bucket/5]).
+-export([create_bucket/2, find_bucket/2, arm_bucket/4]).
 -export([fetch_bucket/2, update_dep_buckets/6, update_buckets/5, update_buckets/6, delete_from_bucket/4]).
--export([delete/4, get_path/3, get_statpack_path/3, get_temp_path/2]).
+-export([delete/4, get_path/3, get_statpack_path/3, get_temp_path/2, delete_statpack/2]).
 
 -define(LOCK(X), gen_server:call(caterpillar_lock, {lock, X}, infinity)).
 -define(UNLOCK(X), gen_server:call(caterpillar_lock, {unlock, X})).
@@ -247,48 +247,17 @@ validate_bucket([E|O], Deps, Prev) ->
     end,
     validate_bucket(O, Deps, Res and Prev).
 
-arm_bucket(_Buckets, _Deps, _Current, _BuildPath, []) ->
+arm_bucket(Rev, _Deps, BuildPath, []) ->
+    RevPath = get_path(BuildPath, Rev, <<"new">>),
+    copy_package_to_bucket(RevPath, 
+        filename:join([get_statpack_path(BuildPath, Rev, Rev#rev_def.work_id), ?BTL(Rev#rev_def.name)])),
     {ok, done};
-arm_bucket(BucketsDets, Deps, Current, BuildPath, [Dep|O]) ->
-    {BName, _, _} = Current,
-    {Name, _, _} = Dep,
-    ?LOCK(BName),
-    [{BName, BPath, BPackages}] = dets:lookup(BucketsDets, BName),
-    ?UNLOCK(BName),
-    ?LOCK(Dep),
-    [{Dep, {_, DepBuckets}, _, _}|_] = dets:lookup(Deps, Dep),
-    ?UNLOCK(Dep),
-    case lists:member(BName, DepBuckets) of
-        true ->
-            pass;
-        false ->
-            case [X || X <- DepBuckets, X /= BName] of
-                [AnyBucket|_] ->
-                    ?LOCK(AnyBucket),
-                    [{AnyBucket, Path, _Packages}] = dets:lookup(BucketsDets, AnyBucket),
-                    ?UNLOCK(AnyBucket),
-                    DepPath = filename:join([BuildPath, Path, binary_to_list(Name)]),
-                    copy_package_to_bucket(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)])),
-                    ?LOCK(Dep),
-                    [{Dep, {NewState, NewDepBuckets}, NewDepOn, NewHasInDep}|_] = dets:lookup(Deps, Dep),
-                    ok = dets:insert(Deps, {Dep, {NewState, lists:usort([BName|NewDepBuckets])}, NewDepOn, NewHasInDep}),
-                    ok = dets:insert(BucketsDets, {BName, BPath, lists:usort([Dep|BPackages])}),
-                    ?UNLOCK(Dep);
-                [] ->
-                    DepPath = get_path(BuildPath, Dep, <<"new">>),
-                    copy_package_to_bucket(DepPath, filename:join([BuildPath, BPath, binary_to_list(Name)])),
-                    ?LOCK(Dep),
-                    [{Dep, {NewState, NewDepBuckets}, NewDepOn, NewHasInDep}|_] = dets:lookup(Deps, Dep),
-                    ok = dets:insert(Deps, {Dep, {NewState, lists:usort([BName|NewDepBuckets])}, NewDepOn, NewHasInDep}),
-                    ok = dets:insert(BucketsDets, {BName, BPath, lists:usort([Dep|BPackages])}),
-                    ?UNLOCK(Dep),
-                    ?LOCK(BName),
-                    [{BName, BPath, OldContain}] = dets:lookup(BucketsDets, BName),
-                    ok = dets:insert(BucketsDets, {BName, BPath, lists:usort([Dep|OldContain])}),
-                    ?UNLOCK(BName)
-            end
-    end,
-    arm_bucket(BucketsDets, Deps, {BName, BPath, [Dep|BPackages]}, BuildPath, O).
+arm_bucket(Rev, Deps, BuildPath, [Dependencie|O]) ->
+    {Dep={Name, _, _}, BState} = Dependencie,
+    DepPath = get_path(BuildPath, Dep, BState),
+    copy_package_to_bucket(DepPath, 
+        filename:join([get_statpack_path(BuildPath, Rev, Rev#rev_def.work_id), ?BTL(Name)])),
+    arm_bucket(Rev, Deps, BuildPath, O).
 
 copy_package_to_bucket(Source, Path) ->
     error_logger:info_msg("copying ~p to ~p~n", [Source, Path]),
@@ -382,6 +351,18 @@ update_new_in_progress(Deps, [{Vsn, {State, InB}, Subj, Obj}]) when State == <<"
 update_new_in_progress(Deps, _) ->
     ok.
 
+-spec delete_statpack(#rev_def{}, list()) -> ok.
+delete_statpack(Rev, BPath) ->
+    ?CU:del_dir(get_statpack_path(BPath, Rev, Rev#rev_def.work_id)).
+
+-spec store_package_with_state(binary(), #rev_def{}, list()) -> ok|pass.
+store_package_with_state(<<"none">>, _, _) ->
+    pass;
+store_package_with_state(State, Rev, BPath) ->
+    Src = filename:join([get_statpack_path(BPath, Rev, Rev#rev_def.work_id), ?BTL(Rev#rev_def.name)]),
+    Dst = get_path(BPath, Rev, State),
+    copy_package_to_bucket(Src, Dst).
+
 -spec get_temp_path(list(), version()|#rev_def{}) -> list().
 get_temp_path(Prefix, Rev) ->
     TmpName = filename:join([Prefix, "temp", get_dir_name(Rev, "tmp")]),
@@ -394,10 +375,10 @@ get_path(Prefix, Vsn, State) ->
     filelib:ensure_dir(Dir ++ "/empty"),
     Dir.
 
--spec get_statpack_path(list(), integer(), version()) -> list().
-get_statpack_path(Prefix, WorkId, RV) ->
+-spec get_statpack_path(list(), version(), integer()) -> list().
+get_statpack_path(Prefix, RV, WorkId) ->
     Dir = filename:join([Prefix, "buckets", get_dir_name(RV, integer_to_list(WorkId))]),
-    filelib:ensure_dir(Dir),
+    filelib:ensure_dir(Dir ++ "empty"),
     Dir.
 
 get_dir_name(RV) ->
