@@ -132,19 +132,19 @@ handle(#http_req{path=[<<"pkg_info">>, Name, Branch|MaybeIdent]}=Req, State) ->
     Reply = lists:foldl(
         fun
             ({ok, Res}, Acc) ->
-                Info = io_lib:format(
+                Info = lists:flatten(io_lib:format(
                     "Name: ~s~nBranch: ~s~nTag: ~s~nState: ~p~nDepends: ~p~nHas in dependencies: ~p~n", 
                     [?GV("name", Res), ?GV("branch", Res), ?GV("tag", Res), ?GV("state", Res), ?GV("depends", Res), ?GV("has_in_deps", Res)]
-                ),
+                )),
                 Bin = list_to_binary(Info),
-                <<Bin/binary, "\n", Acc>>;
+                <<Bin/binary, "\n", Acc/binary>>;
             (Error, Acc) ->
                 Reason = case Error of
                     {error, Rsn} -> Rsn;
                     _ -> {bad_result, Error}
                 end,
                 Bin = list_to_binary(io_lib:format("error: ~p~n", [Reason])),
-                <<Bin/binary, "\n", Acc>>
+                <<Bin/binary, "\n", Acc/binary>>
         end,
         <<>>,
         Result

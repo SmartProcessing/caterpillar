@@ -113,7 +113,7 @@ create_dep(DepTree, Rev) ->
             dets:insert(DepTree, {Version, <<"new">>, DepObject, Subj});
         [] ->
             dets:insert(DepTree, {Version, <<"new">>, DepObject, []});
-        [{_V, {_, _Buckets}, _, _Subj}|_] ->
+        [{_V, _, _, _Subj}|_] ->
             pass
     end,
     ?UNLOCK(Version),

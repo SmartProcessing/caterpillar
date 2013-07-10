@@ -21,7 +21,7 @@
     registered=false,
     work_id=0,
     work_id_file="./work_id",
-    ceptaculum='ceptaculum@127.0.0.1'
+    file_path="/var/lib/smprc/caterpillar/storage/files"
 }).
 
 -define(CU, caterpillar_utils).
@@ -40,14 +40,15 @@ init(Settings) ->
     {ok, Storage} = dets:open_file(storage, [{file, ?GV(storage, Settings, ?DEFAULT_STORAGE)}]),
     WorkIdFile = ?GV(work_id, Settings, ?DEFAULT_WORK_ID_FILE),
     WorkId = ?CU:read_work_id(WorkIdFile),
-    Ceptaculum = ?GV(ceptaculum, Settings, 'ceptaculum@127.0.0.1'),
+    FileStorage = ?GV(file_path, Settings, "/var/lib/smprc/caterpillar/storage/files"),
+    filelib:ensure_dir(FileStorage ++ "/empty"),
     async_register(),
     {ok, #state{
         storage=Storage,
         registered=false,
         work_id=WorkId,
         work_id_file=WorkIdFile,
-        ceptaculum=Ceptaculum
+        file_path=FileStorage
     }}.
 
 
@@ -90,8 +91,7 @@ handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
 
-handle_cast({store_start_build, [IdentRecord, {Name, Branch}, WorkId, CommitHash]}, State=#state{storage=S}) ->
-    Ident = {IdentRecord#ident.type, IdentRecord#ident.arch},
+handle_cast({store_start_build, [Ident, {Name, Branch}, WorkId, CommitHash]}, State=#state{storage=S}) ->
     ?CU:write_work_id(State#state.work_id_file, WorkId),
     case dets:lookup(S, {Ident, {Name, Branch}}) of
         [] ->
@@ -110,8 +110,7 @@ handle_cast({store_start_build, [IdentRecord, {Name, Branch}, WorkId, CommitHash
     }),
     {noreply, State#state{work_id=WorkId}};
 
-handle_cast({store_progress_build, [IdentRecord, {Name, Branch}, WorkId, Description]}, State=#state{storage=S}) ->
-    Ident = {IdentRecord#ident.type, IdentRecord#ident.arch},
+handle_cast({store_progress_build, [Ident, {Name, Branch}, WorkId, Description]}, State=#state{storage=S}) ->
     case dets:lookup(S, {Ident, {Name, Branch}}) of
         [] ->
             dets:insert(S, {{Ident, {Name, Branch}}, Description, [WorkId]});
@@ -135,15 +134,9 @@ handle_cast({store_progress_build, [IdentRecord, {Name, Branch}, WorkId, Descrip
     end,
     {noreply, State};
 
-handle_cast({store_error_build, [IdentRecord, {Name, Branch}, WorkId, BuildLog]}, State=#state{storage=S}) ->
-    Ident = {IdentRecord#ident.type, IdentRecord#ident.arch},
-    Link = case catch gen_server:call({ceptaculum, State#state.ceptaculum}, {put_file, [BuildLog, [{compress, true}]]}, 10000) of
-        {[{_, {ok, L}}|_], _} ->
-            L;
-        Other ->
-            error_logger:info_msg("failed to store build log: ~p~n", [Other]),
-            <<"no_log">>
-    end,
+handle_cast({store_error_build, [Ident, {Name, Branch}, WorkId, BuildLog]}, State=#state{storage=S, file_path=Path}) ->
+    Link = v4str(v4()),
+    file:write_file(filename:join([Path, Link]), BuildLog),
     case dets:lookup(S, {Ident, WorkId, {Name, Branch}}) of
         [{_, _, Start, _, CommitHash, _, _}|_] ->
             InsertData = {
@@ -224,3 +217,20 @@ async_register() ->
 
 async_register(Delay) ->
     erlang:send_after(Delay, self(), async_register).
+
+v4() ->
+    v4(
+        crypto:rand_uniform(1, round(math:pow(2, 48))) - 1, 
+        crypto:rand_uniform(1, round(math:pow(2, 12))) - 1, 
+        crypto:rand_uniform(1, round(math:pow(2, 32))) - 1, 
+        crypto:rand_uniform(1, round(math:pow(2, 30))) - 1
+    ).
+
+v4(R1, R2, R3, R4) ->
+    <<R1:48, 4:4, R2:12, 2:2, R3:32, R4: 30>>.
+
+v4str(U) ->
+    lists:flatten(io_lib:format("~8.16.0b-~4.16.0b-~4.16.0b-~2.16.0b~2.16.0b-~12.16.0b", get_parts(U))).
+
+get_parts(<<TL:32, TM:16, THV:16, CSR:8, CSL:8, N:48>>) ->
+    [TL, TM, THV, CSR, CSL, N].

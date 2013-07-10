@@ -88,9 +88,10 @@ handle_call({newref, RevDef}, _From, State) ->
             {ok, NewState} = try_build(QueuedState)
     end,
     {reply, ok, NewState};
-handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
+handle_call({built, Worker, RevDef, BuildInfo}, _From, State=#state{ident=Ident}) ->
     ?CBS:update_dep_state(State#state.deps, RevDef, <<"built">>),
-    caterpillar_event:event({store_complete_build, [State#state.ident,
+    caterpillar_event:event({store_complete_build, [
+        {Ident#ident.type, Ident#ident.arch},
         {RevDef#rev_def.name, RevDef#rev_def.branch}, 
         RevDef#rev_def.work_id,
         BuildInfo#build_info.pkg_name,
@@ -103,7 +104,8 @@ handle_call({built, Worker, RevDef, BuildInfo}, _From, State) ->
     {reply, ok, NewState};
 handle_call({err_built, Worker, RevDef, BuildInfo}, _From, #state{ident=Ident}=State) ->
     error_logger:info_msg("error built: ~p~n", [BuildInfo]),
-    caterpillar_event:event({store_error_build, [Ident,
+    caterpillar_event:event({store_error_build, [
+        {Ident#ident.type, Ident#ident.arch},
         {RevDef#rev_def.name, RevDef#rev_def.branch}, 
         RevDef#rev_def.work_id,
         BuildInfo#build_info.description
@@ -120,7 +122,7 @@ handle_call({err_built, Worker, RevDef, BuildInfo}, _From, #state{ident=Ident}=S
     {reply, ok, NewState};
 handle_call(state, _From, State) ->
     {reply, State, State};
-handle_call({worker_custom_command, rebuild_deps, [Name, Branch|_], _}, _From, State) ->
+handle_call({worker_custom_command, rebuild_deps, [Name, Branch|_]}, _From, State) ->
     Vsn = {?LTB(Name), ?LTB(Branch), <<>>},
     Res = case ?CBS:get_subj(State#state.deps, Vsn) of
         Subj when is_list(Subj) ->
@@ -131,7 +133,7 @@ handle_call({worker_custom_command, rebuild_deps, [Name, Branch|_], _}, _From, S
             []
     end,
     {reply, {ok, Res}, State};
-handle_call({worker_custom_command, pkg_info, [Name, Branch|_], _}, _From, State) ->
+handle_call({worker_custom_command, pkg_info, [Name, Branch|_]}, _From, State) ->
     Vsn = {Name, Branch, <<>>},
     Res = case ?CBS:fetch_dep_non_block(State#state.deps, Vsn) of
         {ok, {{N, B, T}, Status, Obj, Subj}} ->
@@ -436,9 +438,10 @@ extract_candidate(QType, State) ->
             queue:out(State#state.wait_queue)
     end.
 
-submit_next_to_build(QType, Queue, Candidate, State) ->
+submit_next_to_build(QType, Queue, Candidate, State=#state{ident=Ident}) ->
     ?CBS:update_dep_state(State#state.deps, Candidate, <<"in_progress">>),
-    caterpillar_event:event({store_progress_build, [State#state.ident,
+    caterpillar_event:event({store_progress_build, [
+        {Ident#ident.type, Ident#ident.arch},
         {Candidate#rev_def.name, Candidate#rev_def.branch}, 
         Candidate#rev_def.work_id,
         Candidate#rev_def.pkg_config#pkg_config.description
@@ -529,14 +532,15 @@ check_build_deps(Candidate, State) ->
 missing_actions(true, Dependencies, State, _) ->
     ask_for_rebuild(Dependencies, State),
     dependent;
-missing_actions(_, Dependencies, State, Candidate) ->
+missing_actions(_, Dependencies, State=#state{ident=Ident}, Candidate) ->
     Body = io_lib:format("missing dependencies: ~p~n", [Dependencies]),
     notify("error", 
         Candidate#rev_def.work_id,
         State#state.ident,
         ?VERSION(Candidate),
         Body),
-    caterpillar_event:event({store_error_build, [State#state.ident,
+    caterpillar_event:event({store_error_build, [
+        {Ident#ident.type, Ident#ident.arch},
         {Candidate#rev_def.name, Candidate#rev_def.branch}, 
         Candidate#rev_def.work_id,
         list_to_binary(Body)
