@@ -51,38 +51,38 @@ cleanup(_Ign) ->
     dets:close('test'),
     os:cmd("rm test.dets").
 
-list_unresolved_dependencies_test_() ->
-    {setup,
-        fun setup/0,
-        fun cleanup/1,
-        fun() ->
-            ?assertEqual(
-                caterpillar_build_storage:list_unres_deps('test',
-                    #rev_def{
-                        name = <<"test_package">>,
-                        branch = <<"trunk">>,
-                        tag = <<"">>,
-                        pkg_config={},
-                        dep_object = [{{<<"smprc-test">>, <<"trunk">>, <<"">>}, <<"built">>},
-                            {{<<"caterpillar">>, <<"trunk">>, <<"">>}, <<"built">>}]
-                    },
-                    []
-                ),
-                {ok, [], []}),
-            ?assertEqual(
-                caterpillar_build_storage:list_unres_deps('test',
-                    #rev_def{
-                        name = <<"test_package">>,
-                        branch = <<"trunk">>,
-                        tag = <<"">>,
-                        pkg_config={},
-                        dep_object = [{{<<"pequen">>, <<"trunk">>, <<"">>}, <<"built">>}]
-                    },
-                    []
-                ),
-                {ok, [{<<"pequen">>, <<"trunk">>, <<"">>}], []})
-        end
-    }.
+%   list_unresolved_dependencies_test_() ->
+%       {setup,
+%           fun setup/0,
+%           fun cleanup/1,
+%           fun() ->
+%               ?assertEqual(
+%                   caterpillar_build_storage:list_unres_deps('test',
+%                       #rev_def{
+%                           name = <<"test_package">>,
+%                           branch = <<"trunk">>,
+%                           tag = <<"">>,
+%                           pkg_config={},
+%                           dep_object = [{{<<"smprc-test">>, <<"trunk">>, <<"">>}, <<"built">>},
+%                               {{<<"caterpillar">>, <<"trunk">>, <<"">>}, <<"built">>}]
+%                       },
+%                       []
+%                   ),
+%                   {ok, [], []}),
+%               ?assertEqual(
+%                   caterpillar_build_storage:list_unres_deps('test',
+%                       #rev_def{
+%                           name = <<"test_package">>,
+%                           branch = <<"trunk">>,
+%                           tag = <<"">>,
+%                           pkg_config={},
+%                           dep_object = [{{<<"pequen">>, <<"trunk">>, <<"">>}, <<"built">>}]
+%                       },
+%                       []
+%                   ),
+%                   {ok, [{<<"pequen">>, <<"trunk">>, <<"">>}], []})
+%           end
+%       }.
 
 check_isect_test() ->
     Rev1 = #rev_def{

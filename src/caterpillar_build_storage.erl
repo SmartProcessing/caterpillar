@@ -1,9 +1,8 @@
 -module(caterpillar_build_storage).
 -include_lib("caterpillar_builder_internal.hrl").
--export([check_isect/2, list_unres_deps/3, list_buckets/2, empty_state_buckets/2, cleanup_new_in_progress/1]).
+-export([check_isect/2, list_unres_deps/3, cleanup_new_in_progress/1]).
 -export([update_dep_state/3, fetch_dep/2, fetch_dep_non_block/2, create_dep/2, get_subj/2]).
 -export([arm_bucket/4]).
--export([fetch_bucket/2, update_dep_buckets/6, update_buckets/5, update_buckets/6, delete_from_bucket/4]).
 -export([delete/3, get_path/3, get_statpack_path/3, get_temp_path/2, delete_statpack/2]).
 -export([store_package_with_state/3]).
 
@@ -176,84 +175,6 @@ copy_package_to_bucket(Source, Path) ->
     ?CU:del_dir(Path),
     filelib:ensure_dir(Path),
     ?CU:recursive_copy(Source, Path).
-
-update_dep_buckets(BucketsTable, DepsTable, Buckets, BuildPath, Source, Rev) ->
-    Package = ?VERSION(Rev),
-    case catch update_buckets(BucketsTable, BuildPath, Source, Rev, Buckets) of
-        {ok, UpdatedBuckets} ->
-            SuccessB = [X || {X, _, _} <- UpdatedBuckets],
-            ?LOCK(Package),
-            [{Package, {NewState, NewBucketList}, NewDepObj, NewDepSubj}|_] = dets:lookup(DepsTable, Package),
-            ok = dets:insert(DepsTable, 
-                {Package, {NewState, lists:usort(SuccessB ++ NewBucketList)}, NewDepObj, NewDepSubj}),
-            ?UNLOCK(Package),
-            {ok, UpdatedBuckets};
-        Other ->
-            error_logger:error_msg("failed to update package buckets for ~p: ~p", [Package, Other]),
-            throw(Other)
-    end.
-
-update_buckets(BucketsDB, Path, Source, Rev, Buckets) ->
-    update_buckets(BucketsDB, Path, Source, Rev, Buckets, []).
-
-update_buckets(_, _, _, _, [], Acc) ->
-    {ok, Acc};
-update_buckets(BucketsTable, BuildPath, Source, Rev, [Bucket|O], Acc) ->
-    Package = ?VERSION(Rev),
-    {BName, TempPath, TempContain} = Bucket,
-    Deps = [{N, B, T} || {{N, B, T}, _S} <-Rev#rev_def.dep_object],
-    ?LOCK(BName),
-    [{BName, BPath, BContain}] = case dets:lookup(BucketsTable, BName) of
-        [] -> 
-            [{BName, TempPath, TempContain}];
-        [{B, P, C}] ->
-            [{B, P, C}]
-    end,
-    {Name, _B, _T} = Package,
-    Path = filename:join([BuildPath, BPath, binary_to_list(Name)]) ++ "/",
-    NewContain = lists:usort([Package|BContain] ++ Deps),
-    try
-        copy_package_to_bucket(Source, Path),
-        ok = dets:insert(BucketsTable, {BName, BPath, lists:usort(NewContain)}),
-        ?UNLOCK(BName)
-    catch
-        _:Reason ->
-            ?UNLOCK(BName),
-            error_logger:error_msg("failed to update bucket ~p: ~p", [BName, Reason]),
-            throw(Reason)
-    end,
-    update_buckets(BucketsTable, BuildPath, Source, Rev, O, [{BName, BPath, NewContain}|Acc]).
-
-delete_from_bucket(BucketsDB, Path, Bucket, Rev) ->
-    Version = ?VERSION(Rev),
-    ?LOCK(Bucket),
-    [{BName, BPath, BContain}] = dets:lookup(BucketsDB, Bucket), 
-    dets:insert(BucketsDB, {BName, BPath, lists:delete(Version, BContain)}),
-    ?UNLOCK(Bucket),
-    ToClean = filename:join([Path, BPath, binary_to_list(Rev#rev_def.name)]),
-    error_logger:info_msg("cleaning up: ~p~n", [ToClean]),
-    ?CU:del_dir(ToClean).
-
-empty_state_buckets(DepsDB, Rev) ->
-    Vsn = ?VERSION(Rev),
-    ?LOCK(Vsn),
-    [{Vsn, {State, _}, DepOn, HasInDep}|_] = dets:lookup(DepsDB, Vsn),
-    ok = dets:insert(DepsDB, {Vsn, {State, []}, DepOn, HasInDep}),
-    ?UNLOCK(Vsn),
-    ok.
-
-list_buckets(DepsDB, Rev) ->
-    Version = ?VERSION(Rev),
-    ?LOCK(Version),
-    [{Version, {_, InBuckets}, _, _}] = dets:lookup(DepsDB, Version),
-    ?UNLOCK(Version),
-    InBuckets.
-
-fetch_bucket(BucketsDB, BName) ->
-    ?LOCK(BName),
-    [Res|_] = dets:lookup(BucketsDB, BName), 
-    ?UNLOCK(BName),
-    Res.
 
 cleanup_new_in_progress(Deps) ->
     lists:map(fun(X) -> update_new_in_progress(Deps, X) end, dets:match(Deps, '$1')).
