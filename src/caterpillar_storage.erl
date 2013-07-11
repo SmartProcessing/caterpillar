@@ -53,7 +53,7 @@ init(Settings) ->
     }}.
 
 
-handle_call({storage_list_packages, Ident}, From, State) ->
+handle_call({storage, <<"packages">>, [Ident]}, From, State) ->
     erlang:spawn(fun() ->
         MapFun = fun([{Name, Branch}, Description, LastBuild]) ->
             SelectPattern = {{Ident, LastBuild, {Name, Branch}}, '$1', '_', '_', '_', '_', '_'},
@@ -71,13 +71,13 @@ handle_call({storage_list_packages, Ident}, From, State) ->
     end),
     {noreply, State};
 
-handle_call({storage_list_package_builds, Ident, Name}, From, State) ->
+handle_call({storage, <<"package">>, [Ident, Name]}, From, State) ->
     erlang:spawn(fun() -> 
-        MapFun = fun([WorkId, Branch, State, Started, Finished, Hash]) ->
+        MapFun = fun([WorkId, Branch, Status, Started, Finished, Hash]) ->
             Wid = list_to_binary(integer_to_list(WorkId)),
             {Wid,
                 [
-                    {<<"state">>, State},
+                    {<<"state">>, Status},
                     {<<"branch">>, Branch},
                     {<<"started">>, Started},
                     {<<"finished">>, Finished},
@@ -90,13 +90,13 @@ handle_call({storage_list_package_builds, Ident, Name}, From, State) ->
     end),
     {noreply, State};
 
-handle_call({storage_list_builds, Ident}, From, State) ->
+handle_call({storage, <<"builds">>, [Ident]}, From, State) ->
     erlang:spawn(fun() -> 
-        MapFun = fun([WorkId, Name, Branch, State, Started, Finished]) ->
+        MapFun = fun([WorkId, Name, Branch, Status, Started, Finished]) ->
             Wid = list_to_binary(integer_to_list(WorkId)),
             {Wid,
                 [
-                    {<<"state">>, State},
+                    {<<"state">>, Status},
                     {<<"name">>, Name},
                     {<<"branch">>, Branch},
                     {<<"started">>, Started},
@@ -114,12 +114,12 @@ handle_call({storage_list_builds, Ident}, From, State) ->
     end),
     {noreply, State};
 
-handle_call({storage_build_info, Ident, Id}, From, State) ->
+handle_call({storage, <<"build">>, [Ident, Id]}, From, State) ->
     erlang:spawn(fun() -> 
-        MapFun = fun([Name, Branch, State, Started, Finished, Hash, Log, Package]) ->
+        MapFun = fun([Name, Branch, Status, Started, Finished, Hash, Log, Package]) ->
             {<<Name/binary, <<"/">>/binary, Branch/binary>>,
                 [
-                    {<<"state">>, State},
+                    {<<"state">>, Status},
                     {<<"started">>, Started},
                     {<<"finished">>, Finished},
                     {<<"sha">>, Hash},

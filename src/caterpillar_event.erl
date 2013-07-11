@@ -175,6 +175,10 @@ handle_call({sync_event, {repository_custom_command, _Command, _Args}=Request}, 
     sync_event_to_service(repository, From, Ets, Request),
     {noreply, State};
 
+handle_call({sync_event, {storage, _Command, _Args}=Request}, From, #state{ets=Ets}=State) ->
+    sync_event_to_service(storage, From, Ets, Request),
+    {noreply, State};
+
 handle_call({sync_event, {worker_custom_command, Command, Args, Ident}}, From, #state{ets=Ets}=State) ->
     spawn(fun() ->
         ForeachFun = fun(Pid) -> catch gen_server:call(Pid, {worker_custom_command, Command, Args}, 30000) end,

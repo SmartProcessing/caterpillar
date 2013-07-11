@@ -152,6 +152,18 @@ handle(#http_req{path=[<<"pkg_info">>, Name, Branch|MaybeIdent]}=Req, State) ->
     {ok, Req2} = cowboy_http_req:reply(200, [], Reply, Req),
     {ok, Req2, State};
 
+% Storage requests
+
+handle(#http_req{path=[<<"storage">>, Cmd, IdentType, IdentArch|Args]}=Req, State) ->
+    {ok, Req2} = case catch jsonx:encode(caterpillar_event:sync_event({storage, Cmd, [{IdentType, IdentArch}|Args]})) of
+        Response when is_binary(Response) ->
+            cowboy_http_req:reply(200, [], Response, Req);
+        Error ->
+            cowboy_http_req:reply(500, [], format("~p~n", [Error]), Req)
+    end,
+    {ok, Req2, State};
+
+
 handle(Req, State) ->
     error_logger:info_msg("bad request: ~p~n", [Req]),
     {ok, Req2} = cowboy_http_req:reply(400, [], <<"bad request\n">>, Req),
