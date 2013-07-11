@@ -7,6 +7,7 @@
 -define(DEFAULT_WORK_ID_FILE, "/var/lib/smprc/caterpillar/storage_work_id").
 -define(DTU, smprc_datetime_utils).
 -define(LIST_LENGTH, 30).
+-define(V_PREFIX, 1048676).
 
 -include_lib("caterpillar.hrl").
 -include_lib("caterpillar_storage.hrl").
@@ -53,37 +54,81 @@ init(Settings) ->
 
 
 handle_call({storage_list_packages, Ident}, From, State) ->
-    erlang:spawn(fun() -> 
-        Reply = {ok, (catch dets:match(State#state.storage, {{Ident, '$1'}, '$2', ['$3'|'_']}))},
-        gen_server:reply(From, Reply)
+    erlang:spawn(fun() ->
+        MapFun = fun([{Name, Branch}, Description, LastBuild]) ->
+            SelectPattern = {{Ident, LastBuild, {Name, Branch}}, '$1', '_', '_', '_', '_', '_'},
+            [[State]|_] = dets:match(State#state.storage, SelectPattern),
+            {<<Name/binary, <<"/">>/binary, Branch/binary>>,
+                [
+                    {<<"description">>, Description},
+                    {<<"last_build_id">>, LastBuild},
+                    {<<"last_build_state">>, State}
+                ]
+            }
+        end,
+        Res = lists:map(MapFun, dets:match(State#state.storage, {{Ident, '$1'}, '$2', ['$3'|'_']})),
+        gen_server:reply(From, Res)
     end),
     {noreply, State};
 
 handle_call({storage_list_package_builds, Ident, Name}, From, State) ->
     erlang:spawn(fun() -> 
+        MapFun = fun([WorkId, Branch, State, Started, Finished, Hash]) ->
+            Wid = list_to_binary(integer_to_list(WorkId)),
+            {Wid,
+                [
+                    {<<"state">>, State},
+                    {<<"branch">>, Branch},
+                    {<<"started">>, Started},
+                    {<<"finished">>, Finished},
+                    {<<"sha">>, Hash}
+                ]
+            }
+        end,
         SelectPattern = {{Ident, '$1', {Name, '$2'}}, '$3', '$4', '$5', '$6', '_', '_'},
-        Reply = {ok, (catch dets:match(State#state.storage, SelectPattern))},
-        gen_server:reply(From, Reply)
+        gen_server:reply(From, lists:map(MapFun, dets:match(State#state.storage, SelectPattern)))
     end),
     {noreply, State};
 
 handle_call({storage_list_builds, Ident}, From, State) ->
     erlang:spawn(fun() -> 
+        MapFun = fun([WorkId, Name, Branch, State, Started, Finished]) ->
+            Wid = list_to_binary(integer_to_list(WorkId)),
+            {Wid,
+                [
+                    {<<"state">>, State},
+                    {<<"name">>, Name},
+                    {<<"branch">>, Branch},
+                    {<<"started">>, Started},
+                    {<<"finished">>, Finished}
+                ]
+            }
+        end,
         SelectPattern = [
             {{Ident, '$1', {'$2', '$3'}}, '$4', '$5', '$6', '_', '_', '_'},
             [{'>', '$1', State#state.work_id-?LIST_LENGTH}],
             ['$1', '$2', '$3', '$4', '$5', '$6']
         ],
-        Reply = {ok, (catch dets:select(State#state.storage, SelectPattern))},
+        Reply = lists:map(MapFun, dets:select(State#state.storage, SelectPattern)),
         gen_server:reply(From, Reply)
     end),
     {noreply, State};
 
 handle_call({storage_build_info, Ident, Id}, From, State) ->
     erlang:spawn(fun() -> 
+        MapFun = fun([Name, Branch, State, Started, Finished, Hash, Log, Package]) ->
+            {<<Name/binary, <<"/">>/binary, Branch/binary>>,
+                [
+                    {<<"state">>, State},
+                    {<<"started">>, Started},
+                    {<<"finished">>, Finished},
+                    {<<"sha">>, Hash},
+                    {<<"package">>, Package}
+                ]
+            }
+        end,
         SelectPattern = {{Ident, Id, {'$1', '$2'}}, '$3', '$4', '$5', '$6', '$7', '$8'},
-        Reply = {ok, (catch dets:match(State#state.storage, SelectPattern))},
-        gen_server:reply(From, Reply)
+        gen_server:reply(From, lists:map(MapFun, dets:match(State#state.storage, SelectPattern)))
     end),
     {noreply, State};
 
