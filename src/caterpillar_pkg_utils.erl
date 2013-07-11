@@ -74,9 +74,9 @@ get_valid_versions(L, Archive, build_deps) ->
     ({N, B, T}) ->
         case B of
             "*" ->
-                {{?LTB(N), ?LTB(Archive#archive.branch), ?LTB(T)}, <<"tested">>};
+                {{?LTB(N), ?LTB(Archive#archive.branch), ?LTB(T)}, <<"new">>};
             RealBranch ->
-                {{?LTB(N), ?LTB(RealBranch), ?LTB(T)}, <<"tested">>}
+                {{?LTB(N), ?LTB(RealBranch), ?LTB(T)}, <<"new">>}
         end;
     ({{N, B, T}, State}) ->
         case B of
