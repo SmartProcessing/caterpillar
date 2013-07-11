@@ -154,7 +154,7 @@ handle(#http_req{path=[<<"pkg_info">>, Name, Branch|MaybeIdent]}=Req, State) ->
 
 % Storage requests
 
-handle(#http_req{path=[<<"storage">>, Cmd, IdentType, IdentArch|Args]}=Req, State) ->
+handle(#http_req{path=[<<"storage">>, IdentType, IdentArch, Cmd|Args]}=Req, State) ->
     {ok, Req2} = case catch jsonx:encode(caterpillar_event:sync_event({storage, Cmd, [{IdentType, IdentArch}|Args]})) of
         Response when is_binary(Response) ->
             cowboy_http_req:reply(200, [], Response, Req);

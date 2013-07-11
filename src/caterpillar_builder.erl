@@ -94,7 +94,7 @@ handle_call({built, Worker, RevDef, BuildInfo}, _From, State=#state{ident=Ident}
         {Ident#ident.type, Ident#ident.arch},
         {RevDef#rev_def.name, RevDef#rev_def.branch}, 
         RevDef#rev_def.work_id,
-        BuildInfo#build_info.pkg_name,
+        ?LTB(BuildInfo#build_info.pkg_name),
         <<"everything ok">>
     ]}),
     erlang:spawn(?MODULE, deploy, [RevDef, BuildInfo, State]),
@@ -108,7 +108,7 @@ handle_call({err_built, Worker, RevDef, BuildInfo}, _From, #state{ident=Ident}=S
         {Ident#ident.type, Ident#ident.arch},
         {RevDef#rev_def.name, RevDef#rev_def.branch}, 
         RevDef#rev_def.work_id,
-        BuildInfo#build_info.description
+        ?LTB(BuildInfo#build_info.description)
     ]}),
     notify(BuildInfo#build_info.state,
         RevDef#rev_def.work_id,
@@ -444,7 +444,7 @@ submit_next_to_build(QType, Queue, Candidate, State=#state{ident=Ident}) ->
         {Ident#ident.type, Ident#ident.arch},
         {Candidate#rev_def.name, Candidate#rev_def.branch}, 
         Candidate#rev_def.work_id,
-        Candidate#rev_def.pkg_config#pkg_config.description
+        ?LTB(Candidate#rev_def.pkg_config#pkg_config.description)
     ]}),
     case QType of
         main_queue ->

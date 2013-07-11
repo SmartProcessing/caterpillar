@@ -55,14 +55,14 @@ init(Settings) ->
 
 handle_call({storage, <<"packages">>, [Ident]}, From, State) ->
     erlang:spawn(fun() ->
-        MapFun = fun([{Name, Branch}, Description, LastBuild]) ->
+        MapFun = fun([{Name, Branch}, Description, LastBuild]=Test) ->
             SelectPattern = {{Ident, LastBuild, {Name, Branch}}, '$1', '_', '_', '_', '_', '_'},
-            [[State]|_] = dets:match(State#state.storage, SelectPattern),
+            [[Status]|_] = dets:match(State#state.storage, SelectPattern),
             {<<Name/binary, <<"/">>/binary, Branch/binary>>,
                 [
                     {<<"description">>, Description},
                     {<<"last_build_id">>, LastBuild},
-                    {<<"last_build_state">>, State}
+                    {<<"last_build_state">>, Status}
                 ]
             }
         end,
@@ -104,17 +104,18 @@ handle_call({storage, <<"builds">>, [Ident]}, From, State) ->
                 ]
             }
         end,
-        SelectPattern = [
+        SelectPattern = [{
             {{Ident, '$1', {'$2', '$3'}}, '$4', '$5', '$6', '_', '_', '_'},
             [{'>', '$1', State#state.work_id-?LIST_LENGTH}],
-            ['$1', '$2', '$3', '$4', '$5', '$6']
-        ],
+            [['$1', '$2', '$3', '$4', '$5', '$6']]
+        }],
         Reply = lists:map(MapFun, dets:select(State#state.storage, SelectPattern)),
         gen_server:reply(From, Reply)
     end),
     {noreply, State};
 
-handle_call({storage, <<"build">>, [Ident, Id]}, From, State) ->
+handle_call({storage, <<"build">>, [Ident, IdBin]}, From, State) ->
+    Id = list_to_integer(binary_to_list(IdBin)),
     erlang:spawn(fun() -> 
         MapFun = fun([Name, Branch, Status, Started, Finished, Hash, Log, Package]) ->
             {<<Name/binary, <<"/">>/binary, Branch/binary>>,
@@ -132,7 +133,8 @@ handle_call({storage, <<"build">>, [Ident, Id]}, From, State) ->
     end),
     {noreply, State};
 
-handle_call(_Request, _From, State) ->
+handle_call(Request, _From, State) ->
+    error_logger:info_msg("storage request: ~p~n", [Request]),
     {reply, ok, State}.
 
 
@@ -140,7 +142,7 @@ handle_cast({store_start_build, [Ident, {Name, Branch}, WorkId, CommitHash]}, St
     ?CU:write_work_id(State#state.work_id_file, WorkId),
     case dets:lookup(S, {Ident, {Name, Branch}}) of
         [] ->
-            dets:insert(S, {{Ident, {Name, Branch}}, "...", [WorkId]});
+            dets:insert(S, {{Ident, {Name, Branch}}, <<"...">>, [WorkId]});
         [{_, Desc, Bids}] ->
             dets:insert(S, {{Ident, {Name, Branch}}, Desc, [WorkId|Bids]})
     end,
@@ -179,7 +181,7 @@ handle_cast({store_progress_build, [Ident, {Name, Branch}, WorkId, Description]}
     end,
     {noreply, State};
 
-handle_cast({store_error_build, [Ident, {Name, Branch}, WorkId, BuildLog]}, State=#state{storage=S, file_path=Path}) ->
+handle_cast({store_error_build, [Ident, {Name, Branch}, WorkId, BuildLog]=All}, State=#state{storage=S, file_path=Path}) ->
     Link = v4str(v4()),
     file:write_file(filename:join([Path, get_dir(Link), Link]), BuildLog),
     case dets:lookup(S, {Ident, WorkId, {Name, Branch}}) of
