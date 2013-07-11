@@ -134,7 +134,7 @@ init_repository(#state{repository_root=RR, vcs_state=VCState}, RawPackage) ->
     end,
     AbsPackage = filename:join(RR, Package),
     case is_repository(VCState, AbsPackage) of
-        true -> {error, <<"already initialied">>};
+        true -> {error, <<"already initialized">>};
         false ->
             InitRepo = "git init --shared --bare",
             caterpillar_utils:ensure_dir(AbsPackage),
