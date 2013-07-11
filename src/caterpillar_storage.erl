@@ -136,7 +136,7 @@ handle_cast({store_progress_build, [Ident, {Name, Branch}, WorkId, Description]}
 
 handle_cast({store_error_build, [Ident, {Name, Branch}, WorkId, BuildLog]}, State=#state{storage=S, file_path=Path}) ->
     Link = v4str(v4()),
-    file:write_file(filename:join([Path, Link]), BuildLog),
+    file:write_file(filename:join([Path, get_dir(Link), Link]), BuildLog),
     case dets:lookup(S, {Ident, WorkId, {Name, Branch}}) of
         [{_, _, Start, _, CommitHash, _, _}|_] ->
             InsertData = {
@@ -209,7 +209,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 
 %-----------------
-
+% Utils
 
 async_register() -> 
     async_register(1000).
@@ -234,3 +234,10 @@ v4str(U) ->
 
 get_parts(<<TL:32, TM:16, THV:16, CSR:8, CSL:8, N:48>>) ->
     [TL, TM, THV, CSR, CSL, N].
+
+get_dir(Link) ->
+    <<DirInt:8, _R/binary>> = crypto:md5(Link),
+    vessel_from_number(DirInt).
+
+vessel_from_number(Int) when is_integer(Int) ->
+    lists:flatten(io_lib:format("~.16B", [?V_PREFIX+Int])).
