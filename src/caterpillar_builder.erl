@@ -482,12 +482,12 @@ submit_missing(QType, Queue, Candidate, State) ->
 -spec notify(State :: list(), WorkId :: integer(), Ident :: #ident{}, Version :: version(), Body :: list()) -> ok|error.
 
 notify(State, WorkId, Ident, {N, B, T}, Body) ->
-    Subj = io_lib:format("#~B ~s: ~s/~s/~s/~s/~s", [
+    Subj = io_lib:format("#~B ~s: ~s/~s~s at ~s/~s", [
             WorkId,
             State,
             ?BTL(N),
             ?BTL(B),
-            ?BTL(T),
+            (fun(T) when T /= [] andalso T /= <<>> -> "/" ++ ?BTL(T); (_) -> "" end)(T),
             Ident#ident.type,
             Ident#ident.arch
         ]),
@@ -574,7 +574,7 @@ deploy(RevDef, BuildInfo, #state{ident=#ident{arch=Arch, type=Type}=Ident}=State
         package = BuildInfo#build_info.pkg_name,
         fd = BuildInfo#build_info.fd
     },
-    Subj = io_lib:format("#~B success: ~s/~s/~s/~s/~s", [
+    Subj = io_lib:format("#~B success: ~s/~s/~s at ~s/~s", [
         RevDef#rev_def.work_id,
         binary_to_list(RevDef#rev_def.name),
         binary_to_list(RevDef#rev_def.branch),
