@@ -83,7 +83,7 @@ gen_control_from_pkg_config2_test() ->
         "Version: 0.14.0-trunk.11\n"
         "Architecture: all\n"
         "Description: \n"
-        "Maintainer: example@example.org\n"
+        "Maintainer: admin@smprc.ru\n"
         "Depends: smprc-cowboy, smprc-mochiweb\n">>, ?CPU:gen_control_from_pkg_config(Rev)).
 
 
