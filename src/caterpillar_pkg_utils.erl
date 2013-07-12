@@ -11,7 +11,7 @@
 -define(LTB, list_to_binary).
 -define(BTL, binary_to_list).
 -define(ITL, integer_to_list).
--define(ATP, anything_to_binary).
+-define(ATB, anything_to_binary).
 
 get_pkg_config_record(Archive, {control, Data}) ->
     #pkg_config{
