@@ -104,7 +104,7 @@ handle_call({storage, <<"package">>, [Ident, Name]}, From, State) ->
 handle_call({storage, <<"builds">>, [Ident]}, From, State) ->
     {Pid, _Ref} = erlang:spawn_monitor(fun() -> 
         MapFun = fun([WorkId, Name, Branch, Status, Started, Finished]) ->
-            Wid = list_to_binary(integer_to_list(WorkId)),
+            Wid = list_to_binary(integer_to_list(WorkId)++"/"++Name++"/"++Branch),
             {Wid,
                 [
                     {<<"state">>, Status},
