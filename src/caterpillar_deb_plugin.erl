@@ -29,8 +29,8 @@ build_submit(Rev, Dir) ->
                     {"BRANCH", ?BTL(Rev#rev_def.branch)},
                     {"BUILD_ID", integer_to_list(Rev#rev_def.work_id)}
                 ], "package"), [{cwd, Dir}]) of
-        {0, _Msg} ->
-            find_deb_file(filename:join([Dir, "dist"]));
+        {0, Msg} ->
+            {find_deb_file(filename:join([Dir, "dist"])), Msg};
         {Code, Msg} when is_integer(Code) ->
             error_logger:info_msg("make package failed with status ~B: ~s", [Code, Msg]),
             {error, format("make package returned ~B: ~s", [Code, Msg])}

@@ -16,7 +16,6 @@
 -record(state, {
     master_pid=none,
     deps,
-    buckets,
     main_queue,
     wait_queue,
     queue_switch=true,

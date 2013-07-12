@@ -98,23 +98,23 @@ build_rev(ToBuild, State) ->
         {fun build_submit/2, BuildPlugins}
     ],
     case catch caterpillar_utils:build_pipe(Funs, {none, ToBuild}) of
-        {ok, {{Fd, Name}, Env}} ->
+        {ok, {{Fd, Name}, Env={_, _, OldMsg}}} ->
             informer(<<"built">>, {ok, <<>>}, Env),
             ok = gen_server:call(caterpillar_builder, 
                 {built, self(), ToBuild, #build_info{
                         state = <<"built">>,
                         fd=Fd,
                         pkg_name=Name,
-                        description="ok"
+                        description=OldMsg
                     }}, infinity),
             make_complete_actions(Env);
-        {error, Value, Msg, Env} ->
+        {error, Value, Msg, Env={_, _, OldMsg}} ->
             ok = gen_server:call(caterpillar_builder, 
                 {err_built, self(), ToBuild, #build_info{
                         state=Value,
                         fd=none,
                         pkg_name=none,
-                        description=Msg
+                        description= <<OldMsg/binary, Msg/binary>>
                     }}, infinity),
             make_complete_actions(Env);
         {error, Value, Msg} ->
@@ -143,12 +143,12 @@ build_rev(ToBuild, State) ->
 %% {{{{2 Pipe functions
 
 unpack_rev(Rev, {BuildPath, DepsDets}) ->
-    create_workspace(DepsDets, BuildPath, Rev),
+    {ok, Msg} = create_workspace(DepsDets, BuildPath, Rev),
     {ok, 
-        {none, {Rev, BuildPath}}
+        {none, {Rev, BuildPath, Msg}}
     }.
     
-platform_get_env({Rev, BuildPath}, Plugins) ->
+platform_get_env({Rev, BuildPath, Msg}, Plugins) ->
     {Name, _B, _T} = ?VERSION(Rev),
     PkgConfig = Rev#rev_def.pkg_config,
     Platform = PkgConfig#pkg_config.platform,
@@ -156,7 +156,7 @@ platform_get_env({Rev, BuildPath}, Plugins) ->
     Path = filename:join([?CBS:get_statpack_path(BuildPath, Rev, Rev#rev_def.work_id), binary_to_list(Name)]),
     {ok, Plugin, Path, Rev}.
 
-package_get_env({Rev, BuildPath}, Plugins) ->
+package_get_env({Rev, BuildPath, Msg}, Plugins) ->
     {Name, _B, _T} = ?VERSION(Rev),
     PkgConfig = Rev#rev_def.pkg_config,
     [PackageT|_] = PkgConfig#pkg_config.package_t, 
@@ -192,24 +192,23 @@ build_check(Env, Plugins) ->
 build_submit(Env, Plugins) ->
     {ok, Plugin, Path, Rev} = package_get_env(Env, Plugins),
     {State, Msg} = Plugin:build_submit(Rev, Path),
-    case State of
-        ok ->
-            {_Fd, _Name} = Msg,
-            {ok, {Msg, Env}};
-        error ->
-            {error, Msg, Env};
+    case Plugin:build_submit(Rev, Path) of
+        {{ok, Fcontain}, Msg} ->
+            {ok, {Fcontain, Msg, Env}};
+        {{error, Msg}, Bmsg} ->
+            {error, <<Bmsg/binary, Msg/binary>>, Env};
         Other ->
             error_logger:error_msg("failed to submit package: ~p~n", [Other]),
-            {error, "unknown error while submitting package"}
+            {error, <<"unknown error while submitting package">>}
     end.
 
-informer(Phase, {State, Msg}, Env={Rev, Path}) ->
+informer(Phase, {State, Msg}, Env={Rev, Path, EnvMsg}) ->
     case State of
         ok ->
             ?CBS:store_package_with_state(Phase, Rev, Path),
-            {ok, {Phase, Env}};
+            {ok, {Phase, {Rev, Path, <<EnvMsg/binary, Msg/binary>>}}};
         error ->
-            {error, Msg}
+            {error, <<EnvMsg/binary, Msg/binary>>}
     end.
 
 
@@ -220,10 +219,10 @@ make_complete_actions({Rev, BuildPath}) ->
 
 create_workspace(DepsDets, BuildPath, Rev) ->
     try
-        ?CBS:arm_bucket(Rev, DepsDets, BuildPath, Rev#rev_def.dep_object)
+        ?CBS:arm_bucket(Rev, DepsDets, BuildPath, Rev#rev_def.dep_object, <<"getting dependencies:\n">>)
     catch
         _:Reason ->
-            error_logger:error_msg("failed to unpack revision ~p to bucket ~p: ~p~n", 
+            error_logger:error_msg("failed to unpack revision ~p: ~p~n", 
                 [Rev, erlang:get_stacktrace()]),
             throw(Reason)
     end.

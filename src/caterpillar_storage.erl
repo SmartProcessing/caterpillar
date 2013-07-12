@@ -38,7 +38,7 @@ start_link(Settings) ->
 init(Settings) ->
     error_logger:info_msg("initialized storage: ~p~n", [?GV(storage, Settings)]),
     filelib:ensure_dir(?GV(storage, Settings, ?DEFAULT_STORAGE)),
-    {ok, Storage} = dets:open_file(storage, [{file, ?GV(storage, Settings, ?DEFAULT_STORAGE)}]),
+    {ok, Storage} = dets:open_file(storage, [{ram_file, true}, {file, ?GV(storage, Settings, ?DEFAULT_STORAGE)}]),
     WorkIdFile = ?GV(work_id, Settings, ?DEFAULT_WORK_ID_FILE),
     WorkId = ?CU:read_work_id(WorkIdFile),
     FileStorage = ?GV(file_path, Settings, "/var/lib/smprc/caterpillar/storage/files"),
@@ -106,10 +106,16 @@ handle_call({storage, <<"builds">>, [Ident]}, From, State) ->
         end,
         SelectPattern = [{
             {{Ident, '$1', {'$2', '$3'}}, '$4', '$5', '$6', '_', '_', '_'},
-            [{'>', '$1', State#state.work_id-?LIST_LENGTH}],
+            [{'>=', '$1', State#state.work_id-?LIST_LENGTH}],
             [['$1', '$2', '$3', '$4', '$5', '$6']]
         }],
-        Reply = lists:map(MapFun, dets:select(State#state.storage, SelectPattern)),
+        Reply = lists:sort(fun
+                ({K1, _}, {K2, _}) when K1 > K2 ->
+                    true;
+                (_, _) ->
+                    false
+                end,
+            lists:map(MapFun, dets:select(State#state.storage, SelectPattern))),
         gen_server:reply(From, Reply)
     end),
     {noreply, State};
@@ -133,12 +139,27 @@ handle_call({storage, <<"build">>, [Ident, IdBin]}, From, State) ->
     end),
     {noreply, State};
 
+handle_call({storage, <<"log">>, [Ident, IdBin, Name, Branch]}, From, State) ->
+    Id = list_to_integer(binary_to_list(IdBin)),
+    erlang:spawn(fun() -> 
+        SelectPattern = {{Ident, Id, {Name, Branch}}, '_', '_', '_', '_', '$1', '_'},
+        [[Link]|_] = dets:match(State#state.storage, SelectPattern),
+        Content = case file:read_file(filename:join([State#state.file_path, get_dir(Link), Link])) of
+            {ok, C} ->
+                C;
+            _Other ->
+                <<"...">>
+        end,
+        gen_server:reply(From, [{<<"log">>, Content}])
+    end),
+    {noreply, State};
+
 handle_call(Request, _From, State) ->
     error_logger:info_msg("storage request: ~p~n", [Request]),
     {reply, ok, State}.
 
 
-handle_cast({store_start_build, [Ident, {Name, Branch}, WorkId, CommitHash]}, State=#state{storage=S}) ->
+handle_cast({store_start_build, Msg = [Ident, {Name, Branch}, WorkId, CommitHash]}, State=#state{storage=S}) ->
     ?CU:write_work_id(State#state.work_id_file, WorkId),
     case dets:lookup(S, {Ident, {Name, Branch}}) of
         [] ->
@@ -155,6 +176,8 @@ handle_cast({store_start_build, [Ident, {Name, Branch}, WorkId, CommitHash]}, St
         <<"...">>,
         <<"...">>
     }),
+    dets:sync(S),
+    error_logger:info_msg("stored start build: ~p~n", [Msg]),
     {noreply, State#state{work_id=WorkId}};
 
 handle_cast({store_progress_build, [Ident, {Name, Branch}, WorkId, Description]}, State=#state{storage=S}) ->
@@ -175,31 +198,36 @@ handle_cast({store_progress_build, [Ident, {Name, Branch}, WorkId, Description]}
                 <<"...">>,
                 <<"...">>
             },
-            dets:insert(S, InsertData);
+            dets:insert(S, InsertData),
+            error_logger:info_msg("stored in_progress data: ~p~n", [InsertData]);
         _ ->
             pass
     end,
+    dets:sync(S),
     {noreply, State};
 
 handle_cast({store_error_build, [Ident, {Name, Branch}, WorkId, BuildLog]=All}, State=#state{storage=S, file_path=Path}) ->
     Link = v4str(v4()),
-    file:write_file(filename:join([Path, get_dir(Link), Link]), BuildLog),
+    Fname = filename:join([Path, get_dir(Link), Link]),
+    filelib:ensure_dir(Fname),
+    file:write_file(Fname, BuildLog),
     case dets:lookup(S, {Ident, WorkId, {Name, Branch}}) of
         [{_, _, Start, _, CommitHash, _, _}|_] ->
             InsertData = {
-                Ident,
-                {WorkId, {Name, Branch}},
+                {Ident, WorkId, {Name, Branch}},
                 <<"error">>,
                 Start,
                 ?DTU:datetime_to_binary_string(calendar:universal_time()),
                 CommitHash,
                 Link,
-                <<"">>
+                <<"...">>
             },
-            dets:insert(S, InsertData);
+            dets:insert(S, InsertData),
+            error_logger:info_msg("stored error data: ~p~n", [InsertData]);
         _ ->
             pass
     end,
+    dets:sync(S),
     {noreply, State};
 
 handle_cast({store_complete_build, [Ident,
@@ -223,9 +251,11 @@ handle_cast({store_complete_build, [Ident,
         _ ->
             pass
     end,
+    dets:sync(S),
     {noreply, State};
 
-handle_cast(_Msg, State) ->
+handle_cast(Msg, State) ->
+    error_logger:info_msg("unknown cast message to storage: ~p~n", [Msg]),
     {noreply, State}.
 
 

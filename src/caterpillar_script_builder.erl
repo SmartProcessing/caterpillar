@@ -66,8 +66,8 @@ build_prepare(Rev, Dir) ->
 build_submit(#rev_def{branch=Branch}=Rev, Dir) ->
     error_logger:info_msg("executing build.sh package in ~s:~n", [Dir]),
     case ?CMD(get_command("package"), [{cwd, Dir}, {env, get_env(Branch)}]) of
-        {0, _Msg} ->
-            find_deb_file(filename:join([Dir, "dist"]));
+        {0, Msg} ->
+            {find_deb_file(filename:join([Dir, "dist"]), Msg};
         {Code, Msg} when is_integer(Code) ->
             error_logger:info_msg("make package failed with status ~B: ~s", [Code, Msg]),
             {error, lists:flatten(io_lib:format("make package returned ~B: ~s", [Code, Msg]))}
