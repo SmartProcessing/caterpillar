@@ -121,10 +121,8 @@ handle_call({storage, <<"builds">>, [Ident]}, From, State) ->
             [['$1', '$2', '$3', '$4', '$5', '$6']]
         }],
         Reply = lists:sort(fun
-                ({K1, _}, {K2, _}) when K1 > K2 ->
-                    true;
-                (_, _) ->
-                    false
+                ({K1, _}, {K2, _}) ->
+                    list_to_integer(binary_to_list(K1)) > list_to_integer(binary_to_list(K2))
                 end,
             lists:map(MapFun, dets:select(State#state.storage, SelectPattern))),
         gen_server:reply(From, Reply)
