@@ -11,6 +11,7 @@
 -define(LTB, list_to_binary).
 -define(BTL, binary_to_list).
 -define(ITL, integer_to_list).
+-define(ATP, anything_to_binary).
 
 get_pkg_config_record(Archive, {control, Data}) ->
     #pkg_config{
@@ -89,9 +90,9 @@ get_valid_versions(L, Archive, build_deps) ->
 
 get_archive_version(Archive) ->
     {
-        ?LTB(Archive#archive.name),
-        ?LTB(Archive#archive.branch),
-        ?LTB(Archive#archive.tag)
+        ?ATB(Archive#archive.name),
+        ?ATB(Archive#archive.branch),
+        ?ATB(Archive#archive.tag)
     }.
 
 get_version_archive({Name, Branch, Tag}) ->
@@ -195,3 +196,12 @@ gen_deps([Dep|O], Acc) ->
         _Other ->
             gen_deps(O, Acc)
     end.
+
+anything_to_binary(List) when is_list(List) ->
+    list_to_binary(List);
+anything_to_binary(undefined) ->
+    <<>>;
+anything_to_binary(Atom) when is_atom(Atom) ->
+    atom_to_binary(Atom, latin1);
+anything_to_binary(Integer) when is_integer(Integer) ->
+    list_to_binary(integer_to_list(Integer)).
