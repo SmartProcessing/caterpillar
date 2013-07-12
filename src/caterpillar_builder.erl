@@ -487,7 +487,7 @@ notify(State, WorkId, Ident, {N, B, T}, Body) ->
             State,
             ?BTL(N),
             ?BTL(B),
-            (fun(T) when T /= [] andalso T /= <<>> -> "/" ++ ?BTL(T); (_) -> "" end)(T),
+            format_tag(T), 
             Ident#ident.type,
             Ident#ident.arch
         ]),
@@ -578,7 +578,7 @@ deploy(RevDef, BuildInfo, #state{ident=#ident{arch=Arch, type=Type}=Ident}=State
         RevDef#rev_def.work_id,
         binary_to_list(RevDef#rev_def.name),
         binary_to_list(RevDef#rev_def.branch),
-        binary_to_list(RevDef#rev_def.tag),
+        format_tag(RevDef#rev_def.tag),
         Type,
         Arch
     ]),
@@ -595,3 +595,11 @@ deploy(RevDef, BuildInfo, #state{ident=#ident{arch=Arch, type=Type}=Ident}=State
         post_deploy_actions = [{caterpillar_event, sync_event, [{notify, get_notify_message(Subj, Message)}]}]
     },
     caterpillar_event:sync_event({deploy, Deploy}).
+
+
+format_tag([]) -> "";
+format_tag(<<>>) -> "";
+format_tag(undefined) -> "";
+format_tag(Tag) when is_binary(Tag) -> format_tag(binary_to_list(Tag));
+format_tag(Tag) when is_list(Tag) -> "/" ++ Tag;
+format_tag(Tag) -> lists:flatten(io_lib:format("/~p", [Tag])).
