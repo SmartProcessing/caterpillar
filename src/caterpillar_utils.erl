@@ -182,7 +182,6 @@ command(Cmd__, Options, Env, Timeout) ->
         Env =:= [] -> []; 
 		true -> [{env, Env}]
     end,
-    %FIXME: binary?
     DefaultOpts = [stream, exit_status, use_stdio, stderr_to_stdout, in],
     PortOptions = CD ++ SetEnv ++ DefaultOpts,
     Port = open_port({spawn, Cmd}, PortOptions),

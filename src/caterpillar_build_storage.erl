@@ -163,7 +163,7 @@ arm_bucket(Rev, _Deps, BuildPath, [], Log) ->
     BinRevPath = list_to_binary("getting " ++ RevPath ++ "\n"),
     copy_package_to_bucket(RevPath, 
         filename:join([get_statpack_path(BuildPath, Rev, Rev#rev_def.work_id), ?BTL(Rev#rev_def.name)])),
-    {ok, <<Log/binary, RevPath/binary>>};
+    {ok, <<Log/binary, BinRevPath/binary>>};
 arm_bucket(Rev, Deps, BuildPath, [Dependencie|O], Log) ->
     {Dep={Name, _, _}, BState} = Dependencie,
     DepPath = get_path(BuildPath, Dep, BState),

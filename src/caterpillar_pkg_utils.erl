@@ -20,7 +20,7 @@ get_pkg_config_record(Archive, {control, Data}) ->
         package_t=["deb"],
         arch=?GV("Architecture", Data, "all"),
         description=?GV("Description", Data, Archive#archive.name),
-        maintainers=[?GV("Maintainer", Data, ["example@example.org"])],
+        maintainers=[?GV("Maintainer", Data, ["admin@smprc.ru"])],
         platform="default",
         deps=?GV("Depends", Data, [])
     };
@@ -31,7 +31,7 @@ get_pkg_config_record(Archive, {config, Data}) ->
         section=?GV(section, Data, "smprc"),
         package_t=?GV(package_plugin, Data, ["deb"]),
         arch=?GV(architecture, Data, "all"),
-        maintainers=?GV(maintainers, Data, ["example@example.org"]),
+        maintainers=?GV(maintainers, Data, ["admin@smprc.ru"]),
         description=?GV(description, Data, Archive#archive.name),
         platform=?GV(platform_plugin, Data, "default"),
         deps=?GV(deps, Data, []),
@@ -44,7 +44,7 @@ get_pkg_config_record(Archive, {empty, Data}) ->
         section=?GV("section", Data, "smprc"),
         package_t=?GV("package_t", Data, ["deb"]),
         arch=?GV("architecture", Data, "all"),
-        maintainers=?GV("maintainers", Data, ["example@example.org"]),
+        maintainers=?GV("maintainers", Data, ["admin@smprc.ru"]),
         description=?GV("description", Data, Archive#archive.name),
         platform=?GV("platform", Data, "default"),
         deps=?GV("deps", Data, []),
@@ -167,7 +167,7 @@ gen_control_from_pkg_config(Rev) ->
     NewVersion = OldVersion ++ "-" ++ ?BTL(Rev#rev_def.branch) ++ "." ++ ?ITL(Rev#rev_def.work_id),
     OldSection = PkgConfig#pkg_config.section,
     NewSection = OldSection ++ "-" ++ ?BTL(Rev#rev_def.branch),
-    [Maintainer|_] = PkgConfig#pkg_config.maintainers ++ ["example@example.org"],
+    [Maintainer|_] = PkgConfig#pkg_config.maintainers ++ ["admin@smprc.ru"],
     list_to_binary(io_lib:format(
         "Package: ~s~nSection: ~s~nVersion: ~s~nArchitecture: ~s~nDescription: ~s~nMaintainer: ~s~n~s",
         [

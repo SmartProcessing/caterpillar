@@ -98,14 +98,14 @@ build_rev(ToBuild, State) ->
         {fun build_submit/2, BuildPlugins}
     ],
     case catch caterpillar_utils:build_pipe(Funs, {none, ToBuild}) of
-        {ok, {{Fd, Name}, Env={_, _, OldMsg}}} ->
+        {ok, {{Fd, Name}, BMsg, Env={_, _, OldMsg}}} ->
             informer(<<"built">>, {ok, <<>>}, Env),
             ok = gen_server:call(caterpillar_builder, 
                 {built, self(), ToBuild, #build_info{
                         state = <<"built">>,
                         fd=Fd,
                         pkg_name=Name,
-                        description=OldMsg
+                        description= <<OldMsg/binary, BMsg/binary>>
                     }}, infinity),
             make_complete_actions(Env);
         {error, Value, Msg, Env={_, _, OldMsg}} ->
@@ -191,7 +191,6 @@ build_check(Env, Plugins) ->
 
 build_submit(Env, Plugins) ->
     {ok, Plugin, Path, Rev} = package_get_env(Env, Plugins),
-    {State, Msg} = Plugin:build_submit(Rev, Path),
     case Plugin:build_submit(Rev, Path) of
         {{ok, Fcontain}, Msg} ->
             {ok, {Fcontain, Msg, Env}};
@@ -202,7 +201,7 @@ build_submit(Env, Plugins) ->
             {error, <<"unknown error while submitting package">>}
     end.
 
-informer(Phase, {State, Msg}, Env={Rev, Path, EnvMsg}) ->
+informer(Phase, S = {State, Msg}, Env={Rev, Path, EnvMsg}) ->
     case State of
         ok ->
             ?CBS:store_package_with_state(Phase, Rev, Path),
@@ -214,7 +213,7 @@ informer(Phase, {State, Msg}, Env={Rev, Path, EnvMsg}) ->
 
 %% 2}}}}
 
-make_complete_actions({Rev, BuildPath}) ->
+make_complete_actions({Rev, BuildPath, _}) ->
     ?CBS:delete_statpack(Rev, BuildPath).
 
 create_workspace(DepsDets, BuildPath, Rev) ->

@@ -94,7 +94,7 @@ handle_call({built, Worker, RevDef, BuildInfo}, _From, State=#state{ident=Ident}
         {RevDef#rev_def.name, RevDef#rev_def.branch}, 
         RevDef#rev_def.work_id,
         ?LTB(BuildInfo#build_info.pkg_name),
-        <<"everything ok">>
+        BuildInfo#build_info.description 
     ]}),
     erlang:spawn(?MODULE, deploy, [RevDef, BuildInfo, State]),
     NewWorkers = release_worker(Worker, State#state.workers),
@@ -107,7 +107,7 @@ handle_call({err_built, Worker, RevDef, BuildInfo}, _From, #state{ident=Ident}=S
         {Ident#ident.type, Ident#ident.arch},
         {RevDef#rev_def.name, RevDef#rev_def.branch}, 
         RevDef#rev_def.work_id,
-        ?LTB(BuildInfo#build_info.description)
+        BuildInfo#build_info.description
     ]}),
     notify(BuildInfo#build_info.state,
         RevDef#rev_def.work_id,

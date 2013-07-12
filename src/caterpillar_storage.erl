@@ -5,6 +5,7 @@
 -define(SERVER, ?MODULE).
 -define(DEFAULT_STORAGE, "/var/lib/smprc/caterpillar/storage").
 -define(DEFAULT_WORK_ID_FILE, "/var/lib/smprc/caterpillar/storage_work_id").
+-define(STORAGE_LENGTH, 500).
 -define(DTU, smprc_datetime_utils).
 -define(LIST_LENGTH, 30).
 -define(V_PREFIX, 1048676).
@@ -21,8 +22,11 @@
     storage='storage', 
     registered=false,
     work_id=0,
+    rotate_interval,
+    rotate_length,
     work_id_file="./work_id",
-    file_path="/var/lib/smprc/caterpillar/storage/files"
+    file_path="/var/lib/smprc/caterpillar/storage/files",
+    proc_state
 }).
 
 -define(CU, caterpillar_utils).
@@ -42,19 +46,24 @@ init(Settings) ->
     WorkIdFile = ?GV(work_id, Settings, ?DEFAULT_WORK_ID_FILE),
     WorkId = ?CU:read_work_id(WorkIdFile),
     FileStorage = ?GV(file_path, Settings, "/var/lib/smprc/caterpillar/storage/files"),
+    RotateTime = ?GV(rotate_interval, Settings, 10000),
     filelib:ensure_dir(FileStorage ++ "/empty"),
     async_register(),
+    rotate(RotateTime),
     {ok, #state{
         storage=Storage,
         registered=false,
         work_id=WorkId,
         work_id_file=WorkIdFile,
-        file_path=FileStorage
+        rotate_interval=RotateTime,
+        rotate_length=?GV(rotate_length, Settings, ?STORAGE_LENGTH),
+        file_path=FileStorage,
+        proc_state=ets:new(proc_state, [])
     }}.
 
 
 handle_call({storage, <<"packages">>, [Ident]}, From, State) ->
-    erlang:spawn(fun() ->
+    {Pid, _Ref} = erlang:spawn_monitor(fun() ->
         MapFun = fun([{Name, Branch}, Description, LastBuild]=Test) ->
             SelectPattern = {{Ident, LastBuild, {Name, Branch}}, '$1', '_', '_', '_', '_', '_'},
             [[Status]|_] = dets:match(State#state.storage, SelectPattern),
@@ -69,10 +78,11 @@ handle_call({storage, <<"packages">>, [Ident]}, From, State) ->
         Res = lists:map(MapFun, dets:match(State#state.storage, {{Ident, '$1'}, '$2', ['$3'|'_']})),
         gen_server:reply(From, Res)
     end),
+    ets:insert(State#state.proc_state, {Pid, From}),
     {noreply, State};
 
 handle_call({storage, <<"package">>, [Ident, Name]}, From, State) ->
-    erlang:spawn(fun() -> 
+    {Pid, _Ref} = erlang:spawn_monitor(fun() -> 
         MapFun = fun([WorkId, Branch, Status, Started, Finished, Hash]) ->
             Wid = list_to_binary(integer_to_list(WorkId)),
             {Wid,
@@ -88,10 +98,11 @@ handle_call({storage, <<"package">>, [Ident, Name]}, From, State) ->
         SelectPattern = {{Ident, '$1', {Name, '$2'}}, '$3', '$4', '$5', '$6', '_', '_'},
         gen_server:reply(From, lists:map(MapFun, dets:match(State#state.storage, SelectPattern)))
     end),
+    ets:insert(State#state.proc_state, {Pid, From}),
     {noreply, State};
 
 handle_call({storage, <<"builds">>, [Ident]}, From, State) ->
-    erlang:spawn(fun() -> 
+    {Pid, _Ref} = erlang:spawn_monitor(fun() -> 
         MapFun = fun([WorkId, Name, Branch, Status, Started, Finished]) ->
             Wid = list_to_binary(integer_to_list(WorkId)),
             {Wid,
@@ -118,11 +129,12 @@ handle_call({storage, <<"builds">>, [Ident]}, From, State) ->
             lists:map(MapFun, dets:select(State#state.storage, SelectPattern))),
         gen_server:reply(From, Reply)
     end),
+    ets:insert(State#state.proc_state, {Pid, From}),
     {noreply, State};
 
 handle_call({storage, <<"build">>, [Ident, IdBin]}, From, State) ->
-    Id = list_to_integer(binary_to_list(IdBin)),
-    erlang:spawn(fun() -> 
+    {Pid, _Ref} = erlang:spawn_monitor(fun() -> 
+        Id = list_to_integer(binary_to_list(IdBin)),
         MapFun = fun([Name, Branch, Status, Started, Finished, Hash, Log, Package]) ->
             {<<Name/binary, <<"/">>/binary, Branch/binary>>,
                 [
@@ -137,11 +149,12 @@ handle_call({storage, <<"build">>, [Ident, IdBin]}, From, State) ->
         SelectPattern = {{Ident, Id, {'$1', '$2'}}, '$3', '$4', '$5', '$6', '$7', '$8'},
         gen_server:reply(From, lists:map(MapFun, dets:match(State#state.storage, SelectPattern)))
     end),
+    ets:insert(State#state.proc_state, {Pid, From}),
     {noreply, State};
 
 handle_call({storage, <<"log">>, [Ident, IdBin, Name, Branch]}, From, State) ->
     Id = list_to_integer(binary_to_list(IdBin)),
-    erlang:spawn(fun() -> 
+    {Pid, _Ref} = erlang:spawn_monitor(fun() -> 
         SelectPattern = {{Ident, Id, {Name, Branch}}, '_', '_', '_', '_', '$1', '_'},
         [[Link]|_] = dets:match(State#state.storage, SelectPattern),
         Content = case file:read_file(filename:join([State#state.file_path, get_dir(Link), Link])) of
@@ -152,11 +165,12 @@ handle_call({storage, <<"log">>, [Ident, IdBin, Name, Branch]}, From, State) ->
         end,
         gen_server:reply(From, [{<<"log">>, Content}])
     end),
+    ets:insert(State#state.proc_state, {Pid, From}),
     {noreply, State};
 
 handle_call(Request, _From, State) ->
     error_logger:info_msg("storage request: ~p~n", [Request]),
-    {reply, ok, State}.
+    {reply, unknown, State}.
 
 
 handle_cast({store_start_build, Msg = [Ident, {Name, Branch}, WorkId, CommitHash]}, State=#state{storage=S}) ->
@@ -177,7 +191,6 @@ handle_cast({store_start_build, Msg = [Ident, {Name, Branch}, WorkId, CommitHash
         <<"...">>
     }),
     dets:sync(S),
-    error_logger:info_msg("stored start build: ~p~n", [Msg]),
     {noreply, State#state{work_id=WorkId}};
 
 handle_cast({store_progress_build, [Ident, {Name, Branch}, WorkId, Description]}, State=#state{storage=S}) ->
@@ -198,8 +211,7 @@ handle_cast({store_progress_build, [Ident, {Name, Branch}, WorkId, Description]}
                 <<"...">>,
                 <<"...">>
             },
-            dets:insert(S, InsertData),
-            error_logger:info_msg("stored in_progress data: ~p~n", [InsertData]);
+            dets:insert(S, InsertData);
         _ ->
             pass
     end,
@@ -222,8 +234,7 @@ handle_cast({store_error_build, [Ident, {Name, Branch}, WorkId, BuildLog]=All}, 
                 Link,
                 <<"...">>
             },
-            dets:insert(S, InsertData),
-            error_logger:info_msg("stored error data: ~p~n", [InsertData]);
+            dets:insert(S, InsertData);
         _ ->
             pass
     end,
@@ -236,6 +247,10 @@ handle_cast({store_complete_build, [Ident,
             Package,
             BuildLog
         ]}, State=#state{storage=S}) ->
+    Link = v4str(v4()),
+    Fname = filename:join([State#state.file_path, get_dir(Link), Link]),
+    filelib:ensure_dir(Fname),
+    file:write_file(Fname, BuildLog),
     case dets:lookup(S, {Ident, WorkId, {Name, Branch}}) of
         [{_, _, Start, _, CommitHash, _, _}] ->
             InsertData = {
@@ -244,7 +259,7 @@ handle_cast({store_complete_build, [Ident,
                 Start,
                 ?DTU:datetime_to_binary_string(calendar:universal_time()),
                 CommitHash,
-                BuildLog,
+                Link,
                 Package
             },
             dets:insert(S, InsertData);
@@ -259,9 +274,37 @@ handle_cast(Msg, State) ->
     {noreply, State}.
 
 
-handle_info({'DOWN', _, _, _, _}, State) ->
-    async_register(),
-    {noreply, State#state{registered=false}};
+handle_info({'DOWN', Reference, _, Pid, normal}, State) ->
+    catch ets:delete(State#state.proc_state, Pid),
+    {noreply, State};
+handle_info({'DOWN', _, _, Pid, _}, State) ->
+    Registered = case ets:lookup(State#state.proc_state, Pid) of
+        [{Pif, From}] ->
+            gen_server:reply(From, <<"internal error">>),
+            ets:delete(State#state.proc_state, Pid),
+            State#state.registered;
+        _Other ->
+            async_register(),
+            false
+    end,
+    {noreply, State#state{registered=Registered}};
+
+handle_info(rotate, State=#state{storage=S, file_path=Path}) ->
+    erlang:spawn(fun() -> 
+        error_logger:info_msg("rotating storage~n"),
+        MapFun = fun([WorkId, Name, Branch, Log, Ident]) ->
+            catch file:delete(filename:join([Path, get_dir(Log), Log])),
+            dets:delete(S, {Ident, WorkId, {Name, Branch}})
+        end,
+        SelectPattern = [{
+            {{'$5', '$1', {'$2', '$3'}}, '_', '_', '_', '_', '$4', '_'},
+            [{'<', '$1', State#state.work_id-State#state.rotate_length}],
+            [['$1', '$2', '$3', '$4', '$5']]
+        }],
+        lists:map(MapFun, dets:select(State#state.storage, SelectPattern))
+    end),
+    rotate(State#state.rotate_interval),
+    {noreply, State};
 
 handle_info(async_register, State=#state{registered=false}) ->
     case catch caterpillar_event:register_service(storage) of
@@ -287,6 +330,9 @@ code_change(_OldVsn, State, _Extra) ->
 
 %-----------------
 % Utils
+
+rotate(Time) ->
+    erlang:send_after(Time, self(), rotate).
 
 async_register() -> 
     async_register(1000).
