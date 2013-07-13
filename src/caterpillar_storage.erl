@@ -66,7 +66,12 @@ handle_call({storage, <<"packages">>, [Ident]}, From, State) ->
     {Pid, _Ref} = erlang:spawn_monitor(fun() ->
         MapFun = fun([{Name, Branch}, Description, LastBuild]=Test) ->
             SelectPattern = {{Ident, LastBuild, {Name, Branch}}, '$1', '_', '_', '_', '_', '_'},
-            [[Status]|_] = dets:match(State#state.storage, SelectPattern),
+            Status = case dets:match(State#state.storage, SelectPattern) of
+                [[S]|_] ->
+                    S;
+                _Other ->
+                    <<"error">>
+            end,
             {<<Name/binary, <<"/">>/binary, Branch/binary>>,
                 [
                     {<<"description">>, Description},
@@ -121,8 +126,10 @@ handle_call({storage, <<"builds">>, [Ident]}, From, State) ->
             [['$1', '$2', '$3', '$4', '$5', '$6']]
         }],
         Reply = lists:sort(fun
-                ({K1, _}, {K2, _}) ->
-                    list_to_integer(binary_to_list(K1)) > list_to_integer(binary_to_list(K2))
+                ({K1S, _}, {K2S, _}) ->
+                    [K1|_] = string:tokens(binary_to_list(K1S), "/"),
+                    [K2|_] = string:tokens(binary_to_list(K2S), "/"),
+                    list_to_integer(K1) > list_to_integer(K2)
                 end,
             lists:map(MapFun, dets:select(State#state.storage, SelectPattern))),
         gen_server:reply(From, Reply)
