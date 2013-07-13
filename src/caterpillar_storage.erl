@@ -70,7 +70,7 @@ handle_call({storage, <<"packages">>, [Ident]}, From, State) ->
                 [[S]|_] ->
                     S;
                 _Other ->
-                    <<"error">>
+                    <<"unknown">>
             end,
             {<<Name/binary, <<"/">>/binary, Branch/binary>>,
                 [
