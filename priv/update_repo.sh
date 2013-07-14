@@ -2,7 +2,7 @@
 
 usage(){
 cat << EOF
-usage: $0 -t=TYPE -b=BRANCH -a=ARCH
+usage: $0 -t TYPE -b BRANCH -a ARCH
 EOF
 exit 1
 }
