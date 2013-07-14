@@ -15,6 +15,7 @@
 
 -record(state, {
     ets :: ets:tab(),
+    email_backend :: module(),
     registered = false :: boolean(),
     mail_root :: filelib:dirname(),
     email_to :: string(),

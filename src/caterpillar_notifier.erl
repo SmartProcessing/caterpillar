@@ -20,6 +20,7 @@ stop() ->
 
 
 init(Args) ->
+    EmailBackend = proplists:get_value(email_backend, Args, ssmtp),
     EmailTo = proplists:get_value(email_to, Args),
     State = #state{
         ets = ets:new(?MODULE, [protected, named_table]),
@@ -118,10 +119,10 @@ async_send_mail(Delay) ->
     erlang:send_after(Delay, self(), async_send_mail).
 
 
-send_mail(#state{mail_root=MR, email_distribution=DistList}, File) ->
+send_mail(#state{mail_root=MR, email_distribution=DistList, email_backend=EmailBackend}, File) ->
     AbsPath = filename:join(MR, File),
     Emails = string:join(DistList, " "),
-    Cmd = lists:flatten(io_lib:format("ssmtp ~s < ~s", [Emails, AbsPath])),
+    Cmd = lists:flatten(io_lib:format("~s ~s < ~s", [EmailBackend, Emails, AbsPath])),
     open_port({spawn, Cmd}, [binary, stderr_to_stdout, exit_status]).
 
 
