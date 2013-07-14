@@ -183,9 +183,6 @@ make(#build_package{name=Name, branch=Branch}=Package, Cmd, UnArchivePath, DistD
     #state{deploy_root=DeployRoot, next_work_id=NextWorkId} = State,
     Format= fun(Template, Args) -> lists:flatten(io_lib:format(Template, Args)) end,
     Env = [
-        {"PATH_MK", "../../devel-tools/trunk/Makefile.mk"},
-        {"PATH_PY_MK", "../../smprc.setup/trunk/Makefile.mk"},
-        {"PATH_MOD", Format("../../*/~s", [Branch])},
         {"BRANCH", Format("~s", [Branch])},
         {"DIST_DIR", "dist"},
         {"BUILD_ID", integer_to_list(NextWorkId)}
