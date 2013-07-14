@@ -4,37 +4,37 @@
 
 -include("caterpillar_builder_internal.hrl").
 -define(CMD, caterpillar_utils:command).
+-define(LTB, list_to_binary).
 
 prepare(_Rev, _Dir) ->
-    {ok, ""}.
+    {ok, <<>>}.
 
 clean(Rev, Dir) ->
     error_logger:info_msg("executing make clean in ~s:~n", [Dir]),
     case ?CMD(get_command(Rev#rev_def.branch, "clean"), [{cwd, Dir}]) of
-        {0, _Msg} ->
-            {ok, ""};
+        {0, Msg} ->
+            {ok, ?LTB("\nclean:\n" ++ Msg)};
         {110, Msg} ->
             error_logger:info_msg("clean timeout: ~s", [Msg]),
-            {error, Msg};
+            {error, ?LTB("\nclean:\n" ++ Msg)};
         {Code, Msg} when is_integer(Code) ->
             error_logger:info_msg("clean failed with status ~B: ~s", [Code, Msg]),
-            {ok, ""}
+            {ok, ?LTB("\nclean:\n" ++ Msg)}
     end.
-
 
 test(Rev, Dir) ->
     error_logger:info_msg("executing make test in ~s:~n", [Dir]),
     case ?CMD(get_command(Rev#rev_def.branch, "test"), [{cwd, Dir}]) of
-        {0, _Msg} ->
-            {ok, ""};
-        {Code, Msg} when is_integer(Code) ->
+        {0, Msg} ->
+            {ok, ?LTB("\ntest:\n" ++ Msg)};
+        {Code, Msg} ->
             error_logger:info_msg("test failed with status ~B: ~s", [Code, Msg]),
-            {error, io_lib:format("errors on test~n ~B: ~s", [Code, Msg])}
+            {error, ?LTB("\ntest:\n" ++ Msg)}
     end.
 
 
 prebuild(_Rev, _Dir) ->
-    {ok, ""}.
+    {ok, <<>>}.
 
 
 get_command(Branch, Type) ->

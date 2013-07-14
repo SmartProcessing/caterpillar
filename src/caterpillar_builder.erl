@@ -16,7 +16,6 @@
 -record(state, {
     master_pid=none,
     deps,
-    buckets,
     main_queue,
     wait_queue,
     queue_switch=true,
@@ -95,7 +94,7 @@ handle_call({built, Worker, RevDef, BuildInfo}, _From, State=#state{ident=Ident}
         {RevDef#rev_def.name, RevDef#rev_def.branch}, 
         RevDef#rev_def.work_id,
         ?LTB(BuildInfo#build_info.pkg_name),
-        <<"everything ok">>
+        BuildInfo#build_info.description 
     ]}),
     erlang:spawn(?MODULE, deploy, [RevDef, BuildInfo, State]),
     NewWorkers = release_worker(Worker, State#state.workers),
@@ -108,7 +107,7 @@ handle_call({err_built, Worker, RevDef, BuildInfo}, _From, #state{ident=Ident}=S
         {Ident#ident.type, Ident#ident.arch},
         {RevDef#rev_def.name, RevDef#rev_def.branch}, 
         RevDef#rev_def.work_id,
-        ?LTB(BuildInfo#build_info.description)
+        BuildInfo#build_info.description
     ]}),
     notify(BuildInfo#build_info.state,
         RevDef#rev_def.work_id,
@@ -483,12 +482,12 @@ submit_missing(QType, Queue, Candidate, State) ->
 -spec notify(State :: list(), WorkId :: integer(), Ident :: #ident{}, Version :: version(), Body :: list()) -> ok|error.
 
 notify(State, WorkId, Ident, {N, B, T}, Body) ->
-    Subj = io_lib:format("#~B ~s: ~s/~s/~s/~s/~s", [
+    Subj = io_lib:format("#~B ~s: ~s/~s~s at ~s/~s", [
             WorkId,
             State,
             ?BTL(N),
             ?BTL(B),
-            ?BTL(T),
+            format_tag(T), 
             Ident#ident.type,
             Ident#ident.arch
         ]),
@@ -575,11 +574,11 @@ deploy(RevDef, BuildInfo, #state{ident=#ident{arch=Arch, type=Type}=Ident}=State
         package = BuildInfo#build_info.pkg_name,
         fd = BuildInfo#build_info.fd
     },
-    Subj = io_lib:format("#~B success: ~s/~s/~s/~s/~s", [
+    Subj = io_lib:format("#~B success: ~s/~s~s at ~s/~s", [
         RevDef#rev_def.work_id,
         binary_to_list(RevDef#rev_def.name),
         binary_to_list(RevDef#rev_def.branch),
-        binary_to_list(RevDef#rev_def.tag),
+        format_tag(RevDef#rev_def.tag),
         Type,
         Arch
     ]),
@@ -596,3 +595,11 @@ deploy(RevDef, BuildInfo, #state{ident=#ident{arch=Arch, type=Type}=Ident}=State
         post_deploy_actions = [{caterpillar_event, sync_event, [{notify, get_notify_message(Subj, Message)}]}]
     },
     caterpillar_event:sync_event({deploy, Deploy}).
+
+
+format_tag([]) -> "";
+format_tag(<<>>) -> "";
+format_tag(undefined) -> "";
+format_tag(Tag) when is_binary(Tag) -> format_tag(binary_to_list(Tag));
+format_tag(Tag) when is_list(Tag) -> "/" ++ Tag;
+format_tag(Tag) -> lists:flatten(io_lib:format("/~p", [Tag])).

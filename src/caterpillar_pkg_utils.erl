@@ -11,6 +11,7 @@
 -define(LTB, list_to_binary).
 -define(BTL, binary_to_list).
 -define(ITL, integer_to_list).
+-define(ATB, anything_to_binary).
 
 get_pkg_config_record(Archive, {control, Data}) ->
     #pkg_config{
@@ -20,7 +21,7 @@ get_pkg_config_record(Archive, {control, Data}) ->
         package_t=["deb"],
         arch=?GV("Architecture", Data, "all"),
         description=?GV("Description", Data, Archive#archive.name),
-        maintainers=[?GV("Maintainer", Data, ["example@example.org"])],
+        maintainers=[?GV("Maintainer", Data, ["admin@smprc.ru"])],
         platform="default",
         deps=?GV("Depends", Data, [])
     };
@@ -31,7 +32,7 @@ get_pkg_config_record(Archive, {config, Data}) ->
         section=?GV(section, Data, "smprc"),
         package_t=?GV(package_plugin, Data, ["deb"]),
         arch=?GV(architecture, Data, "all"),
-        maintainers=?GV(maintainers, Data, ["example@example.org"]),
+        maintainers=?GV(maintainers, Data, ["admin@smprc.ru"]),
         description=?GV(description, Data, Archive#archive.name),
         platform=?GV(platform_plugin, Data, "default"),
         deps=?GV(deps, Data, []),
@@ -44,7 +45,7 @@ get_pkg_config_record(Archive, {empty, Data}) ->
         section=?GV("section", Data, "smprc"),
         package_t=?GV("package_t", Data, ["deb"]),
         arch=?GV("architecture", Data, "all"),
-        maintainers=?GV("maintainers", Data, ["example@example.org"]),
+        maintainers=?GV("maintainers", Data, ["admin@smprc.ru"]),
         description=?GV("description", Data, Archive#archive.name),
         platform=?GV("platform", Data, "default"),
         deps=?GV("deps", Data, []),
@@ -89,9 +90,9 @@ get_valid_versions(L, Archive, build_deps) ->
 
 get_archive_version(Archive) ->
     {
-        ?LTB(Archive#archive.name),
-        ?LTB(Archive#archive.branch),
-        ?LTB(Archive#archive.tag)
+        ?ATB(Archive#archive.name),
+        ?ATB(Archive#archive.branch),
+        ?ATB(Archive#archive.tag)
     }.
 
 get_version_archive({Name, Branch, Tag}) ->
@@ -167,7 +168,7 @@ gen_control_from_pkg_config(Rev) ->
     NewVersion = OldVersion ++ "-" ++ ?BTL(Rev#rev_def.branch) ++ "." ++ ?ITL(Rev#rev_def.work_id),
     OldSection = PkgConfig#pkg_config.section,
     NewSection = OldSection ++ "-" ++ ?BTL(Rev#rev_def.branch),
-    [Maintainer|_] = PkgConfig#pkg_config.maintainers ++ ["example@example.org"],
+    [Maintainer|_] = PkgConfig#pkg_config.maintainers ++ ["admin@smprc.ru"],
     list_to_binary(io_lib:format(
         "Package: ~s~nSection: ~s~nVersion: ~s~nArchitecture: ~s~nDescription: ~s~nMaintainer: ~s~n~s",
         [
@@ -195,3 +196,12 @@ gen_deps([Dep|O], Acc) ->
         _Other ->
             gen_deps(O, Acc)
     end.
+
+anything_to_binary(List) when is_list(List) ->
+    list_to_binary(List);
+anything_to_binary(undefined) ->
+    <<>>;
+anything_to_binary(Atom) when is_atom(Atom) ->
+    atom_to_binary(Atom, latin1);
+anything_to_binary(Integer) when is_integer(Integer) ->
+    list_to_binary(integer_to_list(Integer)).

@@ -175,12 +175,12 @@ handle_call({changes, Changes}, _From, State) ->
     NewState = State#state{work_id=NewWorkId},
     spawn(fun() ->
         Archives = Changes#changes.archives,
+        NotifySubject = list_to_binary(io_lib:format("changes for build ~p", [NewWorkId])),
+        notify(NewState, Notify#notify{subject=NotifySubject}),
         case Archives of
             [] -> ok;
             _ -> caterpillar_event:event({changes, NewWorkId, Archives})
-        end,
-        NotifySubject = list_to_binary(io_lib:format("changes for build ~p", [NewWorkId])),
-        notify(NewState, Notify#notify{subject=NotifySubject})
+        end
     end),
     {reply, ok, NewState};
 

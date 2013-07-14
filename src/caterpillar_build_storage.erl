@@ -2,7 +2,7 @@
 -include_lib("caterpillar_builder_internal.hrl").
 -export([check_isect/2, list_unres_deps/3, cleanup_new_in_progress/1]).
 -export([update_dep_state/3, fetch_dep/2, fetch_dep_non_block/2, create_dep/2, get_subj/2]).
--export([arm_bucket/4]).
+-export([arm_bucket/5]).
 -export([delete/3, get_path/3, get_statpack_path/3, get_temp_path/2, delete_statpack/2]).
 -export([store_package_with_state/3]).
 
@@ -158,17 +158,19 @@ delete(Deps, Path, Version) ->
     end,
     lists:map(StatDel, [<<"new">>, <<"tested">>, <<"built">>]).
 
-arm_bucket(Rev, _Deps, BuildPath, []) ->
+arm_bucket(Rev, _Deps, BuildPath, [], Log) ->
     RevPath = get_path(BuildPath, Rev, <<"new">>),
+    BinRevPath = list_to_binary("getting " ++ RevPath ++ "\n"),
     copy_package_to_bucket(RevPath, 
         filename:join([get_statpack_path(BuildPath, Rev, Rev#rev_def.work_id), ?BTL(Rev#rev_def.name)])),
-    {ok, done};
-arm_bucket(Rev, Deps, BuildPath, [Dependencie|O]) ->
+    {ok, <<Log/binary, BinRevPath/binary>>};
+arm_bucket(Rev, Deps, BuildPath, [Dependencie|O], Log) ->
     {Dep={Name, _, _}, BState} = Dependencie,
     DepPath = get_path(BuildPath, Dep, BState),
+    BinDepPath = list_to_binary("getting " ++ DepPath ++ "\n"),
     copy_package_to_bucket(DepPath, 
         filename:join([get_statpack_path(BuildPath, Rev, Rev#rev_def.work_id), ?BTL(Name)])),
-    arm_bucket(Rev, Deps, BuildPath, O).
+    arm_bucket(Rev, Deps, BuildPath, O, <<Log/binary, BinDepPath/binary>>).
 
 copy_package_to_bucket(Source, Path) ->
     error_logger:info_msg("copying ~p to ~p~n", [Source, Path]),
