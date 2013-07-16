@@ -1,6 +1,6 @@
 Caterpillar
 ================
-*package building tool set
+*package building tool set*
 Abstract
 ----------------
 Caterpillar is distributed build tool which provide abilities to assemble packages for various environments.
