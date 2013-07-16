@@ -148,7 +148,7 @@ unpack_rev(Rev, {BuildPath, DepsDets}) ->
         {none, {Rev, BuildPath, Msg}}
     }.
     
-platform_get_env({Rev, BuildPath, Msg}, Plugins) ->
+platform_get_env({Rev, BuildPath, _Msg}, Plugins) ->
     {Name, _B, _T} = ?VERSION(Rev),
     PkgConfig = Rev#rev_def.pkg_config,
     Platform = PkgConfig#pkg_config.platform,
@@ -156,7 +156,7 @@ platform_get_env({Rev, BuildPath, Msg}, Plugins) ->
     Path = filename:join([?CBS:get_statpack_path(BuildPath, Rev, Rev#rev_def.work_id), binary_to_list(Name)]),
     {ok, Plugin, Path, Rev}.
 
-package_get_env({Rev, BuildPath, Msg}, Plugins) ->
+package_get_env({Rev, BuildPath, _Msg}, Plugins) ->
     {Name, _B, _T} = ?VERSION(Rev),
     PkgConfig = Rev#rev_def.pkg_config,
     [PackageT|_] = PkgConfig#pkg_config.package_t, 
@@ -201,7 +201,7 @@ build_submit(Env, Plugins) ->
             {error, <<"unknown error while submitting package">>}
     end.
 
-informer(Phase, S = {State, Msg}, Env={Rev, Path, EnvMsg}) ->
+informer(Phase, {State, Msg}, {Rev, Path, EnvMsg}) ->
     case State of
         ok ->
             ?CBS:store_package_with_state(Phase, Rev, Path),
