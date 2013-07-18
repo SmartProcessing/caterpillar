@@ -55,6 +55,7 @@ init(Settings) ->
     error_logger:info_msg("workers initialized"),
     UnpackState = ets:new(unpack_state, []),
     BuildPath = ?GV(build_path, Settings, ?DEFAULT_BUILD_PATH),
+    ?CBS:cleanup_statpack_dir(BuildPath),
     WorkIdFile = ?GV(work_id, Settings, ?DEFAULT_WORK_ID_FILE),
     WorkId = ?CU:read_work_id(WorkIdFile),
     {Type, Arch}=?GV(ident, Settings, {unknown, unknown}),

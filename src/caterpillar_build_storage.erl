@@ -5,6 +5,7 @@
 -export([arm_bucket/5]).
 -export([delete/3, get_path/3, get_statpack_path/3, get_temp_path/2, delete_statpack/2]).
 -export([store_package_with_state/3]).
+-export([cleanup_statpack_dir/1]).
 
 -define(LOCK(X), gen_server:call(caterpillar_lock, {lock, X}, infinity)).
 -define(UNLOCK(X), gen_server:call(caterpillar_lock, {unlock, X})).
@@ -194,6 +195,10 @@ update_new_in_progress(Deps, _) ->
 -spec delete_statpack(#rev_def{}, list()) -> ok.
 delete_statpack(Rev, BPath) ->
     ?CU:del_dir(get_statpack_path(BPath, Rev, Rev#rev_def.work_id)).
+
+-spec cleanup_statpack_dir(list()) -> ok.
+cleanup_statpack_dir(BPath) ->
+    ?CU:del_dir(filename:join([BPath, "buckets"])).
 
 -spec store_package_with_state(binary(), #rev_def{}, list()) -> ok|pass.
 store_package_with_state(<<"none">>, _, _) ->
