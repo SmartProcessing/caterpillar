@@ -231,14 +231,12 @@ code_change(_OldVsn, State, _Extra) ->
 process_archives([], State, _WorkId) -> {ok, State};
 process_archives([A|O], #state{unpack_state=UnpackState, build_path=BuildPath, ident=Ident}=State, WorkId) ->
     Vsn = ?CPU:get_archive_version(A),
-    case can_prepare(A, State) of
+    {Preparing, Prebuild} = case can_prepare(A, State) of
         true ->
-            Preparing = [Vsn|State#state.queued],
-            Prebuild = State#state.prebuild,
-            process_archive(BuildPath, A, UnpackState, WorkId, Ident);
-        false ->
-            Preparing = State#state.queued,
-            Prebuild = lists:ukeysort(1, [{Vsn, A, WorkId}|State#state.prebuild])
+            process_archive(BuildPath, A, UnpackState, WorkId, Ident),
+            {[Vsn|State#state.queued], State#state.prebuild};
+        _ ->
+            {State#state.queued, lists:ukeysort(1, [{Vsn, A, WorkId}|State#state.prebuild])}
     end,
     process_archives(O, State#state{queued=Preparing, prebuild=Prebuild}, WorkId).
 
