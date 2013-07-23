@@ -224,11 +224,11 @@ register_service(Delay) ->
 
 -spec vcs_init(State::#state{}, Args::proplists:property()) -> NewState::#state{}.
 vcs_init(#state{vcs_plugin=VcsPlugin}=State, Args) ->
-    catch begin
-        case catch VcsPlugin:init_plugin(?GV(vcs_plugin_init, Args, [])) of
-            {ok, VcsState} -> State#state{vcs_plugin=VcsPlugin, vcs_state=VcsState};
-            Error -> {error, {vcs_init, Error}}
-        end
+    case catch VcsPlugin:init_plugin(?GV(vcs_plugin_init, Args, [])) of
+        {ok, VcsState} ->
+            error_logger:info_msg("vsc plugin(~p) state: ~p~n", [VcsPlugin, VcsState]),
+            State#state{vcs_plugin=VcsPlugin, vcs_state=VcsState};
+        Error -> {error, {vcs_init, Error}}
     end.
 
 
