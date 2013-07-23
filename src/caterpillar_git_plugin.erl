@@ -13,8 +13,10 @@
 
 
 
-init_plugin(_Args) ->
-    {ok, []}.
+init_plugin(Args) ->
+    DiffEnabled = proplists:get_value(diff_enabled, Args, true),
+    ChangeLogEnabled = proplists:get_value(changelog_enabled, Args, true),
+    {ok, [{diff_enabled, DiffEnabled}, {changelog_enabled, ChangeLogEnabled}]}.
 
 
 terminate_plugin(_State) ->
@@ -73,7 +75,14 @@ get_branches(_State, Package) ->
     end.
 
 
-get_diff(_State, Package, _Branch, Revno, NewRevno) when Revno == none; Revno == error ->
+get_diff(State, Package, Branch, Revno, NewRevno) ->
+    case proplists:get_value(diff_enabled, State, true) of
+        true -> retrieve_diff(State, Package, Branch, Revno, NewRevno);
+        false -> {ok, <<"diff disabled">>}
+    end.
+
+
+retrieve_diff(_State, Package, _Branch, Revno, NewRevno) when Revno == none; Revno == error ->
     Revisions = case command("git rev-list --all", [{cd, Package}]) of
         {ok, Data} -> Data;
         {error, Err} ->  error_logger:error_msg("get_diff error: ~p~n", [Err]), <<>>
@@ -89,9 +98,7 @@ get_diff(_State, Package, _Branch, Revno, NewRevno) when Revno == none; Revno ==
         {error, _} = Error -> Error; 
         {ok, Diff} -> {ok, Diff}
     end;
-
-
-get_diff(_State, Package, _Branch, OldRevno, NewRevno) ->
+retrieve_diff(_State, Package, _Branch, OldRevno, NewRevno) ->
     DiffCmd = format("git diff ~s ~s", [OldRevno, NewRevno]),
     case command(DiffCmd, [{cd, Package}]) of 
         {error, _} = Error -> Error;
@@ -99,14 +106,21 @@ get_diff(_State, Package, _Branch, OldRevno, NewRevno) ->
     end.
 
 
-get_changelog(_State, Package, _Branch, Revno, NewRevno) when Revno == none; Revno == error ->
+get_changelog(State, Package, Branch, Revno, NewRevno) ->
+    case proplists:get_value(changelog_enabled, State, true) of
+        true -> retrieve_changelog(State, Package, Branch, Revno, NewRevno);
+        false -> {ok,  <<"changelog disabled">>}
+    end.
+
+
+
+retrieve_changelog(_State, Package, _Branch, Revno, NewRevno) when Revno == none; Revno == error ->
     LogCmd = format("git log ~s", [NewRevno]),
     case command(LogCmd, [{cd, Package}]) of
         {error, _} = Error -> Error;
         {ok, Log} -> {ok, Log}
     end;
-
-get_changelog(_State, Package, _Branch, OldRevno, NewRevno) ->
+retrieve_changelog(_State, Package, _Branch, OldRevno, NewRevno) ->
     LogCmd = format("git log ~s..~s", [OldRevno, NewRevno]),
     case command(LogCmd, [{cd, Package}]) of
         {error, _} = Error -> Error;
