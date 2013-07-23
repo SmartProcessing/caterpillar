@@ -30,7 +30,8 @@
             {export_root, "./test/test_export/"},
             {notify_root, "./test/test_notify/"},
             {scan_interval, 10},
-            {vcs_plugin, caterpillar_git_plugin}
+            {vcs_plugin, caterpillar_git_plugin},
+            {vcs_plugin_init, []}
         ]},
 
         {caterpillar_notifier, [
