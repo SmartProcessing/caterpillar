@@ -16,7 +16,11 @@
 init_plugin(Args) ->
     DiffEnabled = proplists:get_value(diff_enabled, Args, true),
     ChangeLogEnabled = proplists:get_value(changelog_enabled, Args, true),
-    {ok, [{diff_enabled, DiffEnabled}, {changelog_enabled, ChangeLogEnabled}]}.
+    BlacklistPrefix = case proplists:get_value(blacklist_prefix, Args) of
+        undefined -> undefined;
+        V -> erlang:list_to_binary(V)
+    end,
+    {ok, [{diff_enabled, DiffEnabled}, {changelog_enabled, ChangeLogEnabled}, {blacklist_prefix, BlacklistPrefix}]}.
 
 
 terminate_plugin(_State) ->
@@ -61,15 +65,25 @@ is_branch(_State, Package, Branch) ->
     end.
 
 
-get_branches(_State, Package) ->
+get_branches(State, Package) ->
     GetBranches = "git rev-parse --abbrev-ref --branches",
+    Prefix = proplists:get_value(blacklist_prefix, State),
     case command(GetBranches, [{cd, Package}]) of
         {error, _}=Error -> Error;
         {ok, <<>>} -> {ok, []};
         {ok, Result} -> 
             Branches = [
                 string:strip(binary_to_list(Branch), both, $ ) ||
-                Branch <- binary:split(Result, <<"\n">>, [global]), Branch /= <<>>
+                Branch <- binary:split(Result, <<"\n">>, [global]),
+                case {Branch, Prefix} of
+                    {<<>>, _} -> false;
+                    {_, undefined} -> true;
+                    {X, Prefix} -> case binary:match(X, Prefix) of
+                        {0, _} -> false;
+                        _ -> true
+                    end;
+                    _ -> true
+                end
             ],
             {ok, Branches}
     end.

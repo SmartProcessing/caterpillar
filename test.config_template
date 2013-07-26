@@ -31,7 +31,9 @@
             {notify_root, "./test/test_notify/"},
             {scan_interval, 10},
             {vcs_plugin, caterpillar_git_plugin},
-            {vcs_plugin_init, []}
+            {vcs_plugin_init, [
+				{blacklist_prefix, "feature-"}
+			]}
         ]},
 
         {caterpillar_notifier, [
