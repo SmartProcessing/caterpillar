@@ -1,0 +1,26 @@
+#!/usr/bin/env python
+# -*-coding: utf-8 -*-
+# example api usage: print last N builds in conky-color style
+
+import requests
+import sys
+
+if __name__ == '__main__':
+    r = requests.get('https://git.smprc.ru/api/storage/squeeze/adm64/builds')
+    k = int(sys.argv[1])
+    res = ""
+    builds = requests.get('https://git.smprc.ru/api/storage/squeeze/amd64/builds').json()
+    for i in sorted(builds.keys())[::-1]:
+        k -= 1
+        if k <= 0:
+            print res
+            break
+        else:
+            if builds[i]['state'] == 'success':
+                res += "${voffset 10}${goto 20}${color green}%s${color}" % i
+            elif builds[i]['state'] == 'in_progress':
+                res += "${voffset 10}${goto 20}${color gray}%s${color}" % i
+            elif builds[i]['state'] == 'tested':
+                res += "${voffset 10}${goto 20}${color blue}%s${color}" % i
+            else:
+                res += "${voffset 10}${goto 20}${color red}%s${color}" % i
