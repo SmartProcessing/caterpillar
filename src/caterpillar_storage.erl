@@ -223,7 +223,7 @@ handle_cast({store_progress_build, [Ident, {Name, Branch}, WorkId, Description]}
     dets:sync(S),
     {noreply, State};
 
-handle_cast({store_error_build, [Ident, {Name, Branch}, WorkId, BuildLog]=All}, State=#state{storage=S, file_path=Path}) ->
+handle_cast({store_error_build, [Ident, {Name, Branch}, WorkId, Status, BuildLog]}, State=#state{storage=S, file_path=Path}) ->
     Link = v4str(v4()),
     Fname = filename:join([Path, get_dir(Link), Link]),
     filelib:ensure_dir(Fname),
@@ -232,7 +232,7 @@ handle_cast({store_error_build, [Ident, {Name, Branch}, WorkId, BuildLog]=All}, 
         [{_, _, Start, _, CommitHash, _, _}|_] ->
             InsertData = {
                 {Ident, WorkId, {Name, Branch}},
-                <<"error">>,
+                Status,
                 Start,
                 ?DTU:datetime_to_binary_string(calendar:universal_time()),
                 CommitHash,

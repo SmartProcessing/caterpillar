@@ -107,7 +107,7 @@ handle_call({err_built, Worker, RevDef, BuildInfo}, _From, #state{ident=Ident}=S
     caterpillar_event:event({store_error_build, [
         {Ident#ident.type, Ident#ident.arch},
         {RevDef#rev_def.name, RevDef#rev_def.branch}, 
-        RevDef#rev_def.work_id,
+        RevDef#rev_def.work_id, BuildInfo#build_info.state,
         BuildInfo#build_info.description
     ]}),
     notify(BuildInfo#build_info.state,
