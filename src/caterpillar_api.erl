@@ -1,12 +1,11 @@
 -module(caterpillar_api).
 
--include_lib("http.hrl").
 -include_lib("caterpillar.hrl").
--behaviour(cowboy_http_handler).
 
 -export([init/1, handle_call/3, handle_info/2, handle_cast/2, code_change/3]).
 -export([init/3, handle/2, terminate/2]).
 -export([start_link/1]).
+-export([terminate/3]).
 
 -record(state, {ets}).
 
@@ -16,15 +15,20 @@ start_link(Args) ->
 
 
 init(Args) ->
+    ensure_started(ranch),
+    ensure_started(cowlib),
+    ensure_started(crypto),
     ensure_started(cowboy),
     Ets = ets:new(?MODULE, [protected]),
-    Dispatch = [{'_', [{'_', ?MODULE, []}]}],
-    ListenIp = proplists:get_value(ip, Args, {127, 0, 0, 1}),
+    Dispatch = cowboy_router:compile(
+        [{'_', 
+            [
+                {'_', ?MODULE, []}
+            ]}
+        ]),
     Port = proplists:get_value(port, Args, 8088),
-    cowboy:start_listener(?MODULE, 1,
-        cowboy_tcp_transport, [{ip, ListenIp}, {port, Port}],
-        cowboy_http_protocol, [{dispatch, Dispatch}]
-    ),
+    cowboy:start_http(http, 100, [{port, Port}],
+        [{env, [{dispatch, Dispatch}]}]),
     {ok, #state{ets=Ets}}.
 
 
@@ -71,17 +75,25 @@ terminate(_Req, _State) ->
 %--------- cowboy 
 
 
-init({tcp, http}, #http_req{path=Path}=Req, State) ->
-    error_logger:info_msg("api request: ~ts~n", [string:join([binary_to_list(X) || X <- Path], "/")]),
+init(_, Req, State) ->
+    {Path, _} = cowboy_req:path(Req),
+    error_logger:info_msg("api request: ~ts~n", 
+        [Path]),
     {ok, Req, State}.
 
+handle(Req, State) ->
+    {Path, _} = cowboy_req:path(Req),
+    handle_path(Path, Req, State).
 
-handle(#http_req{path=[<<"rescan_repository">>]}=Req, State) ->
+terminate(_, _, _) ->
+    ok.
+
+handle_path(<<"rescan_repository">>, Req, State) ->
     Result = (catch caterpillar_event:sync_event(rescan_repository)),
-    {ok, Req2} = cowboy_http_req:reply(200, [], Result, Req),
+    {ok, Req2} = cowboy_req:reply(200, [], Result, Req),
     {ok, Req2, State};
 
-handle(#http_req{path=[Cmd, Name|Rest]}=Req, State)
+handle_path([Cmd, Name|Rest], Req, State)
   when Cmd == <<"rescan">>; Cmd == <<"rebuild">>
 ->
     error_logger:info_msg("handling ~s~n", [Cmd]),
@@ -93,28 +105,28 @@ handle(#http_req{path=[Cmd, Name|Rest]}=Req, State)
     Message = {execute,  {AtomCmd, Package}},
     Response = case gen_server:call(?MODULE, Message, infinity) of
         true ->
-            {ok, Req2} = cowboy_http_req:reply(200, [], <<"ok\n">>, Req),
+            {ok, Req2} = cowboy_req:reply(200, [], <<"ok\n">>, Req),
             Req2;
         false ->
-            {ok, Req2} = cowboy_http_req:reply(200, [], <<"already in process\n">>, Req),
+            {ok, Req2} = cowboy_req:reply(200, [], <<"already in process\n">>, Req),
             Req2;
         Error -> 
             Res = format("~p~n", [Error]),
-            {ok, Req2} = cowboy_http_req:reply(500, [], Res, Req),
+            {ok, Req2} = cowboy_req:reply(500, [], Res, Req),
             Req2
     end,
     {ok, Response, State};
 
-handle(#http_req{path=[<<"init_repository">>, Path]}=Req, State) ->
+handle_path([<<"init_repository">>, Path], Req, State) ->
     {ok, Req2} = case caterpillar_event:sync_event({repository_custom_command, init_repository, [Path]}) of
         {ok, Response} ->
-            cowboy_http_req:reply(200, [], Response, Req);
+            cowboy_req:reply(200, [], Response, Req);
         Error ->
-            cowboy_http_req:reply(500, [], format("~p~n", [Error]), Req)
+            cowboy_req:reply(500, [], format("~p~n", [Error]), Req)
     end,
     {ok, Req2, State};
 
-handle(#http_req{path=[<<"rebuild_deps">>, Name, Branch|MaybeIdent]}=Req, State) ->
+handle_path([<<"rebuild_deps">>, Name, Branch|MaybeIdent], Req, State) ->
     Args = [binary_to_list(X) || X <- [Name, Branch]],
     Reply = case caterpillar_event:sync_event({worker_custom_command, rebuild_deps, Args, get_ident(MaybeIdent)}) of
         [{ok, Res}|_] ->
@@ -124,10 +136,10 @@ handle(#http_req{path=[<<"rebuild_deps">>, Name, Branch|MaybeIdent]}=Req, State)
             error_logger:error_msg("error: rebuild_dependencies: ~p~n", [Reason]),
             list_to_binary(io_lib:format("error: ~p~n", [Reason]))
     end,
-    {ok, Req2} = cowboy_http_req:reply(200, [], Reply, Req),
+    {ok, Req2} = cowboy_req:reply(200, [], Reply, Req),
     {ok, Req2, State};
 
-handle(#http_req{path=[<<"pkg_info">>, Name, Branch|MaybeIdent]}=Req, State) ->
+handle_path([<<"pkg_info">>, Name, Branch|MaybeIdent], Req, State) ->
     Result = caterpillar_event:sync_event({worker_custom_command, pkg_info, [Name, Branch], get_ident(MaybeIdent)}),
     Reply = lists:foldl(
         fun
@@ -149,26 +161,24 @@ handle(#http_req{path=[<<"pkg_info">>, Name, Branch|MaybeIdent]}=Req, State) ->
         <<>>,
         Result
     ), 
-    {ok, Req2} = cowboy_http_req:reply(200, [], Reply, Req),
+    {ok, Req2} = cowboy_req:reply(200, [], Reply, Req),
     {ok, Req2, State};
 
 % Storage requests
 
-handle(#http_req{path=[<<"storage">>, IdentType, IdentArch, Cmd|Args]}=Req, State) ->
+handle_path([<<"storage">>, IdentType, IdentArch, Cmd|Args], Req, State) ->
     {ok, Req2} = case catch jsonx:encode(caterpillar_event:sync_event({storage, Cmd, [{IdentType, IdentArch}|Args]})) of
         Response when is_binary(Response) ->
-            cowboy_http_req:reply(200, [], Response, Req);
+            cowboy_req:reply(200, [], Response, Req);
         Error ->
-            cowboy_http_req:reply(500, [], format("~p~n", [Error]), Req)
+            cowboy_req:reply(500, [], format("~p~n", [Error]), Req)
     end,
     {ok, Req2, State};
 
-
-handle(Req, State) ->
-    error_logger:info_msg("bad request: ~p~n", [Req]),
-    {ok, Req2} = cowboy_http_req:reply(400, [], <<"bad request\n">>, Req),
+handle_path(Path, Req, State) ->
+    error_logger:info_msg("bad request: ~p~n", [Path]),
+    {ok, Req2} = cowboy_req:reply(400, [], <<"bad request\n">>, Req),
     {ok, Req2, State}.
-
 
 
 ensure_started(App) ->

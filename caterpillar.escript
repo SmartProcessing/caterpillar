@@ -31,5 +31,3 @@ main([Config, Cmd]) ->
     end;
 main(_) ->
     io:format("usage: caterpillar.escript config_path self|cookie").
-
-

@@ -1,79 +1,108 @@
-PATH_MK ?= ../devel-tools/Makefile.mk
-include $(PATH_MK)
+EMPTY :=
+SPACE := $(EMPTY) $(EMPTY)
 
-LIB_PATH = var/lib/caterpillar
-LOG_PATH = var/log/caterpillar
-ETC_PATH = etc/caterpillar
+BRANCH ?= $(empty)
+DIST_DIR ?= dist
+DEB_DIR ?= dist/deb
+
+APPLICATION = caterpillar
+CORE_PATH = caterpillar
+LIB_PATH = var/lib/$(CORE_PATH)/$(APPLICATION)
+ETC_PATH = etc/$(CORE_PATH)/$(APPLICATION)
+LOG_PATH = var/log/$(CORE_PATH)/$(APPLICATION)
+SHARE_DIR = usr/share/$(CORE_PATH)/$(APPLICATION)
 INITD = etc/init.d
-SBIN_DIR = usr/sbin
+BIN = usr/sbin
 
-PRIV_PATH = $(LIB_PATH)/priv
-BEAMS = $(patsubst src/%.erl, ebin/%.beam, $(wildcard src/*.erl))
-TEST_BEAMS = $(patsubst test_src/%.erl, ebin/%.beam, $(wildcard test_src/*.erl))
+LIBS := $(subst $(SPACE),:../,../ranch cowlib jsonx cowboy)
+TEST_LIBS = $(subst $(SPACE),:../,../ranch cowlib jsonx cowboy)
+DEVEL_LIBS = $(subst $(SPACE),:../,../ranch cowlib jsonx cowboy)
+INCLUDES = $(patsubst %, -I../%/include, ranch cowlib jsonx cowboy caterpillar)
 
-ERLC_FLAGS += -W
+SRC := src
+TEST_SRC := src
+MOCK_SRC := mock
+EBIN := ebin
+MOCK := mock_ebin
+ERL := erl
+ERLC := erlc
+ERLC_FLAGS := -Wall $(INCLUDES)
 
-ifdef EXPORT_ALL
-	ERLC_FLAGS += +export_all
-else
-	ERLC_FLAGS += -pa $(EBIN)
-endif
+BEAMS = $(patsubst $(SRC)/%.erl,$(EBIN)/%.beam,$(wildcard $(SRC)/*.erl))
+MOCKS = $(patsubst $(MOCK_SRC)/%.erl,$(MOCK)/%.beam,$(wildcard $(MOCK_SRC)/*.erl))
 
+all:
 
-.PHONY: clean test compile devel package export_all test_compile
+ebin/%.beam: $(SRC)/%.erl
+	ERL_LIBS="$(LIBS)" $(ERLC) $(ERLC_FLAGS) -o $(EBIN) $<
 
-none:
-
-ebin/%.beam: test_src/%.erl
-	$(ERLC_LIBS) $(ERLC) $(ERLC_FLAGS) -o $(EBIN) $<
-
-
-clean:
-	rm -rf dist
-	rm -f erl_crash.dump
-	rm -f $(EBIN)/*.beam
-
+$(MOCK)/%.beam: mock/%.erl
+	mkdir -p $(MOCK)
+	$(ERLC_LIBS) $(ERLC) $(ERLC_FLAGS) -o $(MOCK) $<
 
 compile: $(BEAMS)
 
+mocks: $(MOCKS)
 
+clean:
+	rm -f $(EBIN)/*.beam
+	rm -rf $(MOCK)
+	rm -rf ct/log
 
-test_compile: ERLC_FLAGS += +export_all
-test_compile: $(BEAMS) $(TEST_BEAMS)
+test_compile: compile
 
+export_all:
+	$(MAKE) EXPORT_ALL=true test_compile
 
-test: test_compile 
-	$(ERL) -pa ebin/ -env ERL_LIBS "$(NORMALIZED_LIBS)" -noshell \
-    	-eval 'test_runner:start({dir, "ebin"}, [{test_timeout, 15000}])' \
+test: ERLC_FLAGS += +export_all +debug_info -DTEST
+test: compile mocks
+	$(ERL) -pa $(MOCK) -pa $(EBIN) -env ERL_LIBS "$(LIBS)" -noshell \
+    	-eval 'test_runner:start({dir, "ebin"}, [{test_timeout, 15000}, verbose])' \
     	-s init stop 
 
+ct: compile mocks
+	mkdir -p ct/log
+	ct_run -pa $(MOCK) -pa $(EBIN) -logdir ct/log -dir ct/* -erl_args -env ERL_LIBS "$(LIBS)"
 
+test_coverage: export_all $(BEAMS)
+	$(ERL) -pa $(EBIN) -env ERL_LIBS "$(LIBS)" \
+		-eval 'test_runner:start({dir, "ebin"},[{test_timeout, 150000}, coverage])' \
+		-s init stop
 
-devel: $(TEST_BEAMS) $(BEAMS)
-	$(ERL) -pa ebin/ -pa ../jsonx/ebin -env ERL_LIBS "$(NORMALIZED_LIBS)" -config test.config \
-		-boot start_sasl \
-		-s caterpillar_app start
-			 
-
+devel: compile
+	$(ERL) -pa $(EBIN) -env ERL_LIBS "$(DEVEL_LIBS)" -config test.config
 
 package: clean compile
+	rm -rf $(DIST_DIR)
 	mkdir -p $(DEB_DIR)/DEBIAN
-	cp control conffiles postinst postrm $(DEB_DIR)/DEBIAN
+	cp control $(DEB_DIR)/DEBIAN
+ifneq ($(EMPTY),$(wildcard postinst))
+	cp postinst $(DEB_DIR)/DEBIAN
+endif
+ifneq ($(EMPTY),$(wildcard postrm))
+	cp postrm $(DEB_DIR)/DEBIAN
+endif
+ifneq ($(EMPTY),$(wildcard conffiles))
+	cp conffiles $(DEB_DIR)/DEBIAN
+endif
 	chmod +x $(DEB_DIR)/DEBIAN/*
 	mkdir -p $(DEB_DIR)/$(LIB_PATH)
-	mkdir -p $(DEB_DIR)/$(LOG_PATH)
-	mkdir -p $(DEB_DIR)/$(ETC_PATH)
-	mkdir -p $(DEB_DIR)/$(INITD)
-	mkdir -p $(DEB_DIR)/$(SBIN_DIR)
-	mkdir -p $(DEB_DIR)/$(PRIV_PATH)
-	cp caterpillar.config $(DEB_DIR)/$(ETC_PATH)/
-	cp priv/* $(DEB_DIR)/$(ETC_PATH)/
-	chmod +x $(DEB_DIR)/$(ETC_PATH)/update_repo.sh
-	cp caterpillar_shell $(DEB_DIR)/$(SBIN_DIR)/caterpillar
-	cp caterpillar.escript $(DEB_DIR)/$(SBIN_DIR)	
-	chmod +x $(DEB_DIR)/$(SBIN_DIR)/*
+	for i in caterpillar caterpillar.escript; do \
+		mkdir -p $(DEB_DIR)/$(BIN); \
+		cp $$i $(DEB_DIR)/$(BIN)/; \
+	done
+	for i in caterpillar; do \
+		mkdir -p $(DEB_DIR)/$(INITD); \
+		ln -s /$(BIN)/$$i $(DEB_DIR)/$(INITD)/; \
+	done
+	for i in priv; do \
+		mkdir -p $(DEB_DIR)/$(SHARE_DIR); \
+		cp -r $$i $(DEB_DIR)/$(SHARE_DIR)/; \
+	done
+	for i in caterpillar.config; do \
+		mkdir -p $(DEB_DIR)/$(ETC_PATH); \
+		cp -r $$i $(DEB_DIR)/$(ETC_PATH)/; \
+	done
+	rm -f ebin/*_tests.beam
 	cp -R ebin $(DEB_DIR)/$(LIB_PATH)
-	cp priv/* $(DEB_DIR)/$(PRIV_PATH)
-	chmod +x $(DEB_DIR)/$(PRIV_PATH)/*
-	ln -s /$(SBIN_DIR)/caterpillar $(DEB_DIR)/$(INITD)/caterpillar
-	dpkg-deb --build $(DEB_DIR) $(DIST_DIR)
+	dpkg --build $(DEB_DIR) $(DIST_DIR)
