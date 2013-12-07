@@ -1,0 +1,86 @@
+#!/usr/bin/env escript
+%% -*- erlang -*-
+
+-define(GV, proplists:get_value).
+
+-record(pkg_config, {
+    name                :: string(),
+    version="0.0.0"     :: string(),
+    deps=[]             :: [version()|string()],
+    build_deps=[]       :: [version()|string()],
+    section="smprc"     :: string(),
+    platform="default"  :: string(),
+    description=""      :: string(),
+    package_t=["deb"]   :: [string()],
+    arch=["all"]        :: [string()],
+    maintainers=[]      :: [string()]
+}).
+
+main(_) ->
+    PkgConfig = read_pkg_config("./pkg.config"),
+    {ok, Data} = get_data(PkgConfig),
+    {ok, Write} = gen_control_file(Data),
+    file:write_file("control", Write).
+
+
+read_pkg_config(Path) ->
+    case file:consult(Path) of
+        {ok, [Data]} -> Data;
+        {ok, []} -> 
+            io:format("empty pkg.config file, aborting~n"),
+            halt(1);
+        Error ->
+            io:format("error while reading pkg.config: ~p~n", [Error]),
+            halt(1)
+    end.
+    
+
+get_data(PkgConfig) ->
+    {ok, Cwd} = file:get_cwd(),
+    {ok, get_pkg_config_record(lists:last(string:tokens(Cwd, "/")), PkgConfig)}.
+
+
+get_pkg_config_record(Name, Data) ->
+    #pkg_config{
+        name=?GV(name, Data, Name),
+        version=?GV(version, Data, "0.0.0"),
+        section=?GV(section, Data, "smprc"),
+        package_t=?GV(package_t, Data, ["deb"]),
+        arch=?GV(architecture, Data, "all"),
+        maintainers=?GV(maintainers, Data, ["admin@smprc.ru"]),
+        description=?GV(description, Data, ""),
+        platform=?GV(platform, Data, "default"),
+        deps=?GV(deps, Data, []),
+        build_deps=?GV(build_deps, Data, [])
+    }.
+
+
+gen_control_file(PkgConfig) ->
+    Maintainer = case PkgConfig#pkg_config.maintainers of
+        [H|_] -> H;
+        Other ->
+            io:format("bad maintainers section: ~p, using default: \"admin@smprc.ru\"~n", [Other]),
+            "admin@smprc.ru"
+    end,
+    {ok, list_to_binary(io_lib:format(
+        "Package: ~s~nSection: ~s~nVersion: ~s~nArchitecture: ~s~nDescription: ~s~nMaintainer: ~s~n~s",
+        [
+            PkgConfig#pkg_config.name,
+            PkgConfig#pkg_config.section,
+            PkgConfig#pkg_config.version,
+            PkgConfig#pkg_config.arch,
+            PkgConfig#pkg_config.description,
+            Maintainer,
+            gen_deps(PkgConfig#pkg_config.deps)
+        ]))}.
+
+
+gen_deps([]) -> "";
+gen_deps(Deps) -> gen_deps(Deps, []).
+gen_deps([], Acc) -> "Depends: " ++ string:join(Acc, ", ") ++ "\n";
+gen_deps([Dep|O], Acc) ->
+    case Dep of
+        Str when is_list(Dep) -> gen_deps(O, [Str|Acc]);
+        {P, _B, _T} -> gen_deps(O, [P|Acc]);
+        _Other -> gen_deps(O, Acc)
+    end.

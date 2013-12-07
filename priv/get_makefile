@@ -1,0 +1,129 @@
+#!/usr/bin/env escript
+%% -*- erlang -*-
+ 
+-define(GV, proplists:get_value).
+ 
+-record(pkg_config, {
+    name                :: string(),
+    version="0.0.0"     :: string(),
+    deps=[]             :: [version()|string()],
+    build_deps=[]       :: [version()|string()],
+    devel_deps=[]       :: [list()],
+    section="smprc"     :: string(),
+    platform="default"  :: string(),
+    description=""      :: string(),
+    package_t=["deb"]   :: [string()],
+    arch=["all"]        :: [string()],
+    maintainers=[]      :: [string()],
+    dist=[]             :: [term()]
+}).
+ 
+main(_) ->
+    {ok, Data} = get_data(read_pkg_config("./pkg.config")),
+    file:write_file("Makefile", get_makefile(get_template(Data), Data)).
+ 
+ 
+read_pkg_config(Path) ->
+    case file:consult(Path) of
+        {ok, [Data]} -> Data;
+        {ok, []} ->
+            io:format("empty pkg.config file, aborting~n"),
+            halt(1);
+        Error ->
+            io:format("error while reading pkg.config: ~p~n", [Error]),
+            halt(1)
+    end.
+   
+ 
+get_data(PkgConfig) ->
+    {ok, Cwd} = file:get_cwd(),
+    {ok, get_pkg_config_record(lists:last(string:tokens(Cwd, "/")), PkgConfig)}.
+ 
+ 
+get_pkg_config_record(Name, Data) ->
+    #pkg_config{
+        name=?GV(name, Data, Name),
+        version=?GV(version, Data, "0.0.0"),
+        section=?GV(section, Data, "smprc"),
+        package_t=?GV(package_t, Data, ["deb"]),
+        arch=?GV(architecture, Data, "all"),
+        maintainers=?GV(maintainers, Data, ["admin@smprc.ru"]),
+        description=?GV(description, Data, ""),
+        platform=?GV(platform, Data, "default"),
+        deps=?GV(deps, Data, []),
+        build_deps=?GV(build_deps, Data, []),
+        devel_deps=?GV(devel_deps, Data, []),
+        dist=?GV(dist, Data, {"erlang_default", []})
+    }.
+ 
+ 
+get_template(#pkg_config{dist={Type, _}}) ->
+    "../devel-tools/" ++ Type ++ ".mk".
+ 
+get_makefile(TemplateFile, #pkg_config{name=Name, dist={_, Content}, build_deps=BuildDeps, deps=Deps, devel_deps=DevelDeps}) ->
+    {ok, Template} = file:read_file(TemplateFile),
+    Libs = get_raw_deps(Deps) ++ get_raw_deps(BuildDeps),
+    DevelLibs = Libs ++ DevelDeps,
+    Makefile = format(Template, Content ++
+        [
+            {libs, string:join(Libs, " ")},
+            {devel_libs, string:join(DevelLibs, " ")},
+            {name, Name}
+        ]),
+    file:write_file("Makefile", Makefile).
+ 
+get_raw_deps(Deps) ->
+    get_raw_deps(Deps, []).
+ 
+get_raw_deps([], Acc) ->
+    Acc;
+get_raw_deps([{N, _B, _T}|O], Acc) ->
+    get_raw_deps(O, [N|Acc]);
+get_raw_deps([{{N, _B, _T}, _S}|O], Acc) ->
+    get_raw_deps(O, [N|Acc]);
+get_raw_deps([_|O], Acc) ->
+        get_raw_deps(O, Acc).
+ 
+%% Template by #{var}
+-spec format(binary()|string(), [{string(), string()|binary()}]) -> binary().
+format(Template, Data) ->
+    {ok, T} = init(Template),
+    render(T, Data).
+ 
+-spec render({string(), [string()]}, [{string(), string()|binary()}]) -> binary().
+render({FormatStr, Opts}, Data) ->
+    list_to_binary(io_lib:format(FormatStr, gen_opt_values(Opts, Data))).
+ 
+gen_opt_values(Opts, Data) ->
+    gen_opt_values(Opts, Data, []).
+gen_opt_values([], _Data, Acc) ->
+    Acc;
+gen_opt_values([Item|Other], Data, Acc) ->
+    Value = case ?GV(list_to_atom(Item), Data, '$undefined$') of
+        [A|_]=All when is_list(A) ->
+            string:join(All, " ");
+        '$undefined$' ->
+            ?GV(Item, Data, " ");
+        OtherValue ->
+            OtherValue
+    end,
+    gen_opt_values(Other, Data, [Value|Acc]).
+ 
+-spec init(binary()|string()) ->
+    {ok, string(), [atom()]}|{error, string()}.
+init(Template) when is_list(Template) ->
+    init(list_to_binary(Template));
+init(Template) when is_binary(Template) ->
+    get_opts(Template, "", []).
+get_opts(<<>>, Text, Acc) ->
+    {ok, {lists:reverse(Text), Acc}};
+get_opts(<<"#{", T/binary>>, Text, Acc) ->
+    {Param, Tail} = get_p_name(T, ""),
+    get_opts(Tail, "s~" ++ Text, [Param|Acc]);
+get_opts(<<Char, T/binary>>, Text, Acc) ->
+    get_opts(T, [Char|Text], Acc).
+ 
+get_p_name(<<"}", T/binary>>, Acc) ->
+    {lists:reverse(Acc), T};
+get_p_name(<<Char, T/binary>>, Acc) ->
+    get_p_name(T, [Char|Acc]).
