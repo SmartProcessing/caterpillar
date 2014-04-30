@@ -1,0 +1,225 @@
+<html>
+<head>
+<style type="text/css">
+body
+{
+	font: 1.2em "Lucida Grande", Tahoma, Arial, Helvetica, sans-serif;
+}
+
+table
+{
+	color:#0000;
+	background:lightgray;
+	border-collapse:collapse;
+	width:30%;
+	border:3px solid #000;
+}
+
+
+
+thead tr
+{
+
+}
+
+tr
+{
+    border: 2px solid #000;
+}
+
+td
+{
+	padding:1em 1em .5em;
+}
+
+.hh tr:hover td
+{
+    background:white;
+}
+
+tr.success
+{
+    background:#C4E068;
+}
+
+tr.none
+{
+    background:#B89989;
+}
+
+tr.compiled
+{
+    background:#74AE6B;
+}
+
+tr.tested
+{
+    background:#E5E84F;
+}
+
+tr.in_progress
+{
+    background:#
+}
+
+td.id
+{
+    width: 5%;
+}
+
+td.name
+{
+    width: 30%;
+}
+
+td.branch
+{
+    width: 20%;
+}
+
+td.state
+{
+    width: 10%;
+}
+
+td.sha
+{
+    width: 20%;
+}
+
+textarea
+{
+    width: 40%;
+    height: 80%;
+}
+</style>
+<script src="http://code.jquery.com/jquery-1.11.0.min.js" type="text/javascript"></script>
+<script type="text/javascript">
+var timer;
+var lock=false;
+var base_url='%BASE_URL';
+$(document).ready(populateBuilds());
+
+function repeatBuilds() {
+    lock = false;
+    $("#content").html("<p>loading...</p>");
+    populateBuilds();
+}
+
+function populateBuilds() {
+    timer = setTimeout("populateBuilds();", 2000);
+    $.ajax({
+            "url": base_url + "storage/wheezy/amd64/builds"
+            }).done(function(result) {
+                res = '<table class=hh>';
+                Parsed = $.parseJSON(result);
+                for (var elem in Parsed) {
+                    key_elems = elem.split("/");
+                    id = key_elems[0];
+                    name = key_elems[1];
+                    branch = key_elems[2];
+                    state = Parsed[elem]["state"];
+                    res = res + '<tr onclick="getLog(\'' + key_elems.join('\/') + '\')" class=' + state + '>' +
+                        '<td class=id>' + id + '</td>' + 
+                        '<td class=name>' + name + '</td>' + 
+                        '<td class=branch>' + branch + '</td>' + 
+                        '<td class=state>' + state + '</td>' + 
+                        '</tr>';
+                }
+                res = res + '</table>';
+                if (lock == false) {
+                    $("#content").html(res);
+                }
+            })
+}
+
+function getLog(Key) {
+    lock = true;
+    clearTimeout(timer);
+    $("#content").html("<p>loading...</p>");
+    UrlLog = base_url + "storage/wheezy/amd64/log/" + Key;
+    UrlDiff = base_url + "storage/wheezy/amd64/diff/" + Key;
+    $.ajax({"url": UrlDiff}).done(function(result) {
+            $("#content").html('<p>' + Key + '</p><textarea id=diff></textarea><textarea id=log></textarea>');
+            $("#diff").text($.parseJSON(result)['diff']).html();
+            $.ajax({"url": UrlLog}).done(function(result_log) {$("#log").text($.parseJSON(result_log)['log']).html()})
+    });
+
+}
+
+function getPackages() {
+    lock = true;
+    clearTimeout(timer);
+    $("#content").html("<p>loading...</p>");
+    $.ajax({
+            "url": base_url + "/storage/wheezy/amd64/packages"
+            }).done(function(result) {
+                res = '<table class=hh>';
+                Parsed = $.parseJSON(result);
+                Keys = Object.keys(Parsed).sort();
+                for (var i in Keys) {
+                    elem = Keys[i];
+                    key_elems = elem.split("/");
+                    name = key_elems[0];
+                    branch = key_elems[1];
+                    state = Parsed[elem]["last_build_state"];
+                    build_id = Parsed[elem]["last_build_id"];
+                    description = Parsed[elem]["description"];
+                    res = res + '<tr onclick="getPackage(\'' + name + '\')" class=' + state + '>' +
+                        '<td class=name>' + name + '</td>' + 
+                        '<td class=branch>' + branch + '</td>' + 
+                        '<td class=state>' + state + '</td>' + 
+                        '<td class=description>' + description + '</td>' + 
+                        '<td class=id>' + build_id + '</td>' + 
+                        '<td><button onclick="sendRebuild(arguments[0], \'' + [name, branch].join('\/') + '\')">Rebuild</button></td>' + 
+                        '</tr>';
+                }
+                res = res + '</table>';
+                $("#content").html(res);
+            })
+}
+
+function sendRebuild(Ev, Key) {
+    Ev.stopPropagation();
+    Url = base_url + "/rebuild/" + Key;
+    $.ajax({"url": Url});
+    repeatBuilds();
+}
+
+function getPackage(Key) {
+    lock = true;
+    clearTimeout(timer);
+    $("#content").html("<p>loading...</p>");
+    Url = base_url + "storage/wheezy/amd64/package/" + Key;
+    $.ajax({
+            "url": Url
+            }).done(function(result) {
+                Parsed = $.parseJSON(result);
+                res = '<br>' + Key + '</br><table class=hh>';
+                Items = Object.keys(Parsed).sort(function(a, b) {return parseInt(b) - parseInt(a)});
+                for (var i in Items) {
+                    elem = Items[i];
+                    id = elem;
+                    state = Parsed[elem]["state"];
+                    branch = Parsed[elem]["branch"];
+                    sha = Parsed[elem]["sha"];
+                    res = res + '<tr onclick="getLog(\'' + [id, Key, branch].join('\/') + '\')" class=' + state + '>' +
+                        '<td class=id>' + id + '</td>' + 
+                        '<td class=branch>' + branch + '</td>' + 
+                        '<td class=sha>' + sha + '</td>' + 
+                        '<td class=state>' + state + '</td>' + 
+                        '</tr>';
+                }
+                res = res + '</table>';
+                $("#content").html(res);
+            })
+}
+</script>
+<body>
+<button onclick="repeatBuilds()">Builds</button>
+<button onclick="getPackages()">Packages</button>
+<div id='content'>
+</div>
+</body>
+</head>
+</html>
